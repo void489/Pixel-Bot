@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Staff Points</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; line-height:1.5; }
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:0 22px; }
+    .tabs { display:flex; gap:6px; flex-wrap:wrap; }
+    .tabs a { padding:5px 12px; border-radius:99px; font-size:12px; font-weight:600; text-decoration:none; background:var(--bg-muted); color:var(--text-main); }
+    .tabs a.active { background:var(--accent); color:#fff; }
+    .tbl-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+    th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+    td.rank { font-weight:700; width:44px; color:var(--text-muted); }
+    td.pts  { font-weight:700; color:var(--text-bright); }
+    .empty { padding:26px; text-align:center; color:var(--text-muted); font-size:13px; }
+    code { font-size:12px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'staff_points' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🏆 Staff Points</div>
+  <p class="page-sub">Choose who counts as staff, set what each action is worth, and see the leaderboard. Post it publicly in Discord with <code>/staffstats</code>.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved. The bot picks up changes within about 30 seconds.</div>{% endif %}
+  {% if backfill == "done" %}
+    <div class="banner-ok">✅ Imported {{ bf_paid }} past blacklist{{ '' if bf_paid == 1 else 's' }} ({{ bf_points }} points).
+      {% if bf_self or bf_nonstaff %}Skipped {{ bf_self }} approved by their own submitter and {{ bf_nonstaff }} from people who aren't staff right now.{% endif %}</div>
+  {% elif backfill == "norole" %}
+    <div class="banner-warn">Select and save at least one staff role first, then import.</div>
+  {% endif %}
+
+  <div class="t-section">
+    <div class="t-section-head"><h2>⚙️ Settings</h2></div>
+    <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="t-label">Staff roles</label>
+      <select name="staff_role_ids" multiple>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if r.id in cfg.staff_role_ids %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Only members with one of these roles earn points or appear on the leaderboard. Nothing is tracked until at least one role is selected.</div>
+
+      <div class="grid">
+        <div>
+          <label class="t-label">Message outside a ticket</label>
+          <input type="number" name="msg_outside" step="any" min="0" value="{{ cfg.msg_outside }}">
+        </div>
+        <div>
+          <label class="t-label">Message inside a ticket</label>
+          <input type="number" name="msg_ticket" step="any" min="0" value="{{ cfg.msg_ticket }}">
+        </div>
+        <div>
+          <label class="t-label">Moderation action</label>
+          <input type="number" name="mod_action" step="any" min="0" value="{{ cfg.mod_action }}">
+          <div class="hint">Mute, warn, ban, kick, softban, purge. Unmute / unban / unlock don't count.</div>
+        </div>
+        <div>
+          <label class="t-label">Blacklist</label>
+          <input type="number" name="blacklist" step="any" min="0" value="{{ cfg.blacklist }}">
+          <div class="hint">Paid to the staff member who submitted a blacklist request, once it's accepted. Unblacklist requests don't count, and approving your own request earns nothing.</div>
+        </div>
+        <div>
+          <label class="t-label">Ticket handled bonus</label>
+          <input type="number" name="ticket_handled" step="any" min="0" value="{{ cfg.ticket_handled }}">
+          <div class="hint">Paid when a ticket closes and split between the staff who worked it, in proportion to their messages. Closing it yourself earns nothing on its own.</div>
+        </div>
+        <div>
+          <label class="t-label">Ticket rename</label>
+          <input type="number" name="ticket_rename" step="any" min="0" value="{{ cfg.ticket_rename }}">
+          <div class="hint">Only the first rename of a ticket counts, and it's paid at close, and only if that person also reached the minimum messages below. Otherwise nobody gets it.</div>
+        </div>
+        <div>
+          <label class="t-label">Minimum messages to qualify</label>
+          <input type="number" name="min_messages" step="1" min="1" value="{{ cfg.min_messages }}">
+          <div class="hint">Messages you must send in a ticket to share the handled bonus or get the rename points.</div>
+        </div>
+        <div>
+          <label class="t-label">Message cooldown (seconds)</label>
+          <input type="number" name="cooldown_seconds" step="1" min="0" value="{{ cfg.cooldown_seconds }}">
+          <div class="hint">At most one counted message per channel per this many seconds, so spamming doesn't farm points. 0 turns it off.</div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;">
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="t-section">
+    <div class="t-section-head"><h2>📥 Import past blacklists</h2></div>
+    <p class="hint" style="margin-top:0;font-style:normal;">
+      Blacklist requests accepted <em>before</em> staff points existed aren't counted. This adds them once: each accepted
+      <strong>add</strong> request pays the staff member who submitted it, dated by when it was accepted. Denied requests,
+      unblacklist requests, requests approved by their own submitter and submitters who aren't staff right now are skipped.
+      It's safe to click again: anything already counted is never paid twice.
+    </p>
+    <form method="POST" action="{{ url_for('dashboard.staff_points_backfill_blacklists', guild_id=guild_id) }}"
+          onsubmit="return confirm('Import all previously accepted blacklist requests into staff points?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">📥 Import past blacklists</button>
+    </form>
+  </div>
+
+  <div class="t-section">
+    <div class="t-section-head">
+      <h2>📊 Leaderboard</h2>
+      <div class="tabs">
+        {% for w in windows %}
+        <a href="{{ url_for('dashboard.staff_points_page', guild_id=guild_id, window=w) }}" class="{{ 'active' if w == window else '' }}">{{ window_labels[w] }}</a>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if not cfg.staff_role_ids %}
+      <div class="banner-warn">No staff role is set yet. Pick one above and save to start tracking.</div>
+    {% elif rows %}
+      <div class="tbl-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Member</th>
+              <th>Points</th>
+              {% for t in event_types %}<th>{{ event_labels[t] }}</th>{% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="rank">#{{ row.rank }}</td>
+              <td>{{ row.name }}</td>
+              <td class="pts">{{ row.points }}</td>
+              {% for t in event_types %}<td>{{ row.counts[t] }}</td>{% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">No staff activity recorded yet for this period.</div>
+    {% endif %}
+  </div>
+</div>
+
+</body>
+</html>

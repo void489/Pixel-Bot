@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Activity Check</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; max-width:720px; line-height:1.55; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:12px; flex-wrap:wrap; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; line-height:1.5; }
+    .btn-xs { padding:7px 14px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .check-row { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .check-row input { width:auto; margin:0; }
+    .check-row label { margin:0; font-size:13px; font-weight:600; color:var(--text-bright); text-transform:none; letter-spacing:0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:0 22px; }
+    .tbl-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+    th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+    .pill { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:700; }
+    .pill-open { background:rgba(234,179,8,.15); color:#fde68a; }
+    .pill-done { background:rgba(34,197,94,.15); color:#86efac; }
+    .btn-xs-danger  { background:rgba(239,68,68,.15); color:#fca5a5; }
+    .btn-xs-danger:hover { background:rgba(239,68,68,.3); }
+    .btn-xs-muted   { background:var(--bg-muted); color:var(--text-main); }
+    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .pill-off  { background:rgba(148,163,184,.15); color:#cbd5e1; }
+    .card { border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; margin-bottom:12px; background:var(--bg-base); }
+    .card-top { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .card-title { font-weight:700; color:var(--text-bright); font-size:14px; }
+    .card-meta { font-size:12px; color:var(--text-muted); margin-top:4px; line-height:1.6; }
+    .card-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    details > summary { cursor:pointer; color:var(--text-muted); font-size:12px; margin-top:10px; }
+    .empty { padding:26px; text-align:center; color:var(--text-muted); font-size:13px; }
+    code { font-size:12px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'staff_activity' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">💎 Activity Check</div>
+  <p class="page-sub">Every X days, pings a role in a channel and asks them to react within a time window to confirm they're active.
+    Anyone who doesn't react gets listed in a results report. Create as many checks as you want, each for a different role. Start one right away with <code>/activitycheck</code>.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved. The bot looks for due checks every 5 minutes.</div>{% endif %}
+  {% if deleted %}<div class="banner-ok">🗑️ Check deleted. One that is already running will still finish and post its results.</div>{% endif %}
+  {% if error == 'name' %}<div class="banner-warn">Give the check a name.</div>
+  {% elif error == 'role' %}<div class="banner-warn">Choose the role to check.</div>
+  {% elif error == 'channel' %}<div class="banner-warn">Choose the channel to post in.</div>
+  {% elif error == 'striketype' %}<div class="banner-warn">Pick the Changes type the strikes go in (create types on the Changes page).</div>
+  {% elif error == 'limit' %}<div class="banner-warn">You can have up to 10 checks. Delete one to add another.</div>{% endif %}
+
+  {% macro check_form(c) %}
+      <input type="hidden" name="form_type" value="save_check">
+      {% if c %}<input type="hidden" name="check_id" value="{{ c._id }}">{% endif %}
+
+      <label class="t-label">Name <span class="req">*</span></label>
+      <input type="text" name="name" maxlength="60" required placeholder="e.g. Moderators" value="{{ c.name if c else '' }}">
+      <div class="hint">Shown in the check and results embeds, and used by <code>/activitycheck</code>.</div>
+
+      <div class="check-row" style="margin-top:14px;">
+        <input type="checkbox" id="en-{{ c._id if c else 'new' }}" name="enabled" {% if not c or c.enabled %}checked{% endif %}>
+        <label for="en-{{ c._id if c else 'new' }}">Enabled (runs automatically)</label>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label class="t-label">Role to check <span class="req">*</span></label>
+          <select name="role_id" required>
+            <option value="">— Select —</option>
+            {% for r in roles %}
+            <option value="{{ r.id }}" {% if c and c.role_id|string == r.id|string %}selected{% endif %}>{{ r.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">Every member with this role is expected to react.</div>
+        </div>
+        <div>
+          <label class="t-label">Channel <span class="req">*</span></label>
+          <select name="channel_id" required>
+            <option value="">— Select —</option>
+            {% for ch in channels %}
+            <option value="{{ ch.id }}" {% if c and c.channel_id|string == ch.id|string %}selected{% endif %}># {{ ch.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">Where the check and its results are posted.</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label class="t-label">Check interval (days)</label>
+          <input type="number" min="1" max="90" name="interval_days" value="{{ c.interval_days if c else 2 }}">
+        </div>
+        <div>
+          <label class="t-label">Reaction window (hours)</label>
+          <input type="number" min="1" max="168" name="window_hours" value="{{ c.window_hours if c else 24 }}">
+        </div>
+        <div>
+          <label class="t-label">Reaction emoji</label>
+          <input type="text" name="emoji" maxlength="8" value="{{ c.emoji if c else '💎' }}">
+          <div class="hint">Standard Unicode emoji only (custom server emoji aren't supported).</div>
+        </div>
+      </div>
+
+      <div class="hint" style="margin-top:14px;">Members with an <strong>Exception role</strong> (set per type on the Changes page) don't have to react and are never struck. It uses the strike type chosen below, or every type's exception roles if no strike type is set. The check still pings the whole role above.</div>
+
+      <div class="check-row" style="margin-top:14px;">
+        <input type="checkbox" id="st-{{ c._id if c else 'new' }}" name="strike_on_miss" {% if c and c.strike_on_miss %}checked{% endif %}>
+        <label for="st-{{ c._id if c else 'new' }}">Strike members who don't react</label>
+      </div>
+      <label class="t-label">Strike type</label>
+      <select name="strike_type_id">
+        <option value="">— Select a Changes type —</option>
+        {% for t in change_types %}
+        <option value="{{ t.id }}" {% if c and c.strike_type_id == t.id %}selected{% endif %}>{{ t.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Off by default. When on, everyone who doesn't react gets one strike in this type (the type's strike rules, card and DM all apply) and is DMed how many strikes they have until demotion.</div>
+
+      <div style="margin-top:18px;"><button class="btn-xs btn-xs-accent" type="submit">{{ 'Save changes' if c else 'Create check' }}</button></div>
+  {% endmacro %}
+
+  <div class="t-section">
+    <div class="t-section-head"><h2>📋 Your checks ({{ configs|length }})</h2></div>
+    {% for c in configs %}
+    <div class="card">
+      <div class="card-top">
+        <div>
+          <div class="card-title">{{ c.name }}
+            {% if c.enabled %}<span class="pill pill-done">On</span>{% else %}<span class="pill pill-off">Off</span>{% endif %}
+          </div>
+          <div class="card-meta">
+            Role: <strong>{{ role_names.get(c.role_id|string, 'deleted role') }}</strong>
+            · Channel: <strong>#{{ channel_names.get(c.channel_id|string, 'deleted channel') }}</strong><br>
+            Every {{ c.interval_days }} day{{ '' if c.interval_days == 1 else 's' }}
+            · {{ c.window_hours }}h window · {{ c.emoji }}{% if c.strike_on_miss and c.strike_type_id in type_names %} · ⚠️ strikes in {{ type_names[c.strike_type_id] }}{% endif %}
+          </div>
+        </div>
+        <div class="card-actions">
+          <form method="POST" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="form_type" value="toggle_check">
+            <input type="hidden" name="check_id" value="{{ c._id }}">
+            <input type="hidden" name="enabled" value="{{ '0' if c.enabled else '1' }}">
+            <button class="btn-xs btn-xs-muted" type="submit">{{ 'Disable' if c.enabled else 'Enable' }}</button>
+          </form>
+          <form method="POST" style="display:inline" onsubmit="return confirm('Delete the check &quot;{{ c.name }}&quot;?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="form_type" value="delete_check">
+            <input type="hidden" name="check_id" value="{{ c._id }}">
+            <button class="btn-xs btn-xs-danger" type="submit">🗑️ Delete</button>
+          </form>
+        </div>
+      </div>
+      <details>
+        <summary>Edit "{{ c.name }}"</summary>
+        <form method="POST" style="margin-top:6px;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ check_form(c) }}</form>
+      </details>
+    </div>
+    {% else %}
+      <div class="empty">No checks yet. Create your first one below.</div>
+    {% endfor %}
+  </div>
+
+  <div class="t-section">
+    <div class="t-section-head"><h2>➕ New check</h2></div>
+    <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{{ check_form(none) }}</form>
+  </div>
+
+  <div class="t-section">
+    <div class="t-section-head"><h2>🕒 Recent checks</h2></div>
+    {% if recent %}
+    <div class="tbl-wrap">
+      <table>
+        <tr><th>Check</th><th>Opened</th><th>Status</th><th>Expected</th><th>Reacted</th><th>Missing</th></tr>
+        {% for c in recent %}
+        <tr>
+          <td>{{ c.name or '—' }}</td>
+          <td>{{ c.opened_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+          <td>{% if c.closed %}<span class="pill pill-done">Closed</span>{% else %}<span class="pill pill-open">Open · closes {{ c.deadline.strftime('%Y-%m-%d %H:%M') }} UTC</span>{% endif %}</td>
+          <td>{{ (c.expected_reactors or [])|length }}</td>
+          <td>{{ (c.reacted or [])|length if c.closed else '—' }}</td>
+          <td>{{ (c.missing or [])|length if c.closed else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% else %}
+      <div class="empty">No checks yet.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Vouch System Setup</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; max-width:720px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .t-label:first-child { margin-top:0; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    select[multiple] { min-height:120px; background-image:none; padding-right:13px; }
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:14px 18px; border-radius:var(--r-md); margin-bottom:22px; font-size:13px; line-height:1.6; }
+    .banner-warn code { background:rgba(0,0,0,.3); padding:1px 5px; border-radius:3px; }
+    .cmd-list { font-size:12px; color:var(--text-muted); line-height:1.9; font-family:ui-monospace,Menlo,monospace; }
+    .cmd-list b { color:var(--text-bright); font-family:inherit; }
+    .perm-note { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#a5b4fc; padding:12px 16px; border-radius:var(--r-md); margin-top:10px; font-size:12px; line-height:1.6; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'vouches' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">⭐ Vouch System</div>
+  <p class="page-sub">Configure the channels where <code>vouch @user [reason]</code> and <code>scam vouch @user [reason]</code> are counted, where <code>/report</code> submissions go, and which role is treated as the scammer role.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Vouch settings saved.</div>{% endif %}
+
+  {% if not channels %}
+  <div class="banner-warn">
+    <strong>⚠️ The bot can't see this server's channels.</strong><br>
+    Make sure the bot is invited and has the <code>View Channels</code> permission.
+  </div>
+  {% endif %}
+
+  <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="t-section">
+      <div class="t-section-head"><h2>📣 Vouch Channels</h2></div>
+
+      <label class="t-label">Channels where vouch messages are counted</label>
+      <select name="vouch_channel_ids" multiple>
+        {% for c in channels %}
+        <option value="{{ c.id }}" {% if c.id|string in cfg.channel_ids %}selected{% endif %}>#{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Hold Ctrl/Cmd to select several. Users type <code>vouch @user [reason]</code> or <code>scam vouch @user [reason]</code> in these channels. You can also use <code>/vouch setchannel</code> and <code>/vouch removechannel</code>.</div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>📨 Report Channel</h2></div>
+
+      <label class="t-label">Where <code>/report</code> submissions are posted</label>
+      <select name="report_channel_id">
+        <option value="">— Not set —</option>
+        {% for c in channels %}
+        <option value="{{ c.id }}" {% if cfg.report_channel_id == c.id|string %}selected{% endif %}>#{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Reports from <code>/report</code> land here with Accept / Reject buttons for staff.</div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>🛡️ Report Staff Role</h2></div>
+
+      <label class="t-label">Role that can Accept / Reject reports</label>
+      <select name="report_staff_role_id">
+        <option value="">— Not set (Admins only) —</option>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if cfg.report_staff_role_id == r.id|string %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Members with this role can Accept or Reject reports on the report embeds.</div>
+
+      <div class="perm-note">
+        <b>Who can Accept / Reject:</b><br>
+        • Server Administrators — always allowed.<br>
+        • Members with the <b>Report Staff Role</b> above — allowed.<br>
+        • If no Report Staff Role is set — only Administrators can decide.
+      </div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>🎭 Scammer Role</h2></div>
+
+      <label class="t-label">Role given when a report is accepted</label>
+      <select name="scammer_role_id">
+        <option value="">— Not set —</option>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if cfg.scammer_role_id == r.id|string %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Must be an existing role — the bot does not create it. When a report is accepted, this role is assigned in this server only. The global scammer status in the database is separate and applies to <code>/lookup</code> everywhere.</div>
+    </div>
+
+    <div style="max-width:720px;">
+      <button class="btn-xs btn-xs-accent" type="submit" style="padding:10px 22px;font-size:13px;">💾 Save Settings</button>
+    </div>
+  </form>
+
+  <div class="t-section" style="margin-top:24px;">
+    <div class="t-section-head"><h2>📖 Commands</h2></div>
+    <div class="cmd-list">
+      <div><b>Message triggers (only inside configured vouch channels):</b></div>
+      <div>vouch @user [reason]</div>
+      <div>scam vouch @user [reason]</div>
+      <div style="margin-top:10px;"><b>Commands:</b></div>
+      <div>/vouches [user] — public vouch card</div>
+      <div>/vouches channels — list this server's vouch channels</div>
+      <div>/vouches setreportchannel &lt;channel&gt;</div>
+      <div>/vouches scammer add &lt;user&gt; — mark user as global scammer</div>
+      <div>/vouches scammer remove &lt;user&gt; — clear global scammer flag</div>
+      <div>/vouch setchannel &lt;channel&gt;</div>
+      <div>/vouch removechannel &lt;channel&gt;</div>
+      <div>/lookup &lt;user&gt; — global scammer status + cross-guild role check</div>
+      <div>/report &lt;user&gt; &lt;reason&gt; &lt;photo1&gt; [photo2] [photo3]</div>
+      <div>/config — configuration overview</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

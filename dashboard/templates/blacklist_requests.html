@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Blacklist Requests</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); }
+    th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+    .chip-pending  { background:rgba(234,179,8,.15);  color:#facc15; }
+    .chip-accepted { background:rgba(34,197,94,.15);  color:#4ade80; }
+    .chip-denied   { background:rgba(239,68,68,.15);  color:#f87171; }
+    .filters { display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+    .filters select { min-width:160px; }
+    .btn-xs { padding:5px 11px; font-size:12px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .counter-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .counter-cell { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:12px 14px; }
+    .counter-cell .k { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:4px; }
+    .counter-cell .v { font-size:20px; font-weight:800; color:var(--text-bright); }
+    .counter-cell .sub { font-size:11px; color:var(--text-muted); margin-top:4px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'blacklist' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🚫 Blacklist Requests</div>
+  <p class="page-sub">All blacklist and unblacklist requests submitted in this server.</p>
+
+  <div class="t-section">
+    <div class="counter-grid">
+      <div class="counter-cell">
+        <div class="k">Submitted</div>
+        <div class="v">{{ counters.submitted.giveaway + counters.submitted.ticket + counters.submitted.application }}</div>
+        <div class="sub">Giveaway: {{ counters.submitted.giveaway }} · Ticket: {{ counters.submitted.ticket }} · Application: {{ counters.submitted.application }}</div>
+      </div>
+      <div class="counter-cell">
+        <div class="k">Accepted</div>
+        <div class="v">{{ counters.accepted.giveaway + counters.accepted.ticket + counters.accepted.application }}</div>
+        <div class="sub">Giveaway: {{ counters.accepted.giveaway }} · Ticket: {{ counters.accepted.ticket }} · Application: {{ counters.accepted.application }}</div>
+      </div>
+      <div class="counter-cell">
+        <div class="k">Denied</div>
+        <div class="v">{{ counters.denied.giveaway + counters.denied.ticket + counters.denied.application }}</div>
+        <div class="sub">Giveaway: {{ counters.denied.giveaway }} · Ticket: {{ counters.denied.ticket }} · Application: {{ counters.denied.application }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="t-section">
+    <form method="GET" class="filters">
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for st in ["Pending","Accepted","Denied"] %}
+        <option value="{{ st }}" {% if selected_status == st %}selected{% endif %}>{{ st }}</option>
+        {% endfor %}
+      </select>
+      <select name="type">
+        <option value="">All types</option>
+        <option value="giveaway" {% if selected_type == "giveaway" %}selected{% endif %}>Giveaway</option>
+        <option value="ticket" {% if selected_type == "ticket" %}selected{% endif %}>Ticket</option>
+        <option value="application" {% if selected_type == "application" %}selected{% endif %}>Application</option>
+      </select>
+      <select name="action">
+        <option value="">All actions</option>
+        <option value="add" {% if selected_action == "add" %}selected{% endif %}>Add</option>
+        <option value="remove" {% if selected_action == "remove" %}selected{% endif %}>Remove</option>
+      </select>
+      <button class="btn-xs btn-xs-accent" type="submit" style="padding:6px 14px;">Filter</button>
+    </form>
+
+    <table>
+      <tr>
+        <th>#</th><th>Applicant</th><th>Target</th><th>Type</th><th>Action</th>
+        <th>Status</th><th>Staff</th><th>Submitted</th><th></th>
+      </tr>
+      {% for r in requests %}
+      <tr>
+        <td><code>{{ r._id }}</code></td>
+        <td><code>{{ r.applicant_id }}</code></td>
+        <td><code>{{ r.target_id }}</code></td>
+        <td>{{ r.type }}</td>
+        <td>{{ r.action }}</td>
+        <td><span class="chip chip-{{ r.status|lower }}">{{ r.status }}</span></td>
+        <td>{% if r.staff_id %}<code>{{ r.staff_id }}</code>{% else %}—{% endif %}</td>
+        <td>{{ r.created_at }}</td>
+        <td><a class="btn-xs btn-xs-ghost" href="{{ url_for('dashboard.blacklist_request_detail_page', guild_id=guild_id, request_id=r._id) }}">View</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9">No requests yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+</body>
+</html>

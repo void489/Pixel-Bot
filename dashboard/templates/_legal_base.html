@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Bot · {% block title %}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+  <div class="topbar">
+    <a href="{{ url_for('dashboard.index') }}"><span class="brand"><img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt=""><span>Pixel Bot</span></span></a>
+    <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+  </div>
+  <div class="container">
+    <div class="embed">
+      <div class="legal-doc">
+        {% block body %}{% endblock %}
+      </div>
+    </div>
+  </div>
+  {% include '_footer.html' %}
+</body>
+</html>

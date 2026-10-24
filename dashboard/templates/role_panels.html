@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Role Panels</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:28px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:0; margin-bottom:18px; }
+    .t-section > summary { list-style:none; cursor:pointer; padding:18px 24px; display:flex; align-items:center; gap:12px; font-size:15px; font-weight:700; color:var(--text-bright); }
+    .t-section > summary::-webkit-details-marker { display:none; }
+    .t-section > summary .chev { margin-left:auto; color:var(--text-muted); transition:transform .15s; }
+    .t-section[open] > summary .chev { transform:rotate(90deg); }
+    .t-body { padding:4px 24px 22px; border-top:1px solid var(--border); }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-info { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#a5b4fc; padding:12px 16px; border-radius:var(--r-md); margin-bottom:22px; font-size:12px; line-height:1.6; }
+    .banner-soft { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:10px 14px; border-radius:var(--r-md); margin-top:14px; font-size:12px; line-height:1.6; }
+    .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; }
+    textarea { width:100%; min-height:80px; }
+    .entry { display:grid; grid-template-columns:minmax(150px,1.4fr) minmax(110px,1fr) 90px minmax(120px,1.2fr) 120px 34px; gap:8px; align-items:center; margin-bottom:8px; }
+    .entry-head { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:6px; }
+    .entry-head .entry { margin-bottom:0; }
+    .rp-form[data-style="buttons"]  .only-dropdown { visibility:hidden; }
+    .rp-form[data-style="dropdown"] .only-buttons  { visibility:hidden; }
+    .chip { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:700; }
+    .chip-ok   { background:rgba(34,197,94,.15); color:#4ade80; }
+    .chip-off  { background:rgba(140,140,149,.18); color:#a1a1aa; }
+    .chip-bad  { background:rgba(239,68,68,.15); color:#f87171; }
+    .chip-tag  { background:rgba(88,101,242,.15); color:#a5b4fc; }
+    .actions { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; align-items:center; }
+    @media (max-width:900px) { .entry { grid-template-columns:1fr 1fr; } .entry-head { display:none; } }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'role_panels' %}
+{% include '_sidebar.html' %}
+
+{% macro role_options(selected) -%}
+  <option value="">— pick a role —</option>
+  {% for r in roles %}<option value="{{ r.id }}" {% if selected|string == r.id|string %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+{%- endmacro %}
+
+{% macro entry_row(e) -%}
+<div class="entry">
+  <select name="entry_role">{{ role_options(e.role_id) }}</select>
+  <input type="text" name="entry_label" value="{{ e.label }}" maxlength="80" placeholder="(role name)">
+  <input type="text" name="entry_emoji" value="{{ e.emoji }}" maxlength="64" placeholder="🎮 or &lt;:name:id&gt;">
+  <input class="only-dropdown" type="text" name="entry_desc" value="{{ e.description }}" maxlength="100" placeholder="short description">
+  <select class="only-buttons" name="entry_style">
+    {% for v, l in [('secondary','Grey'),('primary','Blue'),('success','Green'),('danger','Red')] %}
+    <option value="{{ v }}" {% if (e.button_style or 'secondary') == v %}selected{% endif %}>{{ l }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn-xs btn-xs-ghost" data-remove-row title="Remove">✕</button>
+</div>
+{%- endmacro %}
+
+{% macro panel_form(p, is_new) -%}
+<form method="POST" class="rp-form" data-style="{{ p.style }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="panel_id" value="{{ p._id }}">
+
+  <div class="grid2">
+    <div>
+      <label class="t-label">Panel name (only you see this)</label>
+      <input type="text" name="name" value="{{ p.name }}" maxlength="60" placeholder="e.g. Ping roles">
+    </div>
+    <div>
+      <label class="t-label">Post in channel</label>
+      <select name="channel_id">
+        <option value="">— pick a channel —</option>
+        {% for c in channels %}<option value="{{ c.id }}" {% if p.channel_id == c.id|string %}selected{% endif %}>#{{ c.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="t-label">Style</label>
+      <select name="style" data-style-select>
+        <option value="buttons"  {% if p.style == 'buttons' %}selected{% endif %}>Buttons (one per role)</option>
+        <option value="dropdown" {% if p.style == 'dropdown' %}selected{% endif %}>Dropdown menu</option>
+      </select>
+    </div>
+    <div>
+      <label class="t-label">Mode</label>
+      <select name="mode">
+        <option value="multiple" {% if p.mode == 'multiple' %}selected{% endif %}>Multiple - any number of these roles</option>
+        <option value="unique"   {% if p.mode == 'unique' %}selected{% endif %}>One only - picking another swaps it</option>
+      </select>
+    </div>
+  </div>
+
+  <label class="t-label">Embed title</label>
+  <input type="text" name="title" value="{{ p.title }}" maxlength="256" placeholder="Pick your roles">
+  <label class="t-label">Embed text</label>
+  <textarea name="description" maxlength="2000" placeholder="Tell members what these roles are for.">{{ p.description }}</textarea>
+
+  <div class="grid2">
+    <div>
+      <label class="t-label">Embed color</label>
+      <input type="color" name="color_hex" value="{{ p.color_hex or '#5865f2' }}" style="height:38px;padding:2px;">
+    </div>
+    <div class="only-dropdown">
+      <label class="t-label">Dropdown placeholder</label>
+      <input type="text" name="placeholder" value="{{ p.placeholder }}" maxlength="100" placeholder="Select your roles…">
+    </div>
+    <div>
+      <label class="t-label">List the roles in the embed</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;"><input type="checkbox" name="show_list" {% if p.show_list %}checked{% endif %}> Show each role + description under the text</label>
+    </div>
+  </div>
+
+  <label class="t-label" style="margin-top:22px;">Roles (max 25)</label>
+  <div class="entry-head"><div class="entry">
+    <div>Role</div><div>Label</div><div>Emoji</div><div class="only-dropdown">Description</div><div class="only-buttons">Button color</div><div></div>
+  </div></div>
+  <div class="entry-list">
+    {% for e in p.entries %}{{ entry_row(e) }}{% endfor %}
+  </div>
+  <template class="row-tpl">{{ entry_row({'role_id':'','label':'','emoji':'','description':'','button_style':'secondary'}) }}</template>
+  <button type="button" class="btn-xs btn-xs-ghost" data-add-row>+ Add a role</button>
+  <div class="hint">Label is optional (defaults to the role name). Emoji can be a normal emoji or a custom one like <code>&lt;:name:123456789012345678&gt;</code>. Roles above the bot's highest role, or managed by a bot, can't be given.</div>
+
+  <div class="actions">
+    <button class="btn-xs btn-xs-accent" type="submit" name="action" value="post" style="padding:9px 18px;font-size:13px;">
+      📨 Save &amp; {% if p.message_id and not is_new %}update message{% else %}post{% endif %}
+    </button>
+    <button class="btn-xs btn-xs-ghost" type="submit" name="action" value="save" style="padding:9px 18px;font-size:13px;">💾 Save only</button>
+    {% if not is_new %}
+    <button class="btn-xs btn-xs-danger" type="submit" name="action" value="delete" style="margin-left:auto;padding:9px 18px;font-size:13px;"
+            onclick="return confirm('Delete this panel and its message in Discord?');">🗑 Delete</button>
+    {% endif %}
+  </div>
+</form>
+{%- endmacro %}
+
+<div class="t-content">
+  <div class="page-title">🎭 Role Panels</div>
+  <p class="page-sub">Self-assign roles with <b>buttons</b> or a <b>dropdown menu</b>. Set them up here - there are no commands. (Emoji reaction roles still work with <code>/reactionrole</code>.)</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
+  {% if posting %}<div class="banner-ok">📨 Saved. The bot is posting the panel - refresh in a few seconds to see the result below.</div>{% endif %}
+  {% if deleted %}<div class="banner-ok">🗑 Panel deleted.</div>{% endif %}
+  {% if error %}
+  <div class="banner-error">❌
+    {% if error == 'no_roles' %}Add at least one role before posting.
+    {% elif error == 'no_channel' %}Pick a channel to post the panel in.
+    {% elif error == 'bad_emoji' %}One of the emojis isn't valid. Use a normal emoji (🎮) or a custom one like &lt;:name:123456789012345678&gt;.
+    {% elif error == 'too_many' %}A panel can have at most 25 roles.
+    {% elif error == 'missing' %}That panel no longer exists.
+    {% else %}Something in the form was invalid.{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="banner-info">
+    <b>Buttons:</b> click a button to get the role, click again to remove it.<br>
+    <b>Dropdown:</b> members pick the roles they want and the menu applies exactly that choice - roles from the panel they leave out are removed, picking nothing removes them all.<br>
+    <b>One only</b> mode lets a member hold just one role from the panel. The bot needs <b>Manage Roles</b> and its top role must be above every role on the panel.
+  </div>
+
+  <details class="t-section" {% if not panels %}open{% endif %}>
+    <summary>➕ New panel <span class="chev">▶</span></summary>
+    <div class="t-body">{{ panel_form(blank, true) }}</div>
+  </details>
+
+  {% for p in panels %}
+  <details class="t-section" {% if open_id == p._id|string %}open{% endif %}>
+    <summary>
+      {{ '🔘' if p.style == 'buttons' else '🔽' }} {{ p.name }}
+      <span class="chip chip-tag">{{ 'Buttons' if p.style == 'buttons' else 'Dropdown' }}</span>
+      <span class="chip chip-tag">{{ 'One only' if p.mode == 'unique' else 'Multiple' }}</span>
+      <span class="chip chip-tag">{{ p.entries|length }} role{{ '' if p.entries|length == 1 else 's' }}</span>
+      {% if p.post_error %}<span class="chip chip-bad">post failed</span>
+      {% elif p.message_id %}<span class="chip chip-ok">posted</span>
+      {% else %}<span class="chip chip-off">not posted</span>{% endif %}
+      <span class="chev">▶</span>
+    </summary>
+    <div class="t-body">
+      {% if p.post_error %}<div class="banner-error" style="margin-top:14px;">❌ Last post failed: {{ p.post_error }}</div>{% endif %}
+      {% if p.post_warning %}<div class="banner-soft">⚠️ {{ p.post_warning }}</div>{% endif %}
+      {% if p.message_id and p.posted_channel_id %}
+      <div class="hint" style="margin-top:12px;">
+        Live message:
+        <a href="https://discord.com/channels/{{ guild_id }}/{{ p.posted_channel_id }}/{{ p.message_id }}" target="_blank" rel="noopener">open in Discord ↗</a>
+        {% if p.posted_at %} · posted {{ p.posted_at.strftime('%Y-%m-%d %H:%M UTC') }}{% endif %}
+      </div>
+      {% endif %}
+      {{ panel_form(p, false) }}
+    </div>
+  </details>
+  {% endfor %}
+</div>
+
+<script>
+  document.querySelectorAll('.rp-form').forEach(function (form) {
+    var sel = form.querySelector('[data-style-select]');
+    if (sel) sel.addEventListener('change', function () { form.dataset.style = sel.value; });
+    form.addEventListener('click', function (ev) {
+      var add = ev.target.closest('[data-add-row]');
+      var rem = ev.target.closest('[data-remove-row]');
+      if (add) {
+        var list = form.querySelector('.entry-list');
+        if (list.children.length >= 25) { alert('A panel can have at most 25 roles.'); return; }
+        list.appendChild(form.querySelector('.row-tpl').content.cloneNode(true));
+      } else if (rem) {
+        rem.closest('.entry').remove();
+      }
+    });
+    // New panels start with one empty row so the form isn't blank.
+    var list = form.querySelector('.entry-list');
+    if (!list.children.length) list.appendChild(form.querySelector('.row-tpl').content.cloneNode(true));
+  });
+</script>
+</body>
+</html>

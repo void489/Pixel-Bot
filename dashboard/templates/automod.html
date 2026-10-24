@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Auto-Mod</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:28px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .t-label:first-child { margin-top:0; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-info { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#a5b4fc; padding:12px 16px; border-radius:var(--r-md); margin-bottom:22px; font-size:12px; line-height:1.6; }
+    select[multiple] { min-height:120px; background-image:none; padding-right:13px; }
+    textarea { width:100%; min-height:130px; font-family:var(--font-mono); font-size:12px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:10px 10px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
+    th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+    td input[type=number] { width:90px; }
+    .rule-name { font-weight:700; color:var(--text-bright); }
+    .rule-desc { font-size:12px; color:var(--text-muted); }
+    .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:18px; }
+    .switch-row { display:flex; align-items:center; gap:10px; font-size:14px; color:var(--text-bright); font-weight:600; }
+    .sticky-save { position:sticky; bottom:0; padding:14px 0 4px; background:linear-gradient(transparent, var(--bg-base) 40%); }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'automod' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🤖 Auto-Mod</div>
+  <p class="page-sub">All auto-moderation is set up here - there are no auto-mod commands. Changes apply within about 30 seconds.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved. The bot picks the new settings up within ~30 seconds.</div>{% endif %}
+  {% if cleared %}<div class="banner-ok">✅ Strikes cleared.</div>{% endif %}
+  {% if error %}
+  <div class="banner-error">
+    ❌ Not saved:
+    {% if error.startswith('bad_limit_') %}
+      the limit for <b>{{ error[10:] }}</b> must be between {{ limit_bounds[error[10:]][0] }} and {{ limit_bounds[error[10:]][1] }}.
+    {% elif error.startswith('bad_strike_') %}
+      <b>{{ error[11:].replace('_', ' ') }}</b> must be between {{ strike_bounds[error[11:]][0] }} and {{ strike_bounds[error[11:]][1] }}.
+    {% else %}something in the form was invalid.{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="banner-info">
+    Every violation deletes the message, saves an <code>automod</code> case (shown in <b>Moderation</b> and in <code>/history</code>),
+    logs it and adds a <b>strike</b>. Strikes are stored in the database, so they survive bot restarts.
+    <b>No one</b> bypasses AutoMod - not admins, not Manage Messages holders, not the owner - unless they have one of the exempt roles below. Exempt channels, bots and webhooks are never checked.
+    The bot needs <b>Manage Messages</b> in the channel (plus Moderate Members / Kick / Ban for the strike ladder).
+  </div>
+
+  <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>⚙️ General</h2></div>
+      <label class="switch-row"><input type="checkbox" name="enabled" {% if cfg.enabled %}checked{% endif %}> Auto-mod is on</label>
+      <div class="hint">Off by default. Nothing below does anything until this is ticked.</div>
+
+      <label class="t-label">Log channel</label>
+      <select name="log_channel_id">
+        <option value="">— Use the mod log channel —</option>
+        {% for c in channels %}
+        <option value="{{ c.id }}" {% if cfg.log_channel_id == c.id|string %}selected{% endif %}>#{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Where each violation is posted (member, message, rule, strikes, action taken).</div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>📏 Rules</h2></div>
+      <table>
+        <tr><th style="width:70px;">On</th><th>Rule</th><th style="width:210px;">Limit</th></tr>
+        {% for name, (label, desc, unit) in rule_info.items() %}
+        <tr>
+          <td><input type="checkbox" name="rule_{{ name }}" {% if cfg.rules[name].enabled %}checked{% endif %}></td>
+          <td><div class="rule-name">{{ label }}</div><div class="rule-desc">{{ desc }}</div></td>
+          <td>
+            {% if limit_bounds.get(name) %}
+            <input type="number" name="limit_{{ name }}" value="{{ cfg.rules[name].limit }}"
+                   min="{{ limit_bounds[name][0] }}" max="{{ limit_bounds[name][1] }}" required>
+            <span class="hint">{{ unit }} ({{ limit_bounds[name][0] }}-{{ limit_bounds[name][1] }})</span>
+            {% else %}<span class="hint">no limit</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>📝 Word &amp; link lists</h2></div>
+      <div class="grid2">
+        <div>
+          <label class="t-label">Bad words ({{ cfg.badwords|length }})</label>
+          <textarea name="badwords" placeholder="one word or phrase per line">{{ cfg.badwords|join('\n') }}</textarea>
+          <div class="hint">One per line, matched as whole words. End a word with <code>*</code> to match anything starting with it (e.g. <code>scam*</code>). Max 200. Only used when the "Bad words" rule is on.</div>
+        </div>
+        <div>
+          <label class="t-label">Allowed link domains ({{ cfg.link_allow|length }})</label>
+          <textarea name="link_allow" placeholder="youtube.com&#10;twitch.tv">{{ cfg.link_allow|join('\n') }}</textarea>
+          <div class="hint">One domain per line (subdomains are included). Only used when the "Links" rule is on.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>🛡️ Exemptions</h2></div>
+      <div class="grid2">
+        <div>
+          <label class="t-label">Exempt roles</label>
+          <select name="exempt_role_ids" multiple>
+            {% for r in roles %}
+            <option value="{{ r.id }}" {% if r.id|string in cfg.exempt_role_ids %}selected{% endif %}>{{ r.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="hint">Members with any of these roles are never checked. Ctrl/Cmd-click to pick several.</div>
+        </div>
+        <div>
+          <label class="t-label">Exempt channels</label>
+          <select name="exempt_channel_ids" multiple>
+            {% for c in all_channels %}
+            <option value="{{ c.id }}" {% if c.id|string in cfg.exempt_channel_ids %}selected{% endif %}>
+              {% if c.type == 4 %}📁 {{ c.name }} (category){% else %}#{{ c.name }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="hint">Nothing is checked in these channels. Pick a category to exempt every channel inside it.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>⚖️ Strike ladder</h2></div>
+      <div class="hint" style="margin:-8px 0 14px;">Each violation is a strike. When a member's strikes inside the window reach a step, that punishment is applied. Use <b>0</b> to turn a step off. The highest step reached wins.</div>
+      <div class="grid2">
+        <div>
+          <label class="t-label">Strikes expire after (minutes)</label>
+          <input type="number" name="strike_window_minutes" value="{{ cfg.strikes.window_minutes }}" min="{{ strike_bounds.window_minutes[0] }}" max="{{ strike_bounds.window_minutes[1] }}" required>
+        </div>
+        <div>
+          <label class="t-label">Timeout at (strikes)</label>
+          <input type="number" name="strike_mute_at" value="{{ cfg.strikes.mute_at }}" min="0" max="{{ strike_bounds.mute_at[1] }}" required>
+        </div>
+        <div>
+          <label class="t-label">Timeout length (minutes)</label>
+          <input type="number" name="strike_mute_minutes" value="{{ cfg.strikes.mute_minutes }}" min="1" max="{{ strike_bounds.mute_minutes[1] }}" required>
+        </div>
+        <div>
+          <label class="t-label">Kick at (strikes)</label>
+          <input type="number" name="strike_kick_at" value="{{ cfg.strikes.kick_at }}" min="0" max="{{ strike_bounds.kick_at[1] }}" required>
+        </div>
+        <div>
+          <label class="t-label">Ban at (strikes)</label>
+          <input type="number" name="strike_ban_at" value="{{ cfg.strikes.ban_at }}" min="0" max="{{ strike_bounds.ban_at[1] }}" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="sticky-save">
+      <button class="btn-xs btn-xs-accent" type="submit" style="padding:10px 22px;font-size:14px;">💾 Save auto-mod settings</button>
+    </div>
+  </form>
+
+  <div class="t-section" style="margin-top:28px;">
+    <div class="t-section-head">
+      <h2>🧾 Active strikes</h2>
+      {% if strikes %}
+      <form method="POST" onsubmit="return confirm('Clear the strikes of everyone in this server?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="clear_strikes">
+        <button class="btn-xs btn-xs-danger" type="submit">Clear all</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="hint" style="margin:-8px 0 12px;">Members with strikes that haven't expired yet ({{ cfg.strikes.window_minutes }} min window). Stored in the database - a bot restart does not clear them.</div>
+    <table>
+      <tr><th>Member</th><th>Strikes</th><th>Last strike</th><th></th></tr>
+      {% for s in strikes %}
+      <tr>
+        <td>{% if s.name %}{{ s.name }} {% endif %}<code>{{ s.user_id }}</code></td>
+        <td>{{ s.count }}</td>
+        <td>{{ s.last_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+        <td style="text-align:right;">
+          <form method="POST" style="display:inline;">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="clear_strikes">
+            <input type="hidden" name="user_id" value="{{ s.user_id }}">
+            <button class="btn-xs btn-xs-ghost" type="submit">Clear</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="color:var(--text-muted);">No active strikes.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+</body>
+</html>

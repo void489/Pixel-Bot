@@ -1,0 +1,65 @@
+{% extends "_legal_base.html" %}
+{% block title %}Privacy Policy{% endblock %}
+{% block body %}
+<h1>Privacy Policy</h1>
+<p class="updated">Last updated: {{ updated }}</p>
+
+<p>Pixel Bot ("the bot", "we") is a Discord bot with a web dashboard that helps server owners run their communities: tickets, moderation, applications, staff tools, leveling, giveaways and more. This policy explains what information the bot and dashboard handle, why, and what your choices are. By using the bot or the dashboard you agree to it.</p>
+
+<h2>1. Information we handle</h2>
+<p>The bot only works inside Discord servers that have added it. Depending on which features a server's admins turn on, it handles:</p>
+<ul>
+  <li><strong>Discord identifiers:</strong> user IDs, usernames, server (guild) IDs, role IDs, channel IDs and message IDs.</li>
+  <li><strong>Server settings</strong> that admins configure on the dashboard (channels, roles, ladders, panels, command permissions and similar).</li>
+  <li><strong>Moderation records:</strong> warnings, mutes, bans, kicks, notes, blacklist requests and the reasons given.</li>
+  <li><strong>Staff records:</strong> promotions and demotions, staff strikes (with reason, who gave it and when), leave-of-absence requests, activity checks and taskbook statistics.</li>
+  <li><strong>Tickets:</strong> ticket details and saved transcripts of the conversation inside the ticket channel.</li>
+  <li><strong>Applications:</strong> the answers a member submits and the decision made on them.</li>
+  <li><strong>Community features:</strong> XP and level totals, vouches, giveaway entries and winners, poll votes, suggestions, AFK status, invite counts (who invited whom), and, only if you set them, birthdays and reminders.</li>
+  <li><strong>Text you give a feature directly,</strong> for example the text of a suggestion, reminder or vouch.</li>
+</ul>
+<p>Regular chat messages are read by the bot in order to run features such as auto-moderation, leveling and logging, but they are not saved in our database as a general rule. The exceptions are the items above where you give text to a feature, and ticket transcripts. If a server's admins turn on message logging, the content of edited or deleted messages is posted by the bot into that server's own log channel on Discord. That channel belongs to the server, not to us.</p>
+<p>The bot does not record voice audio. For voice XP it only notes when members join, leave and stay in voice channels.</p>
+
+<h2>2. Dashboard login</h2>
+<p>When you log in to the dashboard we use Discord's OAuth2 login with the <code>identify</code> and <code>guilds</code> permissions. This lets us see your Discord username and ID and the list of servers you are in, so we can show you the servers you are allowed to manage. We do not get your email address or password. The login session is kept in a secure cookie in your browser and ends when you log out or the cookie expires.</p>
+
+<h2>3. How we use it</h2>
+<ul>
+  <li>To provide the features a server's admins have turned on.</li>
+  <li>To keep the bot secure and working, for example anti-spam, anti-nuke and error handling.</li>
+  <li>To let server admins and staff review moderation and staff history inside their own server.</li>
+</ul>
+<p>We do not sell your information, use it for advertising, or build profiles of you.</p>
+
+<h2>4. Messages the bot sends you</h2>
+<p>The bot may send you direct messages, such as moderation notices, staff strike notices, application results, reminders you asked for, and, if a server's admins enable it, a welcome or advertisement message when you join that server. Server admins decide whether these are on.</p>
+
+<h2>5. Who can see it</h2>
+<p>Information is tied to the server it came from. Admins and staff of that server can see the records for their own server through bot commands and the dashboard, according to the permissions they were given. We do not share one server's data with another server.</p>
+<p>We use these service providers to run the bot: a cloud database (MongoDB) and a hosting provider. The <code>/translate</code> command sends the text you type to a third-party translation service (MyMemory) so it can be translated. Discord itself processes everything you do on Discord under its own terms and privacy policy.</p>
+<p>We may disclose information if the law requires it, or to protect the safety of people and the bot.</p>
+
+<h2>6. How long we keep it</h2>
+<ul>
+  <li>Auto-moderation strike counters expire on their own after a short time.</li>
+  <li>Anti-nuke security events are deleted automatically after 30 days.</li>
+  <li>Everything else is kept for as long as the server uses the bot, or until a server admin deletes it (for example by deleting a strike or a ticket transcript) or you ask us to remove it.</li>
+  <li>If the bot is removed from a server, that server's data may be kept for a while in case the bot is added back. We delete it on request.</li>
+</ul>
+
+<h2>7. Your choices</h2>
+<p>You can ask us to tell you what we hold about you, or to correct or delete it, by emailing <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> with your Discord username and user ID. We aim to reply within 30 days. Some records, such as moderation history, may be kept where there is a legitimate reason, such as keeping a community safe. You can also stop using the dashboard and revoke its access at any time in Discord under <em>Settings → Authorized Apps</em>, and you can ask a server's admins to remove the bot.</p>
+
+<h2>8. Security</h2>
+<p>We take reasonable steps to protect the data we hold, including keeping bot tokens and database credentials private and requiring a Discord login with permission to manage a server before its settings can be seen. No online service is perfectly secure, so we cannot promise absolute security.</p>
+
+<h2>9. Children</h2>
+<p>The bot is meant for people who are allowed to use Discord. Discord requires users to be at least 13 years old (or older where local law says so), and we do not knowingly collect information from anyone below that age. If you think a child's information has been collected, contact us and we will delete it.</p>
+
+<h2>10. Changes</h2>
+<p>We may update this policy from time to time. The "last updated" date at the top shows when it last changed. If you keep using the bot after a change, you accept the new version.</p>
+
+<h2>11. Contact</h2>
+<p>Questions or requests about this policy: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+{% endblock %}

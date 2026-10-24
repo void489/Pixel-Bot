@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Ticket Ratings</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .empty { padding:26px; text-align:center; color:var(--text-muted); font-size:13px; }
+    .stats { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+    .stat { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px 22px; min-width:150px; }
+    .stat b { display:block; font-size:24px; color:var(--text-bright); letter-spacing:-0.02em; }
+    .stat span { font-size:12px; color:var(--text-muted); }
+    .range a { margin-right:6px; text-decoration:none; }
+    table.rt { width:100%; border-collapse:collapse; font-size:13px; }
+    table.rt th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); }
+    table.rt td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
+    .dist { display:flex; align-items:flex-end; gap:4px; height:30px; }
+    .dist i { display:block; width:14px; background:var(--accent, #5865F2); border-radius:3px 3px 0 0; min-height:2px; opacity:.85; }
+    .dist-lbl { display:flex; gap:4px; font-size:10px; color:var(--text-muted); }
+    .dist-lbl em { width:14px; text-align:center; font-style:normal; }
+    .low { color:#f87171; } .mid { color:#fbbf24; } .high { color:#4ade80; }
+    .cmt { padding:12px 0; border-bottom:1px solid var(--border); font-size:13px; color:var(--text-bright); }
+    .cmt small { color:var(--text-muted); display:block; margin-bottom:4px; }
+    /* phones: each table row becomes a small card */
+    @media (max-width:640px) {
+      .tbl-wrap { overflow-x:visible; }
+      table.stack, table.stack tbody { display:block; }
+      table.stack thead, table.stack tr:has(th) { display:none; }
+      table.stack tr { display:block; border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:10px; }
+      table.stack td { display:flex; justify-content:space-between; align-items:center; gap:12px; border:0; padding:5px 0; white-space:normal; text-align:right; }
+      table.stack td::before { content:attr(data-label); color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; text-align:left; }
+      table.stack td.num { width:auto; }
+      table.stack td.act { justify-content:flex-start; flex-wrap:wrap; gap:8px; margin-top:4px; padding-top:10px; border-top:1px solid var(--border); }
+      table.stack td.act::before { display:none; }
+    }
+    @media (max-width:640px) { .t-section { padding:16px; } .stat { flex:1 1 130px; min-width:0; } .page-title { font-size:22px; } }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'ratings' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">⭐ Ticket Ratings</div>
+  <p class="page-sub">When a claimed ticket closes, the opener gets 1–5 buttons in their close DM. The rating counts for the staff member who claimed it. Averages also show on each staff member's taskbook and in <code>/staffprofile</code> (from 3 ratings). Deleting a review removes it from those too.</p>
+
+  <div class="range" style="margin-bottom:18px;">
+    {% for d, label in [(7,'7 days'),(30,'30 days'),(90,'90 days'),(0,'All time')] %}
+    <a class="btn-xs {% if d == days %}btn-xs-accent{% endif %}" href="{{ url_for('dashboard.ticket_ratings_page', guild_id=guild_id, days=d) }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>{% if overall is not none %}{{ '%.2f'|format(overall) }}{% else %}—{% endif %}</b><span>Average rating</span></div>
+    <div class="stat"><b>{{ total }}</b><span>Ratings received</span></div>
+    <div class="stat"><b>{% if sent %}{{ (total * 100 // sent) }}%{% else %}—{% endif %}</b><span>Response rate ({{ total }} of {{ sent }} DMs)</span></div>
+  </div>
+
+  <div class="t-section">
+    <h2 style="margin-bottom:14px;">Per staff member</h2>
+    {% if not rows %}
+      <div class="empty">No ratings in this period yet.</div>
+    {% else %}
+    <table class="rt stack">
+      <thead><tr><th>Staff</th><th>Average</th><th>Ratings</th><th>Spread (1 → 5)</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td data-label="Staff">{{ r.name }}</td>
+          <td data-label="Average" class="{% if r.count < 3 %}{% elif r.avg >= 4 %}high{% elif r.avg >= 3 %}mid{% else %}low{% endif %}">
+            <b>{{ '%.2f'|format(r.avg) }}</b>{% if r.count < 3 %} <small style="color:var(--text-muted)">(few ratings)</small>{% endif %}
+          </td>
+          <td data-label="Ratings">{{ r.count }}</td>
+          <td data-label="Spread (1 → 5)">
+            <div>
+            <div class="dist">{% for n in [1,2,3,4,5] %}<i style="height:{{ (r.dist[n] * 100 // r.max_dist) }}%" title="{{ n }}★: {{ r.dist[n] }}"></i>{% endfor %}</div>
+            <div class="dist-lbl">{% for n in [1,2,3,4,5] %}<em>{{ r.dist[n] }}</em>{% endfor %}</div>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  <div class="t-section">
+    <h2 style="margin-bottom:8px;">Latest reviews</h2>
+    {% if deleted %}<p class="hint" style="color:#4ade80;margin-bottom:8px;">Review deleted.</p>{% endif %}
+    {% if not reviews %}
+      <div class="empty">No reviews in this period.</div>
+    {% else %}
+      {% for c in reviews %}
+      <div class="cmt">
+        <form method="POST" style="float:right;margin-left:12px;" onsubmit="return confirm('Delete this review? It will also be removed from the staff member\'s taskbook average.')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_type" value="delete_rating">
+          <input type="hidden" name="rating_id" value="{{ c.id }}">
+          <input type="hidden" name="days" value="{{ days }}">
+          <button class="btn-xs btn-xs-danger" type="submit">🗑️ Delete</button>
+        </form>
+        <small>{{ '⭐' * c.rating }} · for <b>{{ c.staff }}</b>{% if c.ticket %} · #{{ c.ticket }}{% endif %}{% if c.when %} · {{ c.when.strftime('%Y-%m-%d %H:%M') }}{% endif %}</small>
+        {% if c.text %}{{ c.text }}{% else %}<span style="color:var(--text-muted)">No comment</span>{% endif %}
+      </div>
+      {% endfor %}
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

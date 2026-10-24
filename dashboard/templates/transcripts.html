@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Transcripts</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .filters input[type=text] { flex:1; min-width:220px; }
+    .filters label.chk { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--text-muted); cursor:pointer; }
+    table.tr { width:100%; border-collapse:collapse; font-size:13px; }
+    table.tr th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    table.tr td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:top; }
+    table.tr td.dim { color:var(--text-muted); }
+    .rt-low { color:#f87171; } .rt-mid { color:#fbbf24; } .rt-high { color:#4ade80; }
+    .pager { display:flex; gap:10px; align-items:center; justify-content:center; margin-top:18px; color:var(--text-muted); font-size:13px; }
+    .empty { padding:26px; text-align:center; color:var(--text-muted); font-size:13px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'transcripts' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">📄 Transcripts</div>
+  <p class="page-sub">Every closed ticket, searchable. Staff can also look a user's past tickets up in Discord with <code>/ticket lookup</code>.</p>
+
+  <div class="t-section">
+    <form method="GET" class="filters">
+      <input type="text" name="q" value="{{ f.q }}" placeholder="Search anything: user, staff, ticket name, reason or ID…">
+      <input type="text" name="member" value="{{ f.member }}" placeholder="Member who opened it (name or ID)" style="min-width:200px;flex:0 1 230px;">
+      <input type="text" name="staff" value="{{ f.staff }}" placeholder="Staff (claimed / closed)" style="min-width:180px;flex:0 1 210px;">
+      <select name="panel">
+        <option value="">Any panel</option>
+        {% for name in panels %}<option value="{{ name }}" {% if f.panel == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+      <input type="text" name="text" value="{{ f.text }}" placeholder="Words inside the messages (slower)" style="min-width:220px;flex:0 1 260px;">
+      <select name="rating">
+        <option value="">Any rating</option>
+        <option value="rated" {% if f.rating == 'rated' %}selected{% endif %}>Rated</option>
+        <option value="low" {% if f.rating == 'low' %}selected{% endif %}>Low (1–2 ★)</option>
+        <option value="high" {% if f.rating == 'high' %}selected{% endif %}>High (4–5 ★)</option>
+        {% for n in (5, 4, 3, 2, 1) %}<option value="{{ n }}" {% if f.rating == n|string %}selected{% endif %}>{{ n }} ★ only</option>{% endfor %}
+        <option value="unrated" {% if f.rating == 'unrated' %}selected{% endif %}>Not rated</option>
+      </select>
+      <select name="priority">
+        <option value="">Any priority</option>
+        {% for key, label in (("urgent","🔴 Urgent"),("high","🟠 High"),("normal","🔵 Normal"),("low","🟢 Low")) %}
+        <option value="{{ key }}" {% if f.priority == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="chk">From <input type="date" name="from" value="{{ f.date_from }}"></label>
+      <label class="chk">To <input type="date" name="to" value="{{ f.date_to }}"></label>
+      <select name="days" title="Quick range (ignored when From / To is set)">
+        {% for d, label in [(0,'All time'),(7,'Last 7 days'),(30,'Last 30 days'),(90,'Last 90 days')] %}
+        <option value="{{ d }}" {% if d == f.days %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="chk"><input type="checkbox" name="in_msgs" value="1" {% if f.in_msgs %}checked{% endif %}> Search box also looks inside messages</label>
+      <button class="btn-xs btn-xs-accent" type="submit">Search</button>
+      {% if filtered %}<a class="btn-xs" href="{{ url_for('dashboard.transcripts_page', guild_id=guild_id) }}">Clear</a>{% endif %}
+    </form>
+  </div>
+
+  <div class="t-section">
+    <div style="margin-bottom:10px;color:var(--text-muted);font-size:13px;">{{ total }} transcript{{ '' if total == 1 else 's' }}</div>
+    {% if not rows %}
+      <div class="empty">No transcripts match.</div>
+    {% else %}
+    <table class="tr">
+      <thead><tr><th>Ticket</th><th>Priority</th><th>Opened by</th><th>Claimed by</th><th>Closed by</th><th>Reason</th><th>Rating</th><th>Closed</th><th></th></tr></thead>
+      <tbody>
+      {% for t in rows %}
+        <tr>
+          <td>#{{ t.channel_name }}{% if t.panel_name %}<div class="dim" style="color:var(--text-muted);font-size:11px;">{{ t.panel_name }}</div>{% endif %}</td>
+          <td>{% set pr = {"urgent":"🔴 Urgent","high":"🟠 High","normal":"🔵 Normal","low":"🟢 Low"}.get(t.priority) %}{% if pr %}{{ pr }}{% else %}<span style="color:var(--text-muted)">—</span>{% endif %}</td>
+          <td>{{ t.opener_name or t.opener_id }}</td>
+          <td class="{% if not t.claimed_by_name %}dim{% endif %}">{{ t.claimed_by_name or '—' }}</td>
+          <td>{{ t.closer_name or t.closed_by_id }}</td>
+          <td>{{ (t.reason or '')[:80] }}</td>
+          <td>{% if t.rating %}<span class="{% if t.rating <= 2 %}rt-low{% elif t.rating == 3 %}rt-mid{% else %}rt-high{% endif %}">{{ '★' * t.rating }}</span>{% if t.rating_comment %} <span title="{{ t.rating_comment }}">💬</span>{% endif %}{% else %}<span style="color:var(--text-muted)">—</span>{% endif %}</td>
+          <td class="dim">{{ t.created_at.strftime('%Y-%m-%d %H:%M') if t.created_at else '' }}</td>
+          <td><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.view_transcript', guild_id=guild_id, transcript_id=t._id) }}" target="_blank">View</a>
+            <a class="btn-xs" href="{{ url_for('dashboard.transcript_share_page', guild_id=guild_id, transcript_id=t._id) }}" title="Create an expiring link">🔗 Share</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="pager">
+      {% if prev_url %}<a class="btn-xs" href="{{ prev_url }}">← Previous</a>{% endif %}
+      <span>Page {{ page }} of {{ pages }}</span>
+      {% if next_url %}<a class="btn-xs" href="{{ next_url }}">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

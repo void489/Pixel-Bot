@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Audit Log</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:28px; max-width:900px; line-height:1.6; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .filters { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+    .filters .f { display:flex; flex-direction:column; gap:6px; }
+    .t-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); }
+    .btn-xs { padding:8px 14px; font-size:12px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; text-decoration:none; display:inline-block; }
+    .btn-xs-accent { background:var(--accent); color:#fff; }
+    .btn-xs-ghost { background:var(--bg-muted); color:var(--text-main); }
+    .empty { color:var(--text-muted); font-size:13px; font-style:italic; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:8px; font-style:italic; }
+    .entry { border-bottom:1px solid var(--border); padding:12px 2px; }
+    .entry:last-child { border-bottom:none; }
+    .e-top { display:flex; gap:10px; flex-wrap:wrap; align-items:baseline; font-size:13px; color:var(--text-main); }
+    .e-who { font-weight:800; color:var(--text-bright); }
+    .e-when { font-size:11px; color:var(--text-muted); }
+    .pill { display:inline-block; border-radius:99px; padding:2px 10px; font-size:11px; font-weight:800; color:#93c5fd; background:rgba(59,130,246,.15); border:1px solid rgba(59,130,246,.4); }
+    details { margin-top:6px; }
+    summary { cursor:pointer; font-size:12px; color:var(--text-muted); }
+    .lines { margin:8px 0 0; padding:10px 12px; background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; color:var(--text-main); white-space:pre-wrap; word-break:break-word; }
+    .pager { display:flex; gap:10px; align-items:center; margin-top:16px; font-size:13px; color:var(--text-muted); }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'audit_log' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🧾 Audit Log</div>
+  <p class="page-sub">Who changed what on this dashboard, and when. Each save shows the settings that actually changed (before → after). Secret values such as tokens and webhooks are always hidden. Entries are kept for {{ retention }} days.</p>
+
+  <div class="t-section">
+    <form method="GET" class="filters">
+      <div class="f"><span class="t-label">Person</span><input type="text" name="actor" value="{{ actor }}" placeholder="name or ID" maxlength="60"></div>
+      <div class="f"><span class="t-label">Page</span>
+        <select name="page"><option value="">All pages</option>
+          {% for p in pages %}<option value="{{ p }}" {% if p == page_f %}selected{% endif %}>{{ p }}</option>{% endfor %}
+        </select></div>
+      <div class="f"><span class="t-label">Contains</span><input type="text" name="q" value="{{ q }}" placeholder="e.g. expire_days" maxlength="80"></div>
+      <button class="btn-xs btn-xs-accent" type="submit">Search</button>
+      {% if actor or page_f or q %}<a class="btn-xs btn-xs-ghost" href="{{ url_for('dashboard.audit_log_page', guild_id=guild_id) }}">Clear</a>{% endif %}
+    </form>
+  </div>
+
+  <div class="t-section">
+    {% for a in rows %}
+    <div class="entry">
+      <div class="e-top">
+        <span class="e-who">{{ a.actor_name }}</span>
+        {% if a.page %}<span class="pill">{{ a.page }}</span>{% endif %}
+        <span>{{ a.detail or a.action }}</span>
+        <span class="e-when">{{ a.at.strftime('%Y-%m-%d %H:%M UTC') }}</span>
+      </div>
+      {% if a.lines %}
+      <details {% if a.lines|length <= 3 %}open{% endif %}>
+        <summary>{{ a.lines|length }} change{{ '' if a.lines|length == 1 else 's' }}</summary>
+        <div class="lines">{% for ln in a.lines %}{{ ln }}{{ "\n" if not loop.last }}{% endfor %}</div>
+      </details>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="empty">{% if actor or page_f or q %}Nothing matches that search.{% else %}No changes recorded yet. Saves made from now on will show up here.{% endif %}</div>
+    {% endfor %}
+    {% if pages_total > 1 %}
+    <div class="pager">
+      {% if page_no > 1 %}<a class="btn-xs btn-xs-ghost" href="{{ url_for('dashboard.audit_log_page', guild_id=guild_id, actor=actor, page=page_f, q=q, p=page_no-1) }}">← Newer</a>{% endif %}
+      <span>Page {{ page_no }} of {{ pages_total }} ({{ total }} entries)</span>
+      {% if page_no < pages_total %}<a class="btn-xs btn-xs-ghost" href="{{ url_for('dashboard.audit_log_page', guild_id=guild_id, actor=actor, page=page_f, q=q, p=page_no+1) }}">Older →</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

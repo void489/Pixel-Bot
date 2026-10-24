@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Claim Ticket Setup</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
+    @media(max-width:960px){ .grid2{ grid-template-columns:1fr; } }
+
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+
+    .t-card { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; margin-bottom:10px; }
+    .t-card-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .t-card-title { font-weight:600; font-size:14px; color:var(--text-bright); margin-bottom:4px; }
+    .t-card-meta  { color:var(--text-muted); font-size:12px; line-height:1.6; }
+    .t-card-actions { display:flex; gap:6px; flex-shrink:0; }
+    .tag { display:inline-block; background:var(--accent-tint); border:1px solid rgba(34,197,94,0.3); color:var(--accent-light); font-size:11px; padding:2px 7px; border-radius:99px; margin:2px 2px 0 0; }
+
+    .sbadge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
+    .sbadge-primary   { background:rgba(34,197,94,.2);  color:#86efac; }
+    .sbadge-secondary { background:rgba(90,96,112,.2);   color:#9da3af; }
+    .sbadge-success   { background:rgba(34,197,94,.15);  color:#4ade80; }
+    .sbadge-danger    { background:rgba(239,68,68,.15);  color:#f87171; }
+
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .t-label:first-child { margin-top:0; }
+    .color-row { display:flex; gap:8px; align-items:center; }
+    .color-row input[type=color] { width:42px; height:36px; padding:3px; border-radius:var(--r-sm); border:1px solid var(--border); background:var(--input-bg); cursor:pointer; }
+    .color-row input[type=text]  { flex:1; }
+    select[multiple] { min-height:96px; background-image:none; padding-right:13px; }
+
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-ghost:hover { background:var(--bg-overlay); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
+
+    .m-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; align-items:center; justify-content:center; }
+    .m-overlay.open { display:flex; }
+    .m-box { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:28px; width:100%; max-width:420px; }
+    .m-box h3 { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:18px; }
+    .m-footer { margin-top:20px; display:flex; gap:8px; justify-content:flex-end; }
+
+    .banner-warn { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:14px 18px; border-radius:var(--r-md); margin-bottom:22px; font-size:13px; line-height:1.6; }
+    .banner-warn code { background:rgba(0,0,0,.3); padding:1px 5px; border-radius:3px; }
+    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+
+    .cat-mode-row { display:flex; gap:14px; margin-bottom:8px; font-size:12px; color:var(--text-muted); }
+    .cat-mode-row label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    .hidden { display:none !important; }
+  
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'claim' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🎉 Claim Ticket Setup</div>
+  <p class="page-sub">Configure the ticket that opens when a giveaway winner presses <strong>Claim</strong>. Claim tickets work with <code>/ticket add</code>, <code>close</code>, <code>remove</code> and <code>rename</code> - but can't be moved.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Claim ticket settings saved.</div>{% endif %}
+  {% if error == 'category_required' %}
+  <div class="banner-error">Please choose a category, or enter a name for a new one.</div>
+  {% endif %}
+  {% if error == 'question_required' %}
+  <div class="banner-error">Add at least one question (Question 1 is required).</div>
+  {% endif %}
+  <div class="banner-warn" style="max-width:640px;">
+    📁 Categories (including spare ones for when a category is full) are set on the
+    <a href="{{ url_for('dashboard.tickets_page', guild_id=guild_id) }}">Tickets page</a>
+    under <b>Server-wide Categories</b>.
+    {% if server_category %}That setting is in use now, so the category below is only a fallback.{% endif %}
+  </div>
+  {% if not configured and not server_category %}
+  <div class="banner-warn">
+    Claim tickets aren't set up yet. Until you save this page, claim tickets are created
+    <strong>without a category</strong> and only the winner and admins can see them.
+  </div>
+  {% endif %}
+
+  <div class="t-section" style="max-width:640px;">
+    <div class="t-section-head"><h2>⚙️ Claim Ticket Settings</h2></div>
+
+    <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="t-label">Discord Category{% if not server_category %} *{% endif %}</label>
+      <input type="text" id="f-category-name" list="cat-list" maxlength="100"
+             placeholder="e.g. Claim Tickets" autocomplete="off" {% if not server_category %}required{% endif %}
+             oninput="syncCategory()">
+      <datalist id="cat-list">
+        {% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}
+      </datalist>
+      <!-- what the server actually receives (same fields as before) -->
+      <input type="hidden" name="category_mode" id="f-category-mode" value="existing">
+      <input type="hidden" name="category_id" id="f-category" value="">
+      <input type="hidden" name="category_new_name" id="f-category-new" value="">
+      <div class="hint" id="cat-status"></div>
+
+      <label class="t-label">Ping mode (who gets pinged when a claim ticket opens)</label>
+      <select name="ping_mode">
+        <option value="roles" {% if (cfg.ping_mode or 'roles') == 'roles' %}selected{% endif %}>Ping roles - the ticket opener + the Ping Roles below</option>
+        <option value="host" {% if cfg.ping_mode == 'host' %}selected{% endif %}>Ping host - the ticket opener + the giveaway host (no roles)</option>
+      </select>
+      <div class="hint">The Allow Roles setting below is not affected by this.</div>
+
+      <label class="t-label">Ping Roles (used when Ping mode is "Ping roles")</label>
+      <select name="ping_role_ids" multiple>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if r.id in (cfg.ping_role_ids or []) %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
+
+      <label class="t-label">Allow Roles (who can see &amp; reply in claim tickets)</label>
+      <select name="allow_role_ids" multiple>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if r.id in (cfg.allow_role_ids or []) %}selected{% endif %}>{{ r.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">These roles also count as staff for the Close Ticket button.</div>
+
+      <label class="t-label">Giveaway games - pick timer</label>
+      <div class="hint" style="margin-top:0;margin-bottom:8px;">
+        How long the two winners have to pick in /giveaway rps and /giveaway splitsteal
+        (per round for Rock Paper Scissors). 10 to 600 seconds.
+      </div>
+      <label class="t-label">Rock Paper Scissors timer (seconds)</label>
+      <input type="number" name="rps_timer" min="10" max="600" step="1"
+             value="{{ cfg.rps_timer or 60 }}">
+      <label class="t-label">Split or Steal timer (seconds)</label>
+      <input type="number" name="splitsteal_timer" min="10" max="600" step="1"
+             value="{{ cfg.splitsteal_timer or 60 }}">
+
+      {% set qs = cfg.questions or [] %}
+      <label class="t-label">Claim Questions (asked when a winner presses Claim)</label>
+      <div class="hint" style="margin-top:0;margin-bottom:8px;">
+        Question 1 is required, up to 5 total. Discord limits each question to 45 characters.
+      </div>
+      <label class="t-label">Question 1 *</label>
+      <input type="text" name="q0" maxlength="45" required
+             value="{{ qs[0] if qs|length > 0 else 'What is your Minecraft IGN?' }}">
+      <label class="t-label">Question 2</label>
+      <input type="text" name="q1" maxlength="45" value="{{ qs[1] if qs|length > 1 else '' }}">
+      <label class="t-label">Question 3</label>
+      <input type="text" name="q2" maxlength="45" value="{{ qs[2] if qs|length > 2 else '' }}">
+      <label class="t-label">Question 4</label>
+      <input type="text" name="q3" maxlength="45" value="{{ qs[3] if qs|length > 3 else '' }}">
+      <label class="t-label">Question 5</label>
+      <input type="text" name="q4" maxlength="45" value="{{ qs[4] if qs|length > 4 else '' }}">
+
+      <div style="margin-top:18px;">
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Settings</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const CATEGORIES = [{% for c in categories %}{ id: {{ c.id|string|tojson }}, name: {{ c.name|tojson }} },{% endfor %}];
+  const HINT_EMPTY = "Type a category name. If it exists, claim tickets go there; if not, it's created for you.";
+
+  // One name field drives the three fields the server reads:
+  //   existing name -> category_mode=existing + category_id
+  //   new name      -> category_mode=new      + category_new_name
+  function syncCategory() {
+    const name  = document.getElementById('f-category-name').value.trim();
+    const match = CATEGORIES.find(c => c.name.trim().toLowerCase() === name.toLowerCase());
+    const status = document.getElementById('cat-status');
+    document.getElementById('f-category-mode').value = match ? 'existing' : 'new';
+    document.getElementById('f-category').value      = match ? match.id : '';
+    document.getElementById('f-category-new').value  = match ? '' : name;
+    if (!name)      status.textContent = HINT_EMPTY;
+    else if (match) status.textContent = '✅ "' + match.name + '" already exists - claim tickets will be placed in it.';
+    else            status.textContent = '➕ "' + name + '" doesn\'t exist yet - it will be created automatically.';
+  }
+
+  // Pre-fill from the saved value: a real category ID, or a pending "__new__:" name.
+  (function () {
+    const current = {{ (cfg.category_id or '')|string|tojson }};
+    let name = '';
+    if (current.startsWith('__new__:')) {
+      name = current.slice(8);
+    } else if (current) {
+      const found = CATEGORIES.find(c => c.id === current);
+      name = found ? found.name : '';
+    }
+    document.getElementById('f-category-name').value = name;
+    syncCategory();
+  })();
+</script>
+</body>
+</html>

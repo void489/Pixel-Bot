@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Ticket Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:22px 26px; margin-bottom:24px; }
+    .t-section h2 { font-size:15px; margin:0 0 4px; color:var(--text-bright); }
+    .t-section .basis { font-size:12px; color:var(--text-muted); margin-bottom:14px; }
+    .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .filters label.chk { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--text-muted); }
+    .stats { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+    .stat { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px 22px; min-width:170px; }
+    .stat b { display:block; font-size:24px; color:var(--text-bright); letter-spacing:-0.02em; }
+    .stat span { font-size:12px; color:var(--text-muted); }
+    .stat small { display:block; font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .chart { display:flex; align-items:flex-end; gap:3px; height:170px; overflow-x:auto; padding-bottom:2px; }
+    .chart .col { flex:1 0 14px; max-width:46px; height:100%; display:flex; align-items:flex-end; gap:1px; position:relative; }
+    .chart .col i { flex:1; display:block; min-height:1px; border-radius:2px 2px 0 0; }
+    .chart .o { background:var(--accent, #5865F2); } .chart .c { background:#8c8c95; }
+    .axis { display:flex; justify-content:space-between; font-size:11px; color:var(--text-muted); margin-top:6px; }
+    .legend { display:flex; gap:16px; font-size:12px; color:var(--text-muted); margin-bottom:10px; }
+    .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+    table.an { width:100%; border-collapse:collapse; font-size:13px; }
+    table.an th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    table.an td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
+    td.dim, .dim { color:var(--text-muted); }
+    .bar { height:8px; border-radius:4px; background:var(--accent, #5865F2); opacity:.85; min-width:2px; }
+    .low { color:#f87171; } .mid { color:#fbbf24; } .high { color:#4ade80; }
+    .empty { padding:22px; text-align:center; color:var(--text-muted); font-size:13px; }
+    .note { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#c7d2fe; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'ticket_analytics' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">📈 Ticket Analytics</div>
+  <p class="page-sub">{{ d.start.strftime('%b %d, %Y') }} – {{ d.last_day.strftime('%b %d, %Y') }} · times are UTC. Tickets are counted from when this page's tracking started; use the import button to add older closed tickets.</p>
+
+  {% if notice %}<div class="note">{{ notice }}</div>{% endif %}
+  {% if d.truncated %}<div class="note">This range has a very large number of tickets, so only the first 100,000 per figure were counted. Pick a shorter range for exact numbers.</div>{% endif %}
+
+  <div class="t-section">
+    <form method="GET" class="filters">
+      <select name="days" title="Quick range (ignored when From / To is set)">
+        {% for n, label in [(7,'Last 7 days'),(30,'Last 30 days'),(90,'Last 90 days'),(365,'Last 12 months'),(0,'All time')] %}
+        <option value="{{ n }}" {% if f.days == n %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="chk">From <input type="date" name="from" value="{{ f.date_from }}"></label>
+      <label class="chk">To <input type="date" name="to" value="{{ f.date_to }}"></label>
+      <select name="kind">
+        <option value="">All ticket kinds</option>
+        {% for k in kinds %}<option value="{{ k }}" {% if f.kind == k %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}
+      </select>
+      <select name="panel">
+        <option value="">All panels</option>
+        {% for n in panel_names %}<option value="{{ n }}" {% if f.panel == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+      <button class="btn-xs btn-xs-accent" type="submit">Apply</button>
+      <a class="btn-xs" href="{{ url_for('dashboard.ticket_analytics_page', guild_id=guild_id) }}">Reset</a>
+    </form>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b>{{ d.opened }}</b><span>Tickets opened</span><small>{{ d.still_open }} still open</small></div>
+    <div class="stat"><b>{{ d.closed }}</b><span>Tickets closed</span></div>
+    <div class="stat"><b>{{ d.first_reply.avg|dur }}</b><span>Avg first reply</span><small>median {{ d.first_reply.median|dur }} · 90% within {{ d.first_reply.p90|dur }}{% if d.first_reply.count %} · {{ d.first_reply.count }} tickets{% endif %}</small></div>
+    <div class="stat"><b>{{ d.close_time.avg|dur }}</b><span>Avg time to close</span><small>median {{ d.close_time.median|dur }}</small></div>
+    <div class="stat"><b>{% if d.rating.avg %}{{ '%.2f'|format(d.rating.avg) }} ★{% else %}—{% endif %}</b><span>Avg rating</span><small>{{ d.rating.count }} rated</small></div>
+  </div>
+
+  <div class="t-section">
+    <h2>Ticket volume</h2>
+    <div class="basis">Opened and closed per {{ d.bucket }}.</div>
+    {% if not d.opened and not d.closed %}
+      <div class="empty">No tickets in this range yet.</div>
+    {% else %}
+    <div class="legend"><span><i class="o" style="background:var(--accent,#5865F2)"></i>Opened</span><span><i style="background:#8c8c95"></i>Closed</span></div>
+    <div class="chart">
+      {% for b in d.volume %}
+      <div class="col" title="{{ b.label }}: {{ b.opened }} opened, {{ b.closed }} closed">
+        <i class="o" style="height:{{ b.opened_pct }}%"></i><i class="c" style="height:{{ b.closed_pct }}%"></i>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="axis"><span>{{ d.volume[0].label }}</span><span>{{ d.volume[-1].label }}</span></div>
+    {% endif %}
+  </div>
+
+  <div class="t-section">
+    <h2>Busiest panels</h2>
+    <div class="basis">Tickets opened in the range. Reply time is for tickets opened in it; close time for ones closed in it.</div>
+    {% if not d.panels %}<div class="empty">Nothing yet.</div>{% else %}
+    <table class="an">
+      <thead><tr><th>Panel</th><th style="width:28%"></th><th>Opened</th><th>Closed</th><th>Avg first reply</th><th>Avg close time</th></tr></thead>
+      <tbody>
+      {% for p in d.panels %}
+        <tr><td>{{ p.name }}</td><td><div class="bar" style="width:{{ p.pct }}%"></div></td><td>{{ p.opened }}</td><td>{{ p.closed }}</td><td class="dim">{{ p.avg_first_reply|dur }}</td><td class="dim">{{ p.avg_close|dur }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  <div class="t-section">
+    <h2>Staff workload</h2>
+    <div class="basis">Claimed = claimed in the range · Closed = closed in the range · Rating = tickets they handled that were closed in the range.</div>
+    {% if not d.staff %}<div class="empty">No staff activity in this range.</div>{% else %}
+    <table class="an">
+      <thead><tr><th>Staff</th><th>Claimed</th><th>Closed</th><th>Avg first reply</th><th>Avg rating</th></tr></thead>
+      <tbody>
+      {% for s in d.staff %}
+        <tr>
+          <td>{{ s.name }}</td><td>{{ s.claimed }}</td><td>{{ s.closed }}</td>
+          <td class="dim">{{ s.avg_first_reply|dur }}</td>
+          <td>{% if s.avg_rating %}<span class="{% if s.avg_rating < 2.5 %}low{% elif s.avg_rating < 4 %}mid{% else %}high{% endif %}">{{ '%.2f'|format(s.avg_rating) }} ★</span> <span class="dim">({{ s.rating_count }})</span>{% else %}<span class="dim">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+
+  {% if can_import %}
+  <div class="t-section">
+    <h2>Past tickets</h2>
+    <div class="basis">Add tickets that were closed before this page existed, using their transcripts. They count for volume, close time, claims and ratings, but have no first-reply time. Safe to run more than once.</div>
+    <form method="POST" onsubmit="return confirm('Import past closed tickets into analytics?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="form_type" value="import_history">
+      <button class="btn-xs btn-xs-accent" type="submit">Import past tickets</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Staff Changes</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+
+    .grid2 { display:grid; grid-template-columns:1.4fr 1fr; gap:24px; margin-bottom:32px; align-items:start; }
+    @media(max-width:960px){ .grid2{ grid-template-columns:1fr; } }
+
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .t-label:first-child { margin-top:0; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; line-height:1.6; }
+
+    .rank-row { display:flex; align-items:center; gap:12px; background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 14px; margin-bottom:8px; }
+    .rank-idx { flex-shrink:0; min-width:44px; text-align:center; font-size:12px; font-weight:800; color:var(--accent-light); background:var(--accent-tint); border:1px solid rgba(34,197,94,0.3); border-radius:99px; padding:4px 8px; }
+    .rank-role { flex:1; min-width:0; }
+    .rank-role .nm { font-weight:600; font-size:14px; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .rank-role .sub { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .rank-role .missing { color:#f87171; }
+    .rank-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:var(--text-muted); }
+    .rank-nick { display:flex; gap:6px; align-items:center; }
+    .rank-nick input[type=text] { width:150px; padding:6px 9px; font-size:12px; }
+    .rank-actions { display:flex; gap:5px; flex-shrink:0; }
+    .rank-actions form, .rank-nick { margin:0; }
+    .endcap { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; font-weight:700; margin:0 0 8px 4px; }
+
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-ghost:hover { background:var(--bg-overlay); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
+
+    .cmd { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-sm); padding:8px 11px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:var(--text-bright); margin-bottom:6px; }
+    .cmd small { display:block; font-family:inherit; color:var(--text-muted); margin-top:2px; }
+    .empty { color:var(--text-muted); font-size:13px; font-style:italic; padding:6px 2px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'staff_changes' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🪜 Staff Changes</div>
+  <p class="page-sub">The staff role ladder used by <code>/promote</code>, <code>/demote</code> and accepted applications. Index 0 is the lowest rank (your Member role); every role you add goes on top.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
+  {% if error == 'role_invalid' %}<div class="banner-error">Pick a role from the list.</div>{% endif %}
+  {% if error == 'role_managed' %}<div class="banner-error">That role is managed by a bot/integration and can't be assigned manually.</div>{% endif %}
+  {% if error == 'role_duplicate' %}<div class="banner-error">That role is already on the ladder.</div>{% endif %}
+  {% if error == 'ladder_full' %}<div class="banner-error">The ladder is full (25 roles max).</div>{% endif %}
+
+  {% if not roles_visible %}
+  <div class="banner-warn">
+    <strong>⚠️ The bot can't see this server's roles.</strong> Make sure the bot is invited to the server.
+  </div>
+  {% endif %}
+  {% if not channel_id %}
+  <div class="banner-warn">
+    No <strong>Staff Changes Channel</strong> is set yet, so promotions and demotions won't be announced. Set it on the <strong>Config &amp; Logs</strong> page.
+  </div>
+  {% elif not channel_name %}
+  <div class="banner-warn">The saved Staff Changes Channel couldn't be found. Pick it again on the <strong>Config &amp; Logs</strong> page.</div>
+  {% endif %}
+  {% if rows|length < 2 %}
+  <div class="banner-warn">Add at least <strong>2 roles</strong> for <code>/promote</code> and <code>/demote</code> to work.</div>
+  {% endif %}
+
+  <div class="grid2">
+    <div class="t-section">
+      <div class="t-section-head"><h2>📶 Role Ladder</h2></div>
+
+      {% if rows %}
+      <div class="endcap">▲ Highest</div>
+      {% for r in rows %}
+      <div class="rank-row">
+        <div class="rank-idx">#{{ r.index }}</div>
+        <div class="rank-role">
+          <div class="nm">
+            <span class="rank-dot" {% if r.color %}style="background:{{ r.color }};"{% endif %}></span>{% if r.nick %}{{ r.nick }}{% elif r.name %}{{ r.name }}{% else %}Deleted role{% endif %}
+          </div>
+          <div class="sub">
+            {% if r.name %}@{{ r.name }}{% else %}<span class="missing">⚠️ Role {{ r.role_id }} no longer exists</span>{% endif %}
+            {% if r.nick %}· shown as "{{ r.nick }}"{% else %}· shown by role name{% endif %}
+          </div>
+        </div>
+        <form method="POST" class="rank-nick">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="nick">
+          <input type="hidden" name="role_id" value="{{ r.role_id }}">
+          <input type="text" name="nick" value="{{ r.nick }}" maxlength="{{ max_nick }}" placeholder="Nick">
+          <button class="btn-xs btn-xs-ghost" type="submit" title="Save nick">💾</button>
+        </form>
+        <div class="rank-actions">
+          <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="up"><input type="hidden" name="role_id" value="{{ r.role_id }}">
+            <button class="btn-xs btn-xs-ghost" type="submit" title="Move up (higher rank)" {% if loop.first %}disabled{% endif %}>▲</button>
+          </form>
+          <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="down"><input type="hidden" name="role_id" value="{{ r.role_id }}">
+            <button class="btn-xs btn-xs-ghost" type="submit" title="Move down (lower rank)" {% if loop.last %}disabled{% endif %}>▼</button>
+          </form>
+          <form method="POST" onsubmit="return confirm('Remove this role from the ladder? Everyone above it moves down one index.');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="remove"><input type="hidden" name="role_id" value="{{ r.role_id }}">
+            <button class="btn-xs btn-xs-danger" type="submit" title="Remove">✕</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="endcap" style="margin-top:12px;">▼ Lowest (index 0)</div>
+      {% else %}
+      <div class="empty">No roles yet. Add your Member role first (it becomes index 0), then each staff role above it.</div>
+      {% endif %}
+    </div>
+
+    <div>
+      <div class="t-section" style="margin-bottom:24px;">
+        <div class="t-section-head"><h2>➕ Add Role</h2></div>
+        <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="add">
+
+          <label class="t-label">Role</label>
+          <select name="role_id" required>
+            <option value="">— Select a role —</option>
+            {% for r in available %}
+            <option value="{{ r.id }}">{{ r.name }}</option>
+            {% endfor %}
+          </select>
+
+          <label class="t-label">Nick (shown on the card)</label>
+          <input type="text" name="nick" maxlength="{{ max_nick }}" placeholder="e.g. Trial Mod (optional)">
+          <div class="hint">If left empty, the role's name is shown instead.</div>
+
+          <button class="btn-xs btn-xs-accent" type="submit" style="margin-top:16px;padding:9px 18px;font-size:13px;">Add to ladder</button>
+          <div class="hint" style="margin-top:8px;">New roles are added on top (highest index). Use ▲ ▼ to reorder.</div>
+        </form>
+      </div>
+
+      <div class="t-section">
+        <div class="t-section-head"><h2>ℹ️ How it works</h2></div>
+        <div class="cmd">/promote &lt;user&gt; [reason]<small>Gives the next role up. The old role is kept.</small></div>
+        <div class="cmd">/demote &lt;user&gt; [reason]<small>Removes their highest ladder role.</small></div>
+        <div class="hint">Accepted applications post a "Promoted" card automatically when the roles they give move someone up the ladder. Both commands are admin-only until enabled on <strong>Command Permissions</strong>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

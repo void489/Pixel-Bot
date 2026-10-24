@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Live Tickets</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; max-width:760px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:20px 24px; max-width:1100px; }
+    table.lt { width:100%; border-collapse:collapse; font-size:13px; }
+    table.lt th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    table.lt td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
+    .dim { color:var(--text-muted); }
+    .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; background:rgba(88,101,242,.15); color:#c7d2fe; }
+    .pill.wait { background:rgba(245,158,11,.15); color:#fbbf24; }
+    .empty { padding:30px; text-align:center; color:var(--text-muted); font-size:13px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'live_tickets' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">💬 Live Tickets</div>
+  <p class="page-sub">Open tickets you can read and answer from here. Turn on <b>Live replies</b> in a panel's settings (Tickets page) to see its tickets.
+    Replies are posted by the bot with your name, and don't count for staff points.</p>
+
+  <div class="t-section">
+    {% if not has_panels %}
+      <div class="empty">No panel has Live replies turned on yet. Edit a ticket type on the <a href="{{ url_for('dashboard.tickets_page', guild_id=guild_id) }}">Tickets page</a> and tick <b>Live replies</b>.</div>
+    {% elif not rows %}
+      <div class="empty">No open tickets right now.</div>
+    {% else %}
+      {% if limited %}<div class="dim" style="margin-bottom:10px;">Showing the oldest 200 open tickets.</div>{% endif %}
+      <table class="lt">
+        <thead><tr><th>Ticket</th><th>Panel</th><th>Member</th><th>Priority</th><th>Status</th><th>Claimed by</th><th>Opened (UTC)</th><th></th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr>
+            <td>{% if r.number %}#{{ r.number }}{% else %}<span class="dim">{{ r.channel_id }}</span>{% endif %}{% if r.thread %} <span class="dim">· thread</span>{% endif %}</td>
+            <td>{{ r.panel }}</td><td>{{ r.opener }}</td><td>{{ r.priority_label }}</td>
+            <td>{% if r.waiting %}<span class="pill wait">waiting for a reply</span>{% else %}<span class="pill">replied</span>{% endif %}</td>
+            <td class="dim">{{ r.claimed or '—' }}</td>
+            <td class="dim">{{ r.created_at.strftime('%b %d %H:%M') if r.created_at else '' }}</td>
+            <td><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.live_ticket_page', guild_id=guild_id, channel_id=r.channel_id) }}">Open</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

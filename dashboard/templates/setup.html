@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Bot · Setup Guide</title>
+  <meta name="description" content="Set up Pixel Bot in six steps: permissions, logs, command access, your first feature and testing.">
+  <meta property="og:title" content="Pixel Bot · Setup Guide">
+  <meta property="og:description" content="Get Pixel Bot working in your Discord server in a few minutes.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub { color:var(--text-muted); font-size:13px; margin-bottom:28px; }
+    .sg-wrap { max-width: 860px; }
+    .container .sg-wrap { margin: 0 auto; }
+    .sg-hero h1 { font-family: var(--font-display); font-size: clamp(30px, 5vw, 42px); letter-spacing: -.03em; margin: 0 0 8px; color: var(--text-bright); }
+    .sg-hero p { color: var(--text-muted); margin: 0 0 22px; max-width: 60ch; }
+    .row-btns { display:flex; gap:10px; flex-wrap:wrap; }
+    .btn-ghost { background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border-hi); }
+    .btn-ghost:hover { background: var(--bg-overlay); color: var(--text-bright); }
+    .btn-add { display:inline-block; text-decoration:none; }
+
+    .sg-steps { margin: 30px 0 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 16px; }
+    .sg-step { position: relative; padding: 24px 26px 24px 78px; border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg-surface); }
+    .sg-step::before { counter-increment: step; content: counter(step); position: absolute; left: 24px; top: 24px; width: 38px; height: 38px;
+                       display: grid; place-items: center; border-radius: 50%; background: var(--grad); color: #fff; font-weight: 700;
+                       box-shadow: 0 0 20px var(--accent-glow); }
+    .sg-step h2 { margin: 0 0 6px; font-size: 18px; color: var(--text-bright); font-family: var(--font-display); }
+    .sg-step p { margin: 0 0 10px; color: var(--text-muted); font-size: 14px; }
+    .sg-step ul { margin: 0 0 12px; padding-left: 18px; color: var(--text-muted); font-size: 14px; }
+    .sg-step li { margin-bottom: 4px; }
+    .sg-step b, .sg-step strong { color: var(--text-bright); }
+    .sg-step code, .sg-faq code { font-size: 12.5px; }
+    .sg-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--accent-light); text-decoration: none; }
+    .sg-link:hover { text-decoration: underline; }
+    .sg-tip { margin: 6px 0 12px; padding: 11px 14px; border-radius: var(--r-md); font-size: 13px; line-height: 1.55;
+              background: rgba(88,101,242,.12); border: 1px solid rgba(88,101,242,.4); color: #a5b4fc; }
+    .sg-tip.warn { background: rgba(234,179,8,.12); border-color: rgba(234,179,8,.4); color: #fde68a; }
+
+    .sg-feats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+    .sg-feat { display: block; padding: 14px 16px; border-radius: var(--r-md); border: 1px solid var(--border); background: var(--bg-overlay);
+               text-decoration: none; transition: transform .25s var(--ease), border-color .25s; }
+    .sg-feat:hover { transform: translateY(-2px); border-color: rgba(34,197,94,.4); }
+    .sg-feat strong { display: block; color: var(--text-bright); font-size: 14px; margin-bottom: 2px; }
+    .sg-feat span { color: var(--text-muted); font-size: 12.5px; }
+
+    .sg-faq { margin-top: 44px; }
+    .sg-faq h2 { font-family: var(--font-display); font-size: 24px; color: var(--text-bright); margin: 0 0 14px; }
+    .sg-faq details { border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-surface); padding: 14px 18px; margin-bottom: 10px; }
+    .sg-faq summary { cursor: pointer; font-weight: 600; color: var(--text-bright); font-size: 14px; }
+    .sg-faq details p { margin: 10px 0 0; color: var(--text-muted); font-size: 14px; }
+
+    .sg-help { margin-top: 36px; padding: 28px; text-align: center; border-radius: var(--r-lg); border: 1px solid rgba(34,197,94,.3);
+               background: radial-gradient(ellipse at top, rgba(34,197,94,.14), transparent 70%), var(--bg-surface); }
+    .sg-help h2 { margin: 0 0 6px; font-family: var(--font-display); color: var(--text-bright); }
+    .sg-help p { margin: 0 0 16px; color: var(--text-muted); font-size: 14px; }
+    .sg-help .row-btns { justify-content: center; }
+
+    @media (max-width: 600px) {
+      .sg-step { padding: 20px 18px 20px 18px; }
+      .sg-step::before { position: static; margin-bottom: 12px; }
+    }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+{#- Links go to the server's real pages when opened from the dashboard, otherwise to login. -#}
+{% macro go(endpoint, label) -%}
+  {% if guild_id %}<a class="sg-link" href="{{ url_for(endpoint, guild_id=guild_id) }}">{{ label }} →</a>
+  {% else %}<a class="sg-link" href="{{ url_for('dashboard.login') }}">Log in to open {{ label }} →</a>{% endif %}
+{%- endmacro %}
+{% macro feat(endpoint, title, desc) -%}
+  <a class="sg-feat" href="{% if guild_id %}{{ url_for(endpoint, guild_id=guild_id) }}{% else %}{{ url_for('dashboard.login') }}{% endif %}">
+    <strong>{{ title }}</strong><span>{{ desc }}</span>
+  </a>
+{%- endmacro %}
+
+{% if guild_id %}
+  {% set active_nav = 'setup' %}
+  {% include '_sidebar.html' %}
+  <div class="t-content">
+{% else %}
+  <div class="topbar">
+    <a href="{{ url_for('dashboard.index') }}"><span class="brand"><img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt=""><span>Pixel Bot</span></span></a>
+    <a href="{{ url_for('dashboard.index') }}">Dashboard</a>
+  </div>
+  <div class="container">
+{% endif %}
+
+  <div class="sg-wrap">
+    {% if guild_id %}
+      <div class="page-title">🚀 Setup Guide</div>
+      <p class="page-sub">Six quick steps to get Pixel Bot working in this server. Each step links to the page you need.</p>
+    {% else %}
+      <div class="sg-hero">
+        <h1>Set up Pixel Bot in minutes</h1>
+        <p>Six quick steps from invite to a fully working server. You can read this now and follow along once the bot is in your server.</p>
+        <div class="row-btns">
+          {% if add_bot_url %}<a class="btn btn-add" href="{{ add_bot_url }}" target="_blank" rel="noopener">➕ Add to Discord</a>{% endif %}
+          <a class="btn btn-ghost btn-add" href="{{ url_for('dashboard.login') }}">Open Dashboard</a>
+        </div>
+      </div>
+    {% endif %}
+
+    <ol class="sg-steps">
+      <li class="sg-step">
+        <h2>Add the bot and place its role</h2>
+        <p>Invite Pixel Bot to your server, then open <b>Server Settings → Roles</b> and drag the <b>Pixel Bot</b> role up.</p>
+        <ul>
+          <li>The bot can only manage roles, nicknames and members that sit <b>below</b> its own role.</li>
+          <li>Put it above your staff, mute, member and ticket roles.</li>
+        </ul>
+        <div class="sg-tip warn">This is the number one cause of "the bot isn't working". If role changes, bans or timeouts fail, check the role order first.</div>
+        {% if guild_id and add_bot_url %}<a class="sg-link" href="{{ add_bot_url }}" target="_blank" rel="noopener">Add or re-invite the bot →</a>{% endif %}
+      </li>
+
+      <li class="sg-step">
+        <h2>Set your log channels</h2>
+        <p>Pick a private staff channel for the bot's log, and a channel for ticket transcripts. Moderation actions, ticket events and more get recorded here.</p>
+        <ul>
+          <li>Make sure the bot can <b>View Channel</b>, <b>Send Messages</b> and <b>Embed Links</b> there.</li>
+          <li>Choose which events to log, and set blacklist roles if you use them.</li>
+        </ul>
+        {{ go('dashboard.config_logs_page', 'Config & Logs') }}
+      </li>
+
+      <li class="sg-step">
+        <h2>Choose who can use commands</h2>
+        <p>Bot commands start out <b>admin-only</b>. Nothing is broken, it's a safety default. Decide which roles get which commands.</p>
+        <ul>
+          <li>Enable member commands (like <code>/serverinfo</code> or <code>/rank</code>) for everyone or for specific roles.</li>
+          <li>Give your moderators and staff only the staff commands they need.</li>
+        </ul>
+        <div class="sg-tip">If a teammate says a command "does nothing" or is missing, it almost always just needs enabling here.</div>
+        {{ go('dashboard.permissions_page', 'Command Permissions') }}
+      </li>
+
+      <li class="sg-step">
+        <h2>Turn on your first feature</h2>
+        <p>Don't set everything up at once. Pick the one you need most, get it working, then come back for the next.</p>
+        <div class="sg-feats">
+          {{ feat('dashboard.tickets_page', '🎫 Tickets', 'Create ticket types and post a panel.') }}
+          {{ feat('dashboard.automod_page', '🛡️ Auto-Mod', 'Block spam, links and bad words.') }}
+          {{ feat('dashboard.welcome_page', '👋 Welcome', 'Greet new members and give an auto role.') }}
+          {{ feat('dashboard.applications_page', '📝 Applications', 'Take staff applications.') }}
+          {{ feat('dashboard.leveling_page', '⭐ Leveling', 'XP, ranks and reward roles.') }}
+          {{ feat('dashboard.moderation_page', '🔨 Moderation', 'Cases, warns and history.') }}
+        </div>
+        <p style="margin-top:12px">Giveaways, polls, embeds and anti-nuke are run with slash commands. Enable them in Command Permissions, then use <code>/giveaway create</code>, <code>/poll create</code> or <code>/embeds create</code>.</p>
+      </li>
+
+      <li class="sg-step">
+        <h2>Test it like a member</h2>
+        <p>Before announcing anything, try it from a normal account or an alt, not as an admin.</p>
+        <ul>
+          <li>Run <code>/help</code> to see what members can use. Staff can run <code>/staffhelp</code>, admins <code>/admin help</code>.</li>
+          <li>If you set up tickets, open one yourself and close it.</li>
+          <li>Check your log channel. You should see the action show up.</li>
+        </ul>
+      </li>
+
+      <li class="sg-step">
+        <h2>Fine-tune and relax</h2>
+        <p>Once the basics work, customize the extras: the bot's server nickname, bio and avatar, welcome and join messages, staff tools like strikes, LOA and activity checks, and the security options.</p>
+        {{ go('dashboard.bot_profile_page', 'Bot Profile') }}
+        &nbsp;&nbsp;
+        {{ go('dashboard.security_page', 'Security') }}
+      </li>
+    </ol>
+
+    <section class="sg-faq">
+      <h2>Troubleshooting</h2>
+      <details>
+        <summary>The dropdowns on the dashboard are empty</summary>
+        <p>The bot can't see your channels or roles. Check that Pixel Bot is actually in the server and has <b>View Channels</b>, then refresh the page.</p>
+      </details>
+      <details>
+        <summary>Slash commands don't show up</summary>
+        <p>Give it a minute after inviting the bot, then restart Discord. Also check that the command is enabled for your role in Command Permissions, and that the bot was invited with the <code>applications.commands</code> scope. Re-inviting fixes it.</p>
+      </details>
+      <details>
+        <summary>The bot can't give a role, kick, ban or time someone out</summary>
+        <p>Almost always role order. Move the Pixel Bot role above the target's highest role. Nobody can be moderated above the bot's role, and nobody above the server owner.</p>
+      </details>
+      <details>
+        <summary>Nothing is being logged</summary>
+        <p>Set a log channel in Config &amp; Logs, make sure the event type is ticked, and check the bot can send messages and embeds in that channel.</p>
+      </details>
+      <details>
+        <summary>I can't see my server in the dashboard</summary>
+        <p>You need the <b>Manage Server</b> permission, and the bot has to be in the server. Servers without the bot are listed separately with an Add bot button.</p>
+      </details>
+    </section>
+
+    <section class="sg-help">
+      <h2>Still stuck?</h2>
+      <p>Come ask in the support server. We're happy to help.</p>
+      <div class="row-btns">
+        {% if support_url %}<a class="btn btn-add" href="{{ support_url }}" target="_blank" rel="noopener">💬 Join the Support Server</a>{% endif %}
+        {% if guild_id %}<a class="btn btn-ghost btn-add" href="{{ url_for('dashboard.index') }}">← Back to Servers</a>{% endif %}
+      </div>
+    </section>
+  </div>
+
+{% if guild_id %}
+  </div>
+{% else %}
+  </div>
+  {% include '_footer.html' %}
+{% endif %}
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Strikes</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:28px; max-width:900px; line-height:1.6; }
+
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; }
+    .type-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:6px; }
+    .type-name { font-size:17px; font-weight:800; color:var(--text-bright); }
+    .type-meta { font-size:12px; color:var(--text-muted); margin-bottom:16px; }
+    .sub-head { font-size:13px; font-weight:700; color:var(--text-bright); margin:20px 0 8px; }
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-bottom:6px; }
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    .empty { color:var(--text-muted); font-size:13px; font-style:italic; padding:6px 2px; }
+
+    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:10px 14px; border-radius:var(--r-md); margin:10px 0; font-size:12px; line-height:1.6; }
+
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-ghost:hover { background:var(--bg-overlay); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
+
+    .opts { display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
+    .switch-row { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--text-bright); font-weight:600; cursor:pointer; }
+    .switch-row small { display:block; font-weight:400; color:var(--text-muted); font-size:11px; }
+
+    .rule-row { display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:9px 14px; margin-bottom:8px; font-size:13px; color:var(--text-bright); }
+    .rule-row form { margin:0; }
+    .rule-add { display:flex; align-items:flex-end; gap:12px; flex-wrap:wrap; margin-top:12px; }
+    .rule-add input[type=number] { width:90px; }
+    .rule-add form { display:contents; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { padding:10px 10px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; }
+    th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
+    .count-pill { display:inline-block; min-width:26px; text-align:center; font-weight:800; color:#fca5a5; background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.35); border-radius:99px; padding:2px 9px; }
+    details > summary { cursor:pointer; color:var(--text-muted); font-size:12px; }
+    .strike-line { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12px; color:var(--text-main); }
+    .strike-line:last-child { border-bottom:none; }
+    .strike-line form { margin:0; flex-shrink:0; }
+    .strike-line .why { color:var(--text-muted); margin-top:2px; word-break:break-word; }
+    .scroll-x { overflow-x:auto; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'strikes' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">⚠️ Strikes</div>
+  <p class="page-sub">Staff strikes are given with <code>/strike add</code> and counted per <strong>Change type</strong>, so a builder strike never counts against someone's staff record.
+    Set what happens at each limit, choose when strikes reset, and delete or reset strikes below. Rules only run when a <strong>new</strong> strike is added, never when you edit them here.</p>
+
+  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
+  {% if cleared %}<div class="banner-ok">🧹 Done.</div>{% endif %}
+  {% if error == 'type_missing' %}<div class="banner-error">That type no longer exists.</div>{% endif %}
+  {% if error == 'rule_invalid' %}<div class="banner-error">A rule needs a strike count from 1 to {{ max_at }} and a number of ranks between 1 and the number of ranks above the base rung on that ladder.</div>{% endif %}
+  {% if error == 'rules_full' %}<div class="banner-error">A type can have up to {{ max_rules }} rules. Remove one to add another.</div>{% endif %}
+  {% if error == 'strike_missing' %}<div class="banner-error">That strike was already removed or doesn't belong to this type.</div>{% endif %}
+
+  {% if not cards %}
+  <div class="t-section">
+    <div class="empty">No change types yet. Create one on the <a href="{{ url_for('dashboard.changes_page', guild_id=guild_id) }}">Changes</a> page first - strikes use the same types.</div>
+  </div>
+  {% endif %}
+
+  {% for c in cards %}
+  <div class="t-section" id="t-{{ c.id }}">
+    <div class="type-head">
+      <div class="type-name">📶 {{ c.name }}</div>
+      {% if c.total %}
+      <form method="POST" style="margin:0;" onsubmit="return confirm('Reset ALL strikes in &quot;{{ c.name }}&quot; for everyone?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="reset_type"><input type="hidden" name="type_id" value="{{ c.id }}">
+        <button class="btn-xs btn-xs-danger" type="submit">Reset everyone</button>
+      </form>
+      {% endif %}
+    </div>
+    <div class="type-meta">
+      {{ c.rows|length }} member{{ '' if c.rows|length == 1 else 's' }} with strikes · {{ c.total }} active strike{{ '' if c.total == 1 else 's' }}
+    </div>
+
+    <div class="sub-head" style="margin-top:0;">When strikes reset</div>
+    <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="save_options"><input type="hidden" name="type_id" value="{{ c.id }}">
+      <div class="opts">
+        <label class="switch-row">
+          <input type="checkbox" name="reset_on_promotion" {% if c.cfg.reset_on_promotion %}checked{% endif %}>
+          <span>Reset strikes on promotion<small>Covers <code>/promote</code> and accepted applications linked to this type.</small></span>
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" name="reset_on_demotion" {% if c.cfg.reset_on_demotion %}checked{% endif %}>
+          <span>Reset strikes on demotion<small>Covers <code>/demote</code> and demotions from the rules below.</small></span>
+        </label>
+      </div>
+      <div class="t-label" style="margin-top:14px;">Strikes expire after (days)</div>
+      <input type="number" name="expire_days" min="0" max="{{ max_expire }}" value="{{ c.cfg.expire_days or 0 }}" style="width:110px;">
+      <div class="hint">0 = strikes never expire. Expired strikes are removed automatically (checked every 3 hours) and shown below as "expired". A demotion that already happened is never undone.</div>
+      <label class="switch-row" style="margin-top:10px;">
+        <input type="checkbox" name="expire_dm" {% if c.cfg.expire_dm %}checked{% endif %}>
+        <span>DM the member when a strike expires</span>
+      </label>
+      {% if c.expiring %}
+      <div class="banner-warn">⚠️ {{ c.expiring }} existing strike{{ '' if c.expiring == 1 else 's' }} in this type {{ 'is' if c.expiring == 1 else 'are' }} already older than {{ c.cfg.expire_days }} day{{ '' if c.cfg.expire_days == 1 else 's' }} and will be removed on the next sweep.</div>
+      {% endif %}
+      <button class="btn-xs btn-xs-accent" type="submit" style="margin-top:12px;">Save</button>
+    </form>
+
+    <div class="sub-head">Limits</div>
+    {% if c.rungs < 2 %}
+    <div class="banner-warn">⚠️ This ladder has fewer than 2 roles, so demotion rules can't run. Add roles on the <a href="{{ url_for('dashboard.changes_page', guild_id=guild_id) }}">Changes</a> page first.</div>
+    {% endif %}
+    {% for r in c.cfg.rules %}
+    <div class="rule-row">
+      <span>At <strong>{{ r.at }}</strong> strike{{ '' if r.at == 1 else 's' }} → demote <strong>{{ r.demote }}</strong> rank{{ '' if r.demote == 1 else 's' }}</span>
+      <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="remove_rule"><input type="hidden" name="type_id" value="{{ c.id }}"><input type="hidden" name="at" value="{{ r.at }}">
+        <button class="btn-xs btn-xs-danger" type="submit">Remove</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="empty">No limits set. Strikes are only counted; nobody is demoted automatically.</div>
+    {% endfor %}
+
+    <div class="rule-add">
+      <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add_rule"><input type="hidden" name="type_id" value="{{ c.id }}">
+        <div>
+          <label class="t-label">At strikes</label>
+          <input type="number" name="at" min="1" max="{{ max_at }}" required>
+        </div>
+        <div>
+          <label class="t-label">Demote ranks</label>
+          <input type="number" name="demote" min="1" max="{{ c.max_demote }}" value="1" required>
+        </div>
+        <button class="btn-xs btn-xs-accent" type="submit" style="margin-bottom:6px;">Add limit</button>
+      </form>
+    </div>
+    <div class="hint">If several limits are reached, the highest one applies. Adding a limit for a strike count that already has one replaces it.
+      After a limit demotes someone, their strikes in this type reset to 0. Members on LOA aren't demoted automatically (the strike still counts).</div>
+
+    <div class="sub-head">Members with strikes</div>
+    {% if c.rows %}
+    <div class="scroll-x">
+    <table>
+      <tr><th>Member</th><th>Strikes</th><th>Last strike</th><th></th></tr>
+      {% for row in c.rows %}
+      <tr>
+        <td>
+          {% if row.name %}{{ row.name }} {% endif %}<code>{{ row.user_id }}</code>
+          <details style="margin-top:6px;">
+            <summary>Show strikes</summary>
+            {% for s in row.strikes|reverse %}
+            <div class="strike-line">
+              <div>
+                <strong>#{{ s.number }}</strong> · {{ s.created_at.strftime('%Y-%m-%d %H:%M UTC') }} · by {{ s.issuer_name }}
+                {% if s.reason %}<div class="why">{{ s.reason }}</div>{% endif %}
+              </div>
+              <form method="POST" onsubmit="return confirm('Delete strike #{{ s.number }}?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="action" value="delete_strike"><input type="hidden" name="type_id" value="{{ c.id }}"><input type="hidden" name="number" value="{{ s.number }}">
+                <button class="btn-xs btn-xs-danger" type="submit">Delete</button>
+              </form>
+            </div>
+            {% endfor %}
+          </details>
+        </td>
+        <td><span class="count-pill">{{ row.count }}</span></td>
+        <td>{{ row.last_at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+        <td style="text-align:right;">
+          <form method="POST" style="display:inline;" onsubmit="return confirm('Reset all of this member\'s strikes in {{ c.name }}?');">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="action" value="reset_member"><input type="hidden" name="type_id" value="{{ c.id }}"><input type="hidden" name="user_id" value="{{ row.user_id }}">
+            <button class="btn-xs btn-xs-ghost" type="submit">Reset</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">No active strikes in this type.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="t-section">
+    <div class="type-head"><div class="type-name">🧾 Recent deletions, resets &amp; expiries</div></div>
+    <div class="hint" style="margin:0 0 12px;">Strikes that are deleted or reset (here or with <code>/strike remove</code>) are gone for good, so this is the only trail.</div>
+    {% if audit %}
+    <div class="scroll-x">
+    <table>
+      <tr><th>When</th><th>Type</th><th>Action</th><th>Member</th><th>By</th></tr>
+      {% for a in audit %}
+      <tr>
+        <td>{{ a.at.strftime('%Y-%m-%d %H:%M UTC') }}</td>
+        <td>{{ a.type_name }}</td>
+        <td>
+          {% if a.action == 'delete_strike' %}Deleted a strike{% elif a.action == 'reset_member' %}Reset a member{% elif a.action == 'reset_type' %}Reset everyone{% elif a.action == 'expired' %}Strike expired{% else %}{{ a.action }}{% endif %}
+          {% if a.detail %}<div class="hint" style="margin:2px 0 0;">{{ a.detail }}</div>{% endif %}
+        </td>
+        <td>{% if a.user_id %}<code>{{ a.user_id }}</code>{% else %}-{% endif %}</td>
+        <td>{{ a.by }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Nothing deleted or reset yet.</div>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

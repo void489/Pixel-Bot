@@ -1,0 +1,52 @@
+{% extends "_legal_base.html" %}
+{% block title %}Terms of Service{% endblock %}
+{% block body %}
+<h1>Terms of Service</h1>
+<p class="updated">Last updated: {{ updated }}</p>
+
+<p>These terms apply to Pixel Bot ("the bot", "we") and its web dashboard. By adding the bot to a server, using its commands, or logging in to the dashboard, you agree to them. If you don't agree, please don't use the bot.</p>
+
+<h2>1. Who can use it</h2>
+<p>You must be old enough to use Discord under Discord's own rules (at least 13, or older where the law of your country says so) and follow the <a href="https://discord.com/terms" target="_blank" rel="noopener">Discord Terms of Service</a> and <a href="https://discord.com/guidelines" target="_blank" rel="noopener">Community Guidelines</a> at all times. The bot is not a replacement for Discord's rules and does not give you permission to break them.</p>
+
+<h2>2. Server owners and admins</h2>
+<p>If you add the bot to a server or manage it on the dashboard, you are responsible for how it is used there. That includes:</p>
+<ul>
+  <li>choosing which features are turned on and who is allowed to use each command,</li>
+  <li>telling your members what the bot does in your server where the law or your community's rules require it,</li>
+  <li>the decisions made with the bot's tools, such as bans, strikes, demotions, blacklists and application results, and</li>
+  <li>keeping the dashboard login and your staff roles secure.</li>
+</ul>
+<p>We provide the tools. We do not make moderation or staffing decisions for any server and are not responsible for them.</p>
+
+<h2>3. Acceptable use</h2>
+<p>You agree not to:</p>
+<ul>
+  <li>use the bot to harass, threaten, scam, impersonate or discriminate against anyone, or to break the law,</li>
+  <li>use it to send spam, unwanted advertising or mass direct messages beyond what Discord allows,</li>
+  <li>try to break, overload, reverse engineer or gain unauthorized access to the bot, the dashboard or its data,</li>
+  <li>exploit bugs or use the bot to get around bans, blacklists or Discord's rules, or</li>
+  <li>use automated means to abuse its commands or the dashboard.</li>
+</ul>
+
+<h2>4. Your content and data</h2>
+<p>You keep ownership of what you submit, such as ticket messages, application answers and suggestions. You allow us to store and process it only as needed to run the bot's features for the server it came from. How we handle information is described in our <a href="{{ url_for('dashboard.privacy') }}">Privacy Policy</a>.</p>
+
+<h2>5. Availability and changes</h2>
+<p>The bot is provided as it is, with no promise that it will be always online, error-free or unchanged. We may add, change or remove features, reset data after a technical problem, or take the bot offline for maintenance without notice.</p>
+
+<h2>6. Removing access</h2>
+<p>We may block a user or server from the bot, or remove the bot from a server, at any time and without notice, especially if these terms or Discord's rules are broken. Server owners can remove the bot whenever they like by kicking it. You can stop using the dashboard at any time and revoke its access in Discord under <em>Settings → Authorized Apps</em>.</p>
+
+<h2>7. No warranty</h2>
+<p>To the fullest extent the law allows, the bot and dashboard are provided "as is" and "as available", without any warranty of any kind, whether express or implied, including fitness for a particular purpose and uninterrupted or secure operation.</p>
+
+<h2>8. Limit of liability</h2>
+<p>To the fullest extent the law allows, we are not liable for any indirect, incidental or consequential loss, or for loss of data, roles, messages, rank, income or community, arising from your use of the bot or from its downtime, bugs or misuse by others. Nothing in these terms limits any right you have by law that cannot be limited.</p>
+
+<h2>9. Changes to these terms</h2>
+<p>We may update these terms from time to time. The "last updated" date above shows when they last changed. Continuing to use the bot after a change means you accept the new terms.</p>
+
+<h2>10. Contact</h2>
+<p>Questions about these terms: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+{% endblock %}

@@ -1,0 +1,58 @@
+{#- Shared sidebar, included by every page that has a server selected.
+    Set which item is highlighted BEFORE including it:
+        {% set active_nav = 'tickets' %}
+        {% include '_sidebar.html' %}
+    To add a page to the dashboard, add ONE line to `items` below. -#}
+<div class="sidebar">
+  <h2 class="brand"><img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt=""><span>Pixel Bot</span></h2>
+  {% if session.get('admin_ok') %}
+  <a class="nav-item" href="{{ url_for('admin.admin_page') }}">← Back to Admin</a>
+  {% else %}
+  <a class="nav-item" href="{{ url_for('dashboard.index') }}">← Back to Servers</a>
+  {% endif %}
+  {% set items = [
+    ('setup',         '🚀 Setup Guide',         'dashboard.setup_guild_page'),
+    ('tickets',       'Ticket Types & Panels',  'dashboard.tickets_page'),
+    ('claim',         'Claim Tickets',          'dashboard.claim_tickets_page'),
+    ('spawners',      'Spawners',               'dashboard.spawners_page'),
+    ('announcements', 'Announcements',          'dashboard.announcements_page'),
+    ('welcome',       'Welcome & Auto Role',    'dashboard.welcome_page'),
+    ('join_ads',      'Join Ad',                'dashboard.join_ads_page'),
+    ('bot_profile',   'Bot Profile',            'dashboard.bot_profile_page'),
+    ('vouches',       'Vouches',                'dashboard.vouches_page'),
+    ('applications',  'Applications',           'dashboard.applications_page'),
+    ('submissions',   'Submissions',            'dashboard.application_submissions_page'),
+    ('moderation',    'Moderation',             'dashboard.moderation_page'),
+    ('automod',       'Auto-Mod',               'dashboard.automod_page'),
+    ('role_panels',   'Role Panels',            'dashboard.role_panels_page'),
+    ('taskbooks',     'Taskbooks',              'dashboard.taskbooks_page'),
+    ('transcripts',   'Transcripts',            'dashboard.transcripts_page'),
+    ('ratings',       'Ticket Ratings',         'dashboard.ticket_ratings_page'),
+    ('ticket_analytics', 'Ticket Analytics',    'dashboard.ticket_analytics_page'),
+    ('live_tickets', 'Live Tickets',        'dashboard.live_tickets_page'),
+    ('ticket_automations', 'Ticket Automations', 'dashboard.ticket_automations_page'),
+    ('staff_activity','Activity Check',         'dashboard.staff_activity_page'),
+    ('loa',           'LOA',                    'dashboard.loa_page'),
+    ('changes',       'Changes',                'dashboard.changes_page'),
+    ('strikes',       'Strikes',                'dashboard.strikes_page'),
+    ('promo_history', 'Promotion History',      'dashboard.promotion_history_page'),
+    ('staff_auto',    'Staff Automation',       'dashboard.staff_automation_page'),
+    ('audit_log',     'Audit Log',              'dashboard.audit_log_page'),
+    ('leveling',      'Leveling',               'dashboard.leveling_page'),
+    ('security',      'Security',               'dashboard.security_page'),
+    ('blacklist',     'Blacklist Requests',     'dashboard.blacklist_requests_page'),
+    ('permissions',   'Command Permissions',    'dashboard.permissions_page'),
+    ('config',        'Config & Logs',          'dashboard.config_logs_page'),
+  ] %}
+  {% for key, label, endpoint in items %}
+  <a class="nav-item{% if active_nav == key %} active{% endif %}" href="{{ url_for(endpoint, guild_id=guild_id) }}">{{ label }}</a>
+  {% endfor %}
+  <a class="nav-item logout" href="{{ url_for('dashboard.logout') }}">🚪 Log Out</a>
+  <div class="legal-links">
+    <a href="{{ url_for('dashboard.privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>
+    <span>·</span>
+    <a href="{{ url_for('dashboard.terms') }}" target="_blank" rel="noopener">Terms of Service</a>
+    {% if support_url %}<span>·</span>
+    <a href="{{ support_url }}" target="_blank" rel="noopener">Support</a>{% endif %}
+  </div>
+</div>

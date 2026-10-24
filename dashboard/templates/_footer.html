@@ -1,0 +1,8 @@
+{#- Public footer (topbar pages). Sidebar pages get the same two links inside _sidebar.html. -#}
+<footer class="site-footer">
+  <a href="{{ url_for('dashboard.privacy') }}">Privacy Policy</a>
+  <span>·</span>
+  <a href="{{ url_for('dashboard.terms') }}">Terms of Service</a>
+  {% if support_url %}<span>·</span>
+  <a href="{{ support_url }}" target="_blank" rel="noopener">Support</a>{% endif %}
+</footer>

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Share transcript</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; max-width:900px; }
+    .t-section h2 { font-size:16px; margin:0 0 14px; color:var(--text-bright); }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row input[type=number] { width:90px; }
+    table.tr { width:100%; border-collapse:collapse; font-size:13px; }
+    table.tr th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    table.tr td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
+    .dim { color:var(--text-muted); }
+    .pill { padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+    .pill.active { background:rgba(34,197,94,.15); color:#4ade80; }
+    .pill.expired, .pill.revoked { background:rgba(140,140,149,.15); color:var(--text-muted); }
+    .link-box { display:flex; gap:6px; align-items:center; }
+    .link-box input { flex:1; min-width:260px; font-size:12px; }
+    .msg-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
+    .msg-err { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'transcripts' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">🔗 Share #{{ t.channel_name }}</div>
+  <p class="page-sub"><a href="{{ back_url }}">← Back to the transcript</a> · Links open this one transcript, read-only, without a login.</p>
+
+  {% if message %}<div class="msg-ok">{{ message }}</div>{% endif %}
+  {% if error %}<div class="msg-err">{{ error }}</div>{% endif %}
+
+  <div class="t-section">
+    <h2>Create a link</h2>
+    <form method="POST" class="row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="form_type" value="create_share">
+      <span class="dim">Works for</span>
+      <input type="number" name="amount" value="24" min="1" max="720" required>
+      <select name="unit">
+        <option value="hours" selected>hours</option>
+        <option value="days">days</option>
+      </select>
+      <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Create link</button>
+    </form>
+    <div class="dim" style="margin-top:10px;font-size:12px;">From 1 hour to 30 days. Anyone with the link can read the whole ticket, including attachments, until it expires or you revoke it.</div>
+  </div>
+
+  <div class="t-section">
+    <h2>Links</h2>
+    {% if not shares %}
+      <div class="dim">No links yet.</div>
+    {% else %}
+    <table class="tr">
+      <thead><tr><th>Link</th><th>Status</th><th>Expires</th><th>Views</th><th>Created by</th><th></th></tr></thead>
+      <tbody>
+      {% for sh in shares %}
+        <tr>
+          <td>{% if sh.state == 'active' %}<div class="link-box"><input type="text" readonly value="{{ sh.url }}" onclick="this.select()"></div>{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td><span class="pill {{ sh.state }}">{{ sh.state }}</span></td>
+          <td class="dim">{{ sh.expires_at.strftime('%Y-%m-%d %H:%M UTC') if sh.expires_at else '' }}</td>
+          <td class="dim">{{ sh.views or 0 }}</td>
+          <td class="dim">{{ sh.created_by_name }}</td>
+          <td>
+            {% if sh.state == 'active' %}
+            <form method="POST" style="margin:0" onsubmit="return confirm('Revoke this link? It stops working right away.');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="form_type" value="revoke_share">
+              <input type="hidden" name="share_id" value="{{ sh._id }}">
+              <button class="btn-xs" type="submit">Revoke</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+</body>
+</html>

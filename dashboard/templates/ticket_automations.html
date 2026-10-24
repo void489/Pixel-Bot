@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Ticket Automations</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:24px; max-width:760px; }
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:22px 26px; margin-bottom:24px; max-width:980px; }
+    .t-section h2 { font-size:15px; margin:0 0 12px; color:var(--text-bright); }
+    .auto { display:flex; gap:14px; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); }
+    .auto:last-child { border-bottom:none; }
+    .auto .info { flex:1; min-width:0; } .auto .nm { font-weight:700; color:var(--text-bright); }
+    .auto .sum { font-size:12px; color:var(--text-muted); margin-top:2px; }
+    .auto.off .nm { opacity:.55; }
+    .auto form { margin:0; display:inline; }
+    .msg-ok, .msg-err { padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:980px; }
+    .msg-ok  { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; }
+    .msg-err { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; }
+    .step { display:grid; grid-template-columns:28px 190px 1fr; gap:10px; align-items:start; margin-bottom:10px; }
+    .step .n { color:var(--text-muted); font-weight:700; padding-top:9px; }
+    .step .f { display:none; gap:8px; flex-wrap:wrap; } .step .f.on { display:flex; }
+    .step .f > * { flex:1 1 220px; }
+    .hint { font-size:12px; color:var(--text-muted); margin:6px 0 0; font-style:normal; }
+    #auto-form { display:none; } #auto-form.open { display:block; }
+    .trg { display:none; } .trg.on { display:block; }
+    table.log { width:100%; border-collapse:collapse; font-size:12px; }
+    table.log th { text-align:left; color:var(--text-muted); padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
+    table.log td { padding:8px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:top; }
+    .pill { display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; font-weight:700; margin:1px 2px 1px 0; }
+    .pill.ok { background:rgba(34,197,94,.15); color:#4ade80; } .pill.bad { background:rgba(239,68,68,.15); color:#f87171; }
+    .dim { color:var(--text-muted); }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'ticket_automations' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">⚡ Ticket Automations</div>
+  <p class="page-sub">When something happens in a ticket, the bot runs steps for you: set a priority, rename it, move it, send a message or add someone.
+    Each automation runs <b>once per ticket</b>, never because of a bot's message, and a step that fails is skipped and logged.</p>
+
+  {% if saved %}<div class="msg-ok">Saved.</div>{% endif %}
+  {% if error %}<div class="msg-err">{{ error }}</div>{% endif %}
+
+  <div class="t-section">
+    <h2>Automations <span class="dim" style="font-weight:400;">({{ automations|length }}/{{ limits.MAX_AUTOMATIONS }})</span></h2>
+    {% for a in automations %}
+    <div class="auto {% if not a.enabled %}off{% endif %}">
+      <div class="info"><div class="nm">{{ a.name }}</div><div class="sum">{{ a.summary }}</div></div>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="toggle_automation">
+        <input type="hidden" name="automation_id" value="{{ a.id }}"><input type="hidden" name="name" value="{{ a.name }}">
+        <input type="hidden" name="enabled" value="{{ '0' if a.enabled else '1' }}">
+        <button class="btn-xs" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button>
+      </form>
+      <button class="btn-xs" type="button" onclick='openAutoForm({{ {
+        "_id": a.id, "name": a.name, "enabled": a.enabled, "trigger": a.trigger, "steps": a.steps } | tojson }})'>Edit</button>
+      <form method="POST" onsubmit="return confirm('Delete this automation?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="delete_automation">
+        <input type="hidden" name="automation_id" value="{{ a.id }}"><input type="hidden" name="name" value="{{ a.name }}">
+        <button class="btn-xs" type="submit">Delete</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="dim" style="padding:10px 0;">No automations yet.</div>
+    {% endfor %}
+    <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="button" onclick="openAutoForm(null)">+ New automation</button></div>
+  </div>
+
+  <div class="t-section" id="auto-form">
+    <h2 id="auto-form-title">New automation</h2>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="form_type" value="save_automation">
+      <input type="hidden" name="automation_id" id="f-id" value="">
+
+      <label class="t-label">Name</label>
+      <input type="text" name="name" id="f-name" maxlength="{{ limits.MAX_NAME }}" placeholder="e.g. Escalate refund requests" required>
+      <label class="t-label"><input type="checkbox" name="enabled" id="f-enabled" checked> Enabled</label>
+
+      <label class="t-label">When…</label>
+      <select name="trigger" id="f-trigger" onchange="showTrigger()">
+        {% for key, label in limits.TRIGGER_LABELS.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+
+      <div class="trg" id="trg-keyword">
+        <label class="t-label">Keywords or phrases (separate with commas, up to {{ limits.MAX_KEYWORDS }})</label>
+        <input type="text" name="keywords" id="f-keywords" placeholder="refund, charge back, scam">
+        <label class="t-label">Whose messages</label>
+        <select name="from" id="f-from"><option value="opener">Only the member who opened the ticket</option><option value="anyone">Anyone in the ticket (not bots)</option></select>
+        <div class="hint">Whole words only, any capitals: "pay" doesn't match "payment".</div>
+      </div>
+      <div class="trg" id="trg-no_reply">
+        <label class="t-label">Minutes without a staff reply ({{ limits.MIN_NO_REPLY }} to {{ limits.MAX_NO_REPLY }})</label>
+        <input type="number" name="minutes" id="f-minutes" min="{{ limits.MIN_NO_REPLY }}" max="{{ limits.MAX_NO_REPLY }}" value="30">
+        <div class="hint">Checked once a minute, for tickets opened in the last 7 days.</div>
+      </div>
+
+      <label class="t-label">Only in these panels (Ctrl/Cmd for several; none = every panel)</label>
+      <select name="panel_ids" id="f-panels" multiple size="4">
+        {% for t in ticket_types %}<option value="{{ t._id }}">{{ t.name }}</option>{% endfor %}
+      </select>
+
+      <label class="t-label" style="margin-top:16px;">Then, in order (up to {{ limits.MAX_STEPS }} steps; leave unused rows empty)</label>
+      {% for i in range(limits.MAX_STEPS) %}
+      <div class="step">
+        <div class="n">{{ i + 1 }}</div>
+        <select name="step{{ i }}_type" id="s{{ i }}-type" onchange="showStep({{ i }})">
+          <option value="">—</option>
+          {% for key, label in limits.STEP_LABELS.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        <div>
+          <div class="f" id="s{{ i }}-set_priority">
+            <select name="step{{ i }}_level" id="s{{ i }}-level">
+              {% for p in priorities %}<option value="{{ p }}">{{ p|capitalize }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="f" id="s{{ i }}-rename">
+            <input type="text" name="step{{ i }}_template" id="s{{ i }}-template" maxlength="{{ limits.MAX_TEMPLATE }}" placeholder="urgent-{username}-{number}">
+          </div>
+          <div class="f" id="s{{ i }}-move">
+            <select name="step{{ i }}_type_id" id="s{{ i }}-type_id">
+              {% for t in ticket_types %}<option value="{{ t._id }}">{{ t.name }}</option>{% endfor %}
+            </select>
+            <div class="hint" style="flex-basis:100%">Channel tickets only. The new panel's welcome message is posted without answers; the old one stays.</div>
+          </div>
+          <div class="f" id="s{{ i }}-send_message">
+            <textarea name="step{{ i }}_text" id="s{{ i }}-text" rows="2" maxlength="{{ limits.MAX_MESSAGE }}" placeholder="Hi {user}, we're looking into it."></textarea>
+            <select name="step{{ i }}_role_id" id="s{{ i }}-role_id">
+              <option value="">No role ping</option>
+              {% for r in roles %}<option value="{{ r.id }}">Ping @{{ r.name }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="f" id="s{{ i }}-add_member">
+            <input type="text" name="step{{ i }}_user_id" id="s{{ i }}-user_id" inputmode="numeric" placeholder="Discord user ID">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="hint">Placeholders: <code>{user}</code> <code>{username}</code> <code>{server}</code> <code>{channel}</code> <code>{panel}</code> <code>{number}</code> <code>{id}</code> <code>{priority}</code>.
+        In a name, <code>{user}</code> is the plain name. Discord allows about 2 renames per 10 minutes per ticket. Messages can ping only the role you pick and the member who opened the ticket.</div>
+
+      <div style="margin-top:18px;display:flex;gap:8px;">
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save</button>
+        <button class="btn-xs" type="button" onclick="document.getElementById('auto-form').classList.remove('open')">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="t-section">
+    <h2>Recent runs <span class="dim" style="font-weight:400;">(kept 30 days)</span></h2>
+    {% if not runs %}<div class="dim">Nothing has run yet.</div>{% else %}
+    <table class="log">
+      <thead><tr><th>When (UTC)</th><th>Automation</th><th>Ticket</th><th>Trigger</th><th>Steps</th></tr></thead>
+      <tbody>
+      {% for r in runs %}
+        <tr>
+          <td class="dim">{{ r.at.strftime('%b %d %H:%M') }}</td><td>{{ r.automation_name }}</td><td>#{{ r.channel_name or r.channel_id }}</td>
+          <td class="dim">{{ r.trigger }}{% if r.context and r.context.keyword %}: “{{ r.context.keyword }}”{% endif %}</td>
+          <td>{% for s in r.results %}<span class="pill {{ 'ok' if s.ok else 'bad' }}" title="{{ s.note }}">{{ '✓' if s.ok else '✗' }} {{ limits.STEP_LABELS.get(s.type, s.type) }}</span>{% endfor %}
+              {% for s in r.results if not s.ok %}<div class="dim">{{ s.note }}</div>{% endfor %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const STEPS = {{ limits.MAX_STEPS }};
+  const DRAFT = {{ (draft or none) | tojson }};
+  function showTrigger() {
+    const v = document.getElementById('f-trigger').value;
+    for (const k of ['keyword', 'no_reply']) document.getElementById('trg-' + k).classList.toggle('on', v === k);
+  }
+  function showStep(i) {
+    const v = document.getElementById(`s${i}-type`).value;
+    for (const k of ['set_priority', 'rename', 'move', 'send_message', 'add_member'])
+      document.getElementById(`s${i}-${k}`).classList.toggle('on', v === k);
+  }
+  function openAutoForm(a) {
+    const t = (a && a.trigger) || {};
+    document.getElementById('auto-form-title').textContent = a && a._id ? 'Edit automation' : 'New automation';
+    document.getElementById('f-id').value = a ? (a._id || '') : '';
+    document.getElementById('f-name').value = a ? a.name : '';
+    document.getElementById('f-enabled').checked = a ? !!a.enabled : true;
+    document.getElementById('f-trigger').value = t.type || 'opened';
+    document.getElementById('f-keywords').value = (t.keywords || []).join(', ');
+    document.getElementById('f-from').value = t.from || 'opener';
+    document.getElementById('f-minutes').value = t.minutes || 30;
+    const panels = (t.panel_ids || []).map(String);
+    for (const o of document.getElementById('f-panels').options) o.selected = panels.includes(o.value);
+    const steps = (a && a.steps) || [];
+    for (let i = 0; i < STEPS; i++) {
+      const s = steps[i] || {};
+      document.getElementById(`s${i}-type`).value = s.type || '';
+      document.getElementById(`s${i}-level`).value = s.level || 'high';
+      document.getElementById(`s${i}-template`).value = s.template || '';
+      if (s.type_id) document.getElementById(`s${i}-type_id`).value = s.type_id;
+      document.getElementById(`s${i}-text`).value = s.text || '';
+      document.getElementById(`s${i}-role_id`).value = s.role_id || '';
+      document.getElementById(`s${i}-user_id`).value = s.user_id || '';
+      showStep(i);
+    }
+    showTrigger();
+    const box = document.getElementById('auto-form'); box.classList.add('open'); box.scrollIntoView({behavior: 'smooth'});
+  }
+  if (DRAFT) openAutoForm(DRAFT);          // a save that failed validation reopens filled in
+</script>
+</body>
+</html>

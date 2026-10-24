@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Live ticket</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .lv { flex:1; display:flex; flex-direction:column; height:100vh; background:var(--bg-base); min-width:0; }
+    .lv-head { padding:18px 28px; border-bottom:1px solid var(--border); display:flex; gap:22px; align-items:center; flex-wrap:wrap; }
+    .lv-head .ttl { font-size:18px; font-weight:800; color:var(--text-bright); letter-spacing:-0.02em; }
+    .lv-head .meta { font-size:12px; color:var(--text-muted); display:flex; gap:16px; flex-wrap:wrap; }
+    .lv-head .meta b { color:var(--text-bright); font-weight:600; }
+    #msgs { flex:1; overflow-y:auto; padding:18px 28px; }
+    .m { display:flex; gap:12px; margin-bottom:14px; }
+    .m img.av { width:36px; height:36px; border-radius:50%; flex:none; background:#222; }
+    .m .who { font-weight:700; color:var(--text-bright); font-size:13px; }
+    .m .who .tag { font-size:10px; font-weight:700; padding:1px 6px; border-radius:4px; background:rgba(88,101,242,.2); color:#c7d2fe; margin-left:6px; vertical-align:1px; }
+    .m .when { font-size:11px; color:var(--text-muted); margin-left:8px; font-weight:400; }
+    .m .body { white-space:pre-wrap; word-break:break-word; color:var(--text-bright); font-size:14px; margin-top:2px; }
+    .m.sys .body { color:var(--text-muted); font-style:italic; }
+    .m img.att { max-width:360px; max-height:260px; border-radius:8px; margin-top:6px; display:block; }
+    .m a.file { display:inline-block; margin-top:6px; font-size:12px; }
+    .emb { border-left:3px solid var(--accent, #5865F2); background:var(--bg-surface); border-radius:4px; padding:8px 12px; margin-top:6px; max-width:560px; font-size:13px; }
+    .emb .et { font-weight:700; color:var(--text-bright); } .emb .ef b { color:var(--text-bright); }
+    .emb .ed, .emb .ef span { white-space:pre-wrap; word-break:break-word; color:var(--text-muted); }
+    .lv-foot { border-top:1px solid var(--border); padding:14px 28px; }
+    .lv-foot textarea { width:100%; min-height:70px; resize:vertical; }
+    .lv-foot .row { display:flex; gap:14px; align-items:center; margin-top:8px; flex-wrap:wrap; }
+    #status { font-size:12px; color:var(--text-muted); } #status.err { color:#f87171; }
+    .banner { padding:12px 28px; background:rgba(245,158,11,.12); color:#fbbf24; font-size:13px; border-bottom:1px solid var(--border); }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'live_tickets' %}
+{% include '_sidebar.html' %}
+
+<div class="lv">
+  <div class="lv-head">
+    <div class="ttl">{% if number %}#{{ number }} · {% endif %}{{ panel }}</div>
+    <div class="meta">
+      <span>Member <b>{{ opener }}</b></span><span>Priority <b>{{ priority }}</b></span>
+      <span>Claimed by <b>{{ claimed or '—' }}</b></span>{% if is_thread %}<span><b>Thread ticket</b></span>{% endif %}
+    </div>
+    <a class="btn-xs" style="margin-left:auto;" href="{{ url_for('dashboard.live_tickets_page', guild_id=guild_id) }}">← All tickets</a>
+  </div>
+
+  <div class="banner" id="closed-banner" {% if is_open %}style="display:none"{% endif %}>
+    This ticket is closed.
+    {% if transcript_url %}<a href="{{ transcript_url }}" target="_blank" rel="noopener">Open the transcript</a>{% endif %}
+  </div>
+
+  <div id="msgs"></div>
+
+  <div class="lv-foot" id="foot" {% if not is_open %}style="display:none"{% endif %}>
+    <textarea id="text" maxlength="{{ max_reply }}" placeholder="Reply as yourself… (Ctrl/Cmd + Enter to send)"></textarea>
+    <div class="row">
+      <button class="btn-xs btn-xs-accent" id="send" type="button" style="padding:8px 18px;">Send</button>
+      <label style="font-size:12px;color:var(--text-muted);"><input type="checkbox" id="ping"> Ping the member</label>
+      <span id="status"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CSRF = {{ csrf_token()|tojson }};
+  const BASE = {{ url_for('dashboard.live_ticket_page', guild_id=guild_id, channel_id=channel_id)|tojson }};
+  const IS_OPEN = {{ 'true' if is_open else 'false' }};
+  const box = document.getElementById('msgs'), statusEl = document.getElementById('status');
+  const seen = new Set(); let lastId = null, delay = 3000, timer = null, stopped = !IS_OPEN;
+
+  // Only ever put Discord CDN URLs into src / href (the server filters too)
+  function safeUrl(u) {
+    try { const x = new URL(u); return x.protocol === 'https:' && /(^|\.)discord(app)?\.(com|net)$/.test(x.hostname) ? x.href : null; }
+    catch (e) { return null; }
+  }
+  function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  function render(m) {
+    const row = el('div', 'm' + (m.system ? ' sys' : ''));
+    const av = safeUrl(m.author.avatar);
+    if (av) { const i = el('img', 'av'); i.src = av; i.alt = ''; i.loading = 'lazy'; row.appendChild(i); }
+    const col = el('div'); col.style.minWidth = 0;
+    const who = el('div', 'who', m.author.name);
+    if (m.dashboard) who.appendChild(el('span', 'tag', 'dashboard')); else if (m.author.bot) who.appendChild(el('span', 'tag', 'BOT'));
+    who.appendChild(el('span', 'when', m.at ? new Date(m.at).toLocaleString() : ''));
+    col.appendChild(who);
+    if (m.content) col.appendChild(el('div', 'body', m.content));
+    for (const a of m.attachments) {
+      const u = safeUrl(a.url); if (!u) continue;
+      if (a.image) { const i = el('img', 'att'); i.src = u; i.alt = a.name; i.loading = 'lazy'; col.appendChild(i); }
+      else { const l = el('a', 'file', '📎 ' + a.name); l.href = u; l.target = '_blank'; l.rel = 'noopener'; col.appendChild(l); }
+    }
+    for (const e of m.embeds) {
+      const b = el('div', 'emb');
+      if (e.title) b.appendChild(el('div', 'et', e.title));
+      if (e.description) b.appendChild(el('div', 'ed', e.description));
+      for (const f of e.fields) { const d = el('div', 'ef'); d.appendChild(el('b', null, f.name)); d.appendChild(document.createElement('br')); d.appendChild(el('span', null, f.value)); b.appendChild(d); }
+      col.appendChild(b);
+    }
+    row.appendChild(col); return row;
+  }
+
+  function add(messages) {
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    for (const m of messages) { if (seen.has(m.id)) continue; seen.add(m.id); lastId = m.id; box.appendChild(render(m)); }
+    if (messages.length && (nearBottom || seen.size === messages.length)) box.scrollTop = box.scrollHeight;
+  }
+  function setStatus(t, err) { statusEl.textContent = t || ''; statusEl.className = err ? 'err' : ''; }
+  function closed() {
+    stopped = true; document.getElementById('closed-banner').style.display = '';
+    document.getElementById('foot').style.display = 'none';
+  }
+
+  async function poll() {
+    if (stopped) return;
+    if (document.visibilityState === 'hidden') { timer = setTimeout(poll, 3000); return; }       // pause in a background tab
+    try {
+      const res = await fetch(BASE + '/messages' + (lastId ? '?after=' + lastId : ''), {});
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && !data.closed) { add(data.messages); delay = 3000; if (statusEl.className === 'err') setStatus(''); }
+      else if (data.closed || res.status === 409) { closed(); return; }
+      else if (res.status === 401 || res.status === 403 || res.status === 404) { setStatus(data.message || 'No access to this ticket.', true); stopped = true; return; }
+      else { delay = Math.min(delay * 2, 15000); setStatus('Connection problem, retrying…', true); }
+    } catch (e) { delay = Math.min(delay * 2, 15000); setStatus('Connection problem, retrying…', true); }
+    timer = setTimeout(poll, delay);
+  }
+
+  async function send() {
+    const t = document.getElementById('text'), btn = document.getElementById('send');
+    const text = t.value.trim(); if (!text) return;
+    btn.disabled = true; setStatus('Sending…');
+    try {
+      const res = await fetch(BASE + '/reply', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+                                               body: JSON.stringify({text, ping: document.getElementById('ping').checked})});
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { t.value = ''; setStatus(''); clearTimeout(timer); poll(); }
+      else if (res.status === 409) closed();
+      else setStatus(data.message || 'Couldn\'t send.', true);
+    } catch (e) { setStatus('Couldn\'t send. Check your connection.', true); }
+    btn.disabled = false; t.focus();
+  }
+  document.getElementById('send').addEventListener('click', send);
+  document.getElementById('text').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+  if (IS_OPEN) poll();
+</script>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixel Bot · Tickets, Giveaways &amp; Moderation for Discord</title>
+  <meta name="description" content="Pixel Bot is an all-in-one Discord bot: tickets, giveaways, auto-mod, anti-nuke, staff tools and a full web dashboard.">
+  <meta property="og:title" content="Pixel Bot · All-in-one Discord bot">
+  <meta property="og:description" content="Tickets, giveaways, auto-mod, anti-nuke, staff tools and a full web dashboard.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#050506">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .notice { padding: 12px 16px; border-radius: var(--r-md); margin-bottom: 18px; font-size: 14px;
+              background: var(--danger-tint); border: 1px solid rgba(255,92,106,.35); color: #fca5a5; }
+    .btn-add { display: inline-block; text-decoration: none; }
+    .btn-ghost { background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border-hi); }
+    .btn-ghost:hover { background: var(--bg-overlay); color: var(--text-bright); }
+    .row-btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+    .guild-row { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                 padding: 12px 16px; background: var(--bg-overlay); border: 1px solid var(--border);
+                 border-left: 3px solid var(--border-hi); border-radius: var(--r-md); }
+    .guild-row .gname { color: var(--text-bright); font-weight: 600; min-width: 0; overflow: hidden;
+                        text-overflow: ellipsis; white-space: nowrap; }
+    .guild-rows { display: grid; gap: 8px; margin-top: 14px; }
+    /* ---------- landing page (logged-out) ---------- */
+    .lp-hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; padding: 36px 0 28px; }
+    .lp-eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 99px;
+                  font-size: 12.5px; font-weight: 600; color: var(--accent-light); background: var(--accent-tint);
+                  border: 1px solid rgba(34,197,94,.3); }
+    .lp-eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-mid); box-shadow: 0 0 10px var(--accent-glow); }
+    .lp-hero h1 { font-family: var(--font-display); font-size: clamp(40px, 6vw, 64px); line-height: 1.04;
+                  letter-spacing: -.03em; margin: 18px 0 16px; color: var(--text-bright); }
+    .lp-hero h1 span { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lp-hero p.lead { font-size: 17px; color: var(--text-muted); max-width: 52ch; margin: 0 0 26px; }
+    .lp-trust { margin-top: 20px; font-size: 13px; color: var(--text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .lp-trust b { color: var(--text-bright); }
+
+    .lp-visual { position: relative; display: grid; place-items: center; min-height: 300px; }
+    .lp-visual::before { content: ""; position: absolute; width: 340px; height: 340px; border-radius: 50%;
+                         background: radial-gradient(circle, rgba(34,197,94,.35), rgba(20,184,166,.12) 55%, transparent 70%);
+                         filter: blur(30px); animation: lpPulse 6s ease-in-out infinite; }
+    @keyframes lpPulse { 50% { transform: scale(1.12); opacity: .7; } }
+    .lp-logo { position: relative; width: 170px; height: 170px; margin-bottom: 20px; border-radius: 32px; object-fit: cover;
+               box-shadow: 0 20px 60px rgba(0,0,0,.6), 0 0 0 1px var(--border-hi); }
+    .lp-msg { position: absolute; display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--r-md);
+              background: rgba(16,16,20,.92); border: 1px solid var(--border-hi); box-shadow: 0 14px 40px rgba(0,0,0,.5);
+              font-size: 12.5px; color: var(--text-muted); backdrop-filter: blur(10px); }
+    .lp-msg b { display: block; color: var(--text-bright); font-size: 13px; }
+    .lp-msg .tag { background: #5865f2; color: #fff; font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 6px; }
+    .lp-msg.m1 { top: 0; right: -10px; }
+    .lp-msg.m2 { bottom: 40px; left: -6px; }
+    .lp-msg.m3 { bottom: -24px; right: -6px; }
+
+    .lp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; margin: 30px 0 10px;
+                border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg-surface); overflow: hidden; }
+    .lp-stat { padding: 20px 22px; border-right: 1px solid var(--border); }
+    .lp-stat:last-child { border-right: 0; }
+    .lp-stat strong { display: block; font-family: var(--font-display); font-size: 28px; color: var(--text-bright); letter-spacing: -.02em; }
+    .lp-stat span { font-size: 13px; color: var(--text-muted); }
+
+    .lp-section { margin-top: 72px; }
+    .lp-section > h2 { font-family: var(--font-display); text-align: center; font-size: clamp(28px, 4vw, 38px);
+                       letter-spacing: -.02em; margin: 0 0 8px; color: var(--text-bright); }
+    .lp-section > .sub { text-align: center; color: var(--text-muted); margin: 0 auto 34px; max-width: 56ch; }
+
+    .lp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .lp-card { padding: 24px; border-radius: var(--r-lg); background: var(--bg-surface); border: 1px solid var(--border);
+               transition: transform .3s var(--ease), border-color .3s, box-shadow .3s; }
+    .lp-card:hover { transform: translateY(-4px); border-color: rgba(34,197,94,.4); box-shadow: 0 18px 50px rgba(0,0,0,.45), 0 0 30px rgba(34,197,94,.08); }
+    .lp-ico { width: 46px; height: 46px; display: grid; place-items: center; font-size: 22px; border-radius: 12px;
+              background: var(--grad-soft); border: 1px solid rgba(34,197,94,.25); margin-bottom: 16px; }
+    .lp-card h3 { margin: 0 0 6px; font-size: 18px; color: var(--text-bright); font-family: var(--font-display); }
+    .lp-card p { margin: 0; font-size: 14px; color: var(--text-muted); }
+
+    .lp-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; counter-reset: s; }
+    .lp-step { position: relative; padding: 24px; border-radius: var(--r-lg); border: 1px dashed var(--border-hi); }
+    .lp-step::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 34px; height: 34px;
+                       border-radius: 50%; background: var(--grad); color: #fff; font-weight: 700; margin-bottom: 14px; }
+    .lp-step h3 { margin: 0 0 4px; font-size: 17px; color: var(--text-bright); font-family: var(--font-display); }
+    .lp-step p { margin: 0; font-size: 14px; color: var(--text-muted); }
+
+    .lp-cta { margin-top: 72px; text-align: center; padding: 48px 24px; border-radius: var(--r-lg); border: 1px solid rgba(34,197,94,.3);
+              background: radial-gradient(ellipse at top, rgba(34,197,94,.16), transparent 70%), var(--bg-surface); }
+    .lp-cta h2 { font-family: var(--font-display); font-size: clamp(26px, 4vw, 36px); margin: 0 0 8px; color: var(--text-bright); }
+    .lp-cta p { color: var(--text-muted); margin: 0 0 22px; }
+    .lp-cta .row-btns { justify-content: center; }
+
+    @media (max-width: 820px) {
+      .lp-hero { grid-template-columns: 1fr; text-align: center; gap: 30px; }
+      .lp-hero p.lead { margin-inline: auto; }
+      .lp-hero .row-btns, .lp-trust { justify-content: center; }
+      .lp-msg { display: none; }
+      .lp-visual { min-height: 220px; }
+      .lp-stat { border-right: 0; border-bottom: 1px solid var(--border); }
+      .lp-stat:last-child { border-bottom: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .lp-visual::before { animation: none; } }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+  <div class="topbar">
+    <a href="{{ url_for('dashboard.index') }}"><span class="brand"><img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt=""><span>Pixel Bot</span></span></a>
+    {% if logged_in %}<a href="{{ url_for('dashboard.logout') }}">Logout</a>{% endif %}
+  </div>
+  <div class="container">
+    {% if notice == 'nobot' %}
+      <div class="notice">⚠️ The bot isn't in that server yet. Add it first, then you can manage it.</div>
+    {% endif %}
+
+    {% if not logged_in %}
+      <section class="lp-hero">
+        <div>
+          <span class="lp-eyebrow"><i></i> All-in-one Discord bot</span>
+          <h1>Run your server <span>without the chaos.</span></h1>
+          <p class="lead">Pixel Bot handles tickets, giveaways, auto-mod and staff management, all controlled from one clean web dashboard.</p>
+          <div class="row-btns">
+            {% if add_bot_url %}<a class="btn btn-add" href="{{ add_bot_url }}" target="_blank" rel="noopener">➕ Add to Discord</a>{% endif %}
+            <a class="btn btn-ghost btn-add" href="{{ url_for('dashboard.login') }}">Open Dashboard</a>
+            <a class="btn btn-ghost btn-add" href="{{ url_for('dashboard.setup_public') }}">📖 Setup Guide</a>
+            {% if is_admin %}<a class="btn btn-ghost btn-add" href="{{ url_for('admin.admin_page') }}">🛠️ Admin</a>{% endif %}
+          </div>
+          <div class="lp-trust">🔒 <span>Log in with Discord · <b>Manage Server</b> permission required · free to set up</span></div>
+        </div>
+        <div class="lp-visual" aria-hidden="true">
+          <img class="lp-logo" src="{{ url_for('static', filename='logo.png') }}" alt="">
+          <div class="lp-msg m1"><span style="font-size:22px">🎫</span><div><b>Ticket opened</b>Support · waiting for staff</div></div>
+          <div class="lp-msg m2"><span style="font-size:22px">🎉</span><div><b>Pixel Bot<span class="tag">APP</span></b>3 winners picked!</div></div>
+          <div class="lp-msg m3"><span style="font-size:22px">🛡️</span><div><b>Raid blocked</b>Anti-nuke stepped in</div></div>
+        </div>
+      </section>
+
+      {% if guild_count %}
+      <div class="lp-stats">
+        <div class="lp-stat"><strong>{{ "{:,}".format(guild_count) }}</strong><span>Servers using Pixel Bot</span></div>
+        <div class="lp-stat"><strong>30+</strong><span>Systems built in</span></div>
+        <div class="lp-stat"><strong>24/7</strong><span>Always online</span></div>
+      </div>
+      {% endif %}
+
+      <section class="lp-section" id="features">
+        <h2>Everything your server needs</h2>
+        <p class="sub">Replace a pile of single-purpose bots with one that does it all.</p>
+        <div class="lp-grid">
+          <div class="lp-card"><div class="lp-ico">🎫</div><h3>Tickets &amp; Transcripts</h3><p>Panels, claiming, close requests, ratings and saved transcripts you can read on the dashboard.</p></div>
+          <div class="lp-card"><div class="lp-ico">🎉</div><h3>Giveaways &amp; Games</h3><p>Classic giveaways plus fastest finger, rock-paper-scissors, split or steal and double or nothing.</p></div>
+          <div class="lp-card"><div class="lp-ico">🛡️</div><h3>Auto-mod &amp; Anti-Nuke</h3><p>Stop spam, raids and rogue admins before they do damage, with lockdown at one command.</p></div>
+          <div class="lp-card"><div class="lp-ico">👥</div><h3>Staff Management</h3><p>Points, strikes, leave of absence, activity tracking and promotion logs for your team.</p></div>
+          <div class="lp-card"><div class="lp-ico">📝</div><h3>Applications</h3><p>Custom staff applications with submissions, review and blacklist controls.</p></div>
+          <div class="lp-card"><div class="lp-ico">🎛️</div><h3>Full Web Dashboard</h3><p>Control every command's permissions, logs, welcome messages and the bot's profile without typing a thing.</p></div>
+        </div>
+      </section>
+
+      <section class="lp-section" id="how-it-works">
+        <h2>Up and running in a minute</h2>
+        <p class="sub">No config files, no hosting, no fuss.</p>
+        <div class="lp-steps">
+          <div class="lp-step"><h3>Add the bot</h3><p>Invite Pixel Bot to your server with one click.</p></div>
+          <div class="lp-step"><h3>Log in</h3><p>Sign in with Discord and pick your server.</p></div>
+          <div class="lp-step"><h3>Configure</h3><p>Turn on the systems you want and set who can use what. <a href="{{ url_for('dashboard.setup_public') }}" style="color:var(--accent-light)">Read the guide →</a></p></div>
+          <div class="lp-step"><h3>Relax</h3><p>Pixel Bot does the busywork while you run your community.</p></div>
+        </div>
+      </section>
+
+      <section class="lp-cta">
+        <h2>Ready to level up your server?</h2>
+        <p>Add Pixel Bot and have it working in minutes.</p>
+        <div class="row-btns">
+          {% if add_bot_url %}<a class="btn btn-add" href="{{ add_bot_url }}" target="_blank" rel="noopener">➕ Add to Discord</a>{% endif %}
+          <a class="btn btn-ghost btn-add" href="{{ url_for('dashboard.login') }}">Login with Discord</a>
+          {% if support_url %}<a class="btn btn-ghost btn-add" href="{{ support_url }}" target="_blank" rel="noopener">💬 Support Server</a>{% endif %}
+        </div>
+      </section>
+    {% else %}
+      <div class="embed">
+        <h2>Select a server</h2>
+        <p>Servers where you have Manage Server and the bot is already added. New servers open the Setup Guide first. After that you go straight to the dashboard, and the guide stays in the sidebar.</p>
+        <ul class="guild-list">
+          {% for g in guilds %}
+          <li><a href="{{ url_for('dashboard.tickets_page' if (g.id | string) in seen_setup else 'dashboard.setup_guild_page', guild_id=g.id) }}">{{ g.name }}</a></li>
+          {% else %}
+          <li>No manageable servers with the bot yet.</li>
+          {% endfor %}
+        </ul>
+        {% if add_bot_url %}
+        <div class="row-btns" style="margin-top:16px;">
+          <a class="btn btn-add" href="{{ add_bot_url }}" target="_blank" rel="noopener">➕ Add the bot to your server</a>
+        </div>
+        {% endif %}
+      </div>
+
+      {% if without_bot %}
+      <div class="embed">
+        <h2>Servers without the bot</h2>
+        <p>You can manage these servers on Discord, but the bot isn't in them yet.</p>
+        <div class="guild-rows">
+          {% for g, url in without_bot %}
+          <div class="guild-row">
+            <span class="gname">{{ g.name }}</span>
+            {% if url %}<a class="btn btn-add" href="{{ url }}" target="_blank" rel="noopener">Add bot</a>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% include '_footer.html' %}
+</body>
+</html>

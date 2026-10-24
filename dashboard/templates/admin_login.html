@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Pixel Bot · Admin Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .login-wrap { max-width: 400px; margin: 90px auto; padding: 0 20px; }
+    .login-wrap h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 26px; color: var(--text-bright); }
+    .login-wrap p { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
+    .err { padding: 10px 14px; border-radius: var(--r-sm); margin-bottom: 14px; font-size: 13px; font-weight: 600;
+           background: var(--danger-tint); border: 1px solid rgba(255,92,106,.35); color: #fca5a5; }
+    .login-wrap input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+    .login-wrap button { width: 100%; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="embed">
+      <div class="brand login-brand"><img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt=""><span>Pixel Bot</span></div>
+      <h2>Admin</h2>
+      {% if disabled %}
+        <div class="err">The admin page is switched off.</div>
+        <p>{{ disabled }} Set them in your environment variables and redeploy.</p>
+      {% else %}
+        <p>Owner login.</p>
+        {% if error %}<div class="err">{{ error }}</div>{% endif %}
+        {% if locked %}
+          <div class="err">Too many wrong attempts. Try again in about {{ (locked // 60) + 1 }} minute(s).</div>
+        {% else %}
+        <form method="POST" action="{{ url_for('admin.login') }}" autocomplete="off">
+          <input type="text" name="username" placeholder="Username" required autofocus>
+          <input type="password" name="password" placeholder="Password" required>
+          <button type="submit">Log in</button>
+        </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% include '_footer.html' %}
+</body>
+</html>
