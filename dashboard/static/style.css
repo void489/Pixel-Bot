@@ -725,3 +725,58 @@ img, video { max-width: 100%; }
 .legal-doc a { color: var(--accent-light); }
 .legal-doc code { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; font-size: 12px; }
 
+
+/* ==========================================================================
+   Phones and tablets: tables as cards, filter bars (used by the ticket tools: Transcripts,
+   Latest transcripts, Ticket Analytics, Ticket Automations, Live Tickets, share links).
+   Mark a table with class="cards", give each <td> a data-label, and the row becomes a small
+   card on a phone (same idea as the Ticket Ratings page).
+     td.title   the card's heading (no label)      td.act   buttons row at the bottom
+     td.stack   label above the content (long text, pills, inputs)
+   ========================================================================== */
+/* date pickers (the shared input rules don't cover type=date) */
+input[type=date] {
+  padding: 10px 12px; background: var(--input-bg); border: 1px solid var(--border); border-radius: var(--r-sm);
+  color: var(--text-bright); font: inherit; font-size: 14px; color-scheme: dark;
+}
+input[type=date]:hover { border-color: var(--border-hi); }
+input[type=date]:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 4px var(--accent-tint); }
+
+/* a table that is still too wide for its box (between phone and desktop) scrolls inside it, never the whole page */
+.tbl-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 820px) {
+  body table.cards td.act .btn-xs, body .filters a.btn-xs { padding: 10px 16px; font-size: 13px; }
+  body table.cards, body table.cards tbody { display: block; width: 100%; }
+  body table.cards thead, body table.cards tr:has(> th) { display: none; }
+  body table.cards tr {
+    display: block; margin-bottom: 10px; padding: 8px 14px;
+    border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,.02);
+  }
+  body table.cards td {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;
+    border: 0; padding: 5px 0; text-align: right; white-space: normal; overflow-wrap: anywhere;
+  }
+  body table.cards td::before {
+    content: attr(data-label); flex: none; padding-top: 2px; text-align: left;
+    color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  }
+  body table.cards td:empty { display: none; }
+  body table.cards td:not([data-label])::before, body table.cards td[data-label=""]::before { display: none; }
+  body table.cards td.title { display: block; text-align: left; font-weight: 700; padding: 6px 0 8px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  body table.cards td.title::before { display: none; }
+  body table.cards td.stack { flex-direction: column; align-items: stretch; gap: 4px; text-align: left; }
+  body table.cards td.act { justify-content: flex-start; flex-wrap: wrap; gap: 8px; margin-top: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+  body table.cards td.act::before { display: none; }
+  body table.cards td input { width: 100%; min-width: 0; }
+}
+
+@media (max-width: 640px) {
+  /* filter bars: one control per line, dates side by side */
+  body .filters { gap: 8px; }
+  body .filters > * { flex: 1 1 100% !important; min-width: 0 !important; max-width: 100%; }
+  body .filters > label.chk.half { flex: 1 1 calc(50% - 4px) !important; }
+  body .filters input:not([type=checkbox]), body .filters select, body .filters button { width: 100%; }
+  body .filters label.chk input[type=date] { flex: 1; min-width: 0; width: auto; }
+}
+

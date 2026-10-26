@@ -14,6 +14,7 @@
     .t-section .basis { font-size:12px; color:var(--text-muted); margin-bottom:14px; }
     .filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
     .filters label.chk { display:flex; gap:6px; align-items:center; font-size:12px; color:var(--text-muted); }
+    .filters select { width:auto; flex:0 1 190px; }          /* the global select is 100% wide: one row each */
     .stats { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
     .stat { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:16px 22px; min-width:170px; }
     .stat b { display:block; font-size:24px; color:var(--text-bright); letter-spacing:-0.02em; }
@@ -32,6 +33,11 @@
     td.dim, .dim { color:var(--text-muted); }
     .bar { height:8px; border-radius:4px; background:var(--accent, #5865F2); opacity:.85; min-width:2px; }
     .low { color:#f87171; } .mid { color:#fbbf24; } .high { color:#4ade80; }
+    @media (max-width:640px) {
+      body .t-section { padding:16px; } body .page-title { font-size:22px; }
+      .stats { gap:10px; } .stat { flex:1 1 calc(50% - 5px); min-width:0; padding:14px 16px; } .stat b { font-size:20px; }
+      .chart { height:140px; }
+    }
     .empty { padding:22px; text-align:center; color:var(--text-muted); font-size:13px; }
     .note { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#c7d2fe; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
   </style>
@@ -57,8 +63,8 @@
         <option value="{{ n }}" {% if f.days == n %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <label class="chk">From <input type="date" name="from" value="{{ f.date_from }}"></label>
-      <label class="chk">To <input type="date" name="to" value="{{ f.date_to }}"></label>
+      <label class="chk half">From <input type="date" name="from" value="{{ f.date_from }}"></label>
+      <label class="chk half">To <input type="date" name="to" value="{{ f.date_to }}"></label>
       <select name="kind">
         <option value="">All ticket kinds</option>
         {% for k in kinds %}<option value="{{ k }}" {% if f.kind == k %}selected{% endif %}>{{ k|capitalize }}</option>{% endfor %}
@@ -68,7 +74,7 @@
         {% for n in panel_names %}<option value="{{ n }}" {% if f.panel == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
       </select>
       <button class="btn-xs btn-xs-accent" type="submit">Apply</button>
-      <a class="btn-xs" href="{{ url_for('dashboard.ticket_analytics_page', guild_id=guild_id) }}">Reset</a>
+      <a class="btn-xs btn-xs-ghost" href="{{ url_for('dashboard.ticket_analytics_page', guild_id=guild_id) }}">Reset</a>
     </form>
   </div>
 
@@ -102,14 +108,14 @@
     <h2>Busiest panels</h2>
     <div class="basis">Tickets opened in the range. Reply time is for tickets opened in it; close time for ones closed in it.</div>
     {% if not d.panels %}<div class="empty">Nothing yet.</div>{% else %}
-    <table class="an">
+    <div class="tbl-scroll"><table class="an cards">
       <thead><tr><th>Panel</th><th style="width:28%"></th><th>Opened</th><th>Closed</th><th>Avg first reply</th><th>Avg close time</th></tr></thead>
       <tbody>
       {% for p in d.panels %}
-        <tr><td>{{ p.name }}</td><td><div class="bar" style="width:{{ p.pct }}%"></div></td><td>{{ p.opened }}</td><td>{{ p.closed }}</td><td class="dim">{{ p.avg_first_reply|dur }}</td><td class="dim">{{ p.avg_close|dur }}</td></tr>
+        <tr><td class="title" data-label="Panel">{{ p.name }}</td><td class="stack" data-label=""><div class="bar" style="width:{{ p.pct }}%"></div></td><td data-label="Opened">{{ p.opened }}</td><td data-label="Closed">{{ p.closed }}</td><td class="dim" data-label="Avg first reply">{{ p.avg_first_reply|dur }}</td><td class="dim" data-label="Avg close time">{{ p.avg_close|dur }}</td></tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 
@@ -117,18 +123,18 @@
     <h2>Staff workload</h2>
     <div class="basis">Claimed = claimed in the range · Closed = closed in the range · Rating = tickets they handled that were closed in the range.</div>
     {% if not d.staff %}<div class="empty">No staff activity in this range.</div>{% else %}
-    <table class="an">
+    <div class="tbl-scroll"><table class="an cards">
       <thead><tr><th>Staff</th><th>Claimed</th><th>Closed</th><th>Avg first reply</th><th>Avg rating</th></tr></thead>
       <tbody>
       {% for s in d.staff %}
         <tr>
-          <td>{{ s.name }}</td><td>{{ s.claimed }}</td><td>{{ s.closed }}</td>
-          <td class="dim">{{ s.avg_first_reply|dur }}</td>
-          <td>{% if s.avg_rating %}<span class="{% if s.avg_rating < 2.5 %}low{% elif s.avg_rating < 4 %}mid{% else %}high{% endif %}">{{ '%.2f'|format(s.avg_rating) }} ★</span> <span class="dim">({{ s.rating_count }})</span>{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td class="title" data-label="Staff">{{ s.name }}</td><td data-label="Claimed">{{ s.claimed }}</td><td data-label="Closed">{{ s.closed }}</td>
+          <td class="dim" data-label="Avg first reply">{{ s.avg_first_reply|dur }}</td>
+          <td data-label="Avg rating">{% if s.avg_rating %}<span class="{% if s.avg_rating < 2.5 %}low{% elif s.avg_rating < 4 %}mid{% else %}high{% endif %}">{{ '%.2f'|format(s.avg_rating) }} ★</span> <span class="dim">({{ s.rating_count }})</span>{% else %}<span class="dim">—</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 

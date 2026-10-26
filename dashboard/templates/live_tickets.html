@@ -16,6 +16,7 @@
     .dim { color:var(--text-muted); }
     .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; background:rgba(88,101,242,.15); color:#c7d2fe; }
     .pill.wait { background:rgba(245,158,11,.15); color:#fbbf24; }
+    @media (max-width:640px) { body .t-section { padding:14px; } body .page-title { font-size:22px; } }
     .empty { padding:30px; text-align:center; color:var(--text-muted); font-size:13px; }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
@@ -38,21 +39,21 @@
       <div class="empty">No open tickets right now.</div>
     {% else %}
       {% if limited %}<div class="dim" style="margin-bottom:10px;">Showing the oldest 200 open tickets.</div>{% endif %}
-      <table class="lt">
+      <div class="tbl-scroll"><table class="lt cards">
         <thead><tr><th>Ticket</th><th>Panel</th><th>Member</th><th>Priority</th><th>Status</th><th>Claimed by</th><th>Opened (UTC)</th><th></th></tr></thead>
         <tbody>
         {% for r in rows %}
           <tr>
-            <td>{% if r.number %}#{{ r.number }}{% else %}<span class="dim">{{ r.channel_id }}</span>{% endif %}{% if r.thread %} <span class="dim">· thread</span>{% endif %}</td>
-            <td>{{ r.panel }}</td><td>{{ r.opener }}</td><td>{{ r.priority_label }}</td>
-            <td>{% if r.waiting %}<span class="pill wait">waiting for a reply</span>{% else %}<span class="pill">replied</span>{% endif %}</td>
-            <td class="dim">{{ r.claimed or '—' }}</td>
-            <td class="dim">{{ r.created_at.strftime('%b %d %H:%M') if r.created_at else '' }}</td>
-            <td><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.live_ticket_page', guild_id=guild_id, channel_id=r.channel_id) }}">Open</a></td>
+            <td class="title" data-label="Ticket">{% if r.number %}#{{ r.number }}{% else %}<span class="dim">{{ r.channel_id }}</span>{% endif %}{% if r.thread %} <span class="dim">· thread</span>{% endif %}</td>
+            <td data-label="Panel">{{ r.panel }}</td><td data-label="Member">{{ r.opener }}</td><td data-label="Priority">{{ r.priority_label }}</td>
+            <td data-label="Status">{% if r.waiting %}<span class="pill wait">waiting for a reply</span>{% else %}<span class="pill">replied</span>{% endif %}</td>
+            <td class="dim" data-label="Claimed by">{{ r.claimed or '—' }}</td>
+            <td class="dim" data-label="Opened (UTC)">{{ r.created_at.strftime('%b %d %H:%M') if r.created_at else '' }}</td>
+            <td class="act"><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.live_ticket_page', guild_id=guild_id, channel_id=r.channel_id) }}">Open</a></td>
           </tr>
         {% endfor %}
         </tbody>
-      </table>
+      </table></div>
     {% endif %}
   </div>
 </div>

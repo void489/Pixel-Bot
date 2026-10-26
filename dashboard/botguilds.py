@@ -20,7 +20,7 @@ DISCORD_API = "https://discord.com/api/v10"
 _TTL = 60  # seconds
 
 # Permissions used when building an invite link ourselves (no BOT_INVITE_URL set):
-# Administrator keeps it simple; change BOT_INVITE_URL in the environment to use your own.
+# Administrator keeps it simple; change BOT_INVITE_URL in Railway to use your own.
 _DEFAULT_PERMISSIONS = 8
 
 _lock = threading.Lock()

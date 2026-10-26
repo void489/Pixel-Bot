@@ -12,6 +12,24 @@
 
     .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
     @media(max-width:960px){ .grid2{ grid-template-columns:1fr; } }
+    /* panel settings: custom button rows (label / emoji / colour) */
+    /* panel settings: toggles read as toggles (checkbox beside its text), with room between settings */
+    details.ps .t-label { margin-top:16px; }
+    details.ps label.t-label:has(> input[type=checkbox]) {
+      display:flex; gap:10px; align-items:flex-start; margin:16px 0 4px; line-height:1.4;
+      text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; color:var(--text-main);
+    }
+    details.ps label.t-label:has(> input[type=checkbox]) > input { flex:none; width:auto; margin-top:2px; }
+    details.ps .hint { margin:6px 0 2px; }
+    .btn-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+    .btn-row-name { min-width:62px; font-size:12px; color:var(--text-muted); }
+    .btn-row .br-label { flex:2; min-width:0; } .btn-row .br-emoji { flex:1; min-width:0; } .btn-row .br-style { flex:1; min-width:0; }
+    #thread-box, details.adv select { text-overflow:ellipsis; }
+    @media(max-width:640px){
+      .btn-row { flex-wrap:wrap; padding:8px 0 10px; border-bottom:1px solid var(--border); }
+      .btn-row-name { flex-basis:100%; font-weight:700; color:var(--text-bright); }
+      .btn-row .br-label { flex:1 1 100%; } .btn-row .br-emoji { flex:1 1 40%; } .btn-row .br-style { flex:1 1 50%; }
+    }
 
     .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; }
     .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
@@ -325,7 +343,7 @@
           Empty answers are skipped. Leave blank for the default (<code>{type}-{username}</code>).
         </div>
 
-        <details class="adv" style="margin-top:18px;">
+        <details class="adv ps" style="margin-top:18px;">
           <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">⚙️ Panel settings</summary>
 
           <label class="t-label">Required Roles - members need one of these to open a ticket</label>
@@ -336,8 +354,8 @@
 
           <label class="t-label">Max open tickets per member (this panel)</label>
           <select name="max_open_tickets" id="f-max-open">
-            <option value="0">Default - 1 open ticket across the whole server</option>
-            {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }} in this panel</option>{% endfor %}
+            <option value="0">Default (1 across the server)</option>
+            {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }} per member in this panel</option>{% endfor %}
           </select>
           <div class="hint">A number here only counts tickets of this panel. Panels left on Default keep the old rule.</div>
 
@@ -355,11 +373,11 @@
           <label class="t-label">Ticket buttons</label>
           <div class="hint" style="margin-bottom:6px;">Blank = default. Emoji: a normal emoji or a custom one like <code>&lt;:name:123456789012345678&gt;</code>; type <code>-</code> for no emoji.</div>
           {% for key, title in (("close","Close"),("claim","Claim"),("unclaim","Unclaim")) %}
-          <div class="q-row" style="gap:6px;margin-bottom:6px;">
-            <span style="min-width:62px;font-size:12px;color:var(--text-muted);align-self:center;">{{ title }}</span>
-            <input type="text" name="btn_{{ key }}_label" id="f-btn-{{ key }}-label" maxlength="80" placeholder="Label" style="flex:2">
-            <input type="text" name="btn_{{ key }}_emoji" id="f-btn-{{ key }}-emoji" maxlength="60" placeholder="Emoji" style="flex:1">
-            <select name="btn_{{ key }}_style" id="f-btn-{{ key }}-style" style="flex:1">
+          <div class="btn-row">
+            <span class="btn-row-name">{{ title }}</span>
+            <input type="text" name="btn_{{ key }}_label" id="f-btn-{{ key }}-label" maxlength="80" placeholder="Label" class="br-label">
+            <input type="text" name="btn_{{ key }}_emoji" id="f-btn-{{ key }}-emoji" maxlength="60" placeholder="Emoji" class="br-emoji">
+            <select name="btn_{{ key }}_style" id="f-btn-{{ key }}-style" class="br-style">
               <option value="">Default</option>
               <option value="primary">Blue</option><option value="secondary">Grey</option>
               <option value="success">Green</option><option value="danger">Red</option>
@@ -374,11 +392,11 @@
 
           <label class="t-label">Who can open this panel's transcripts on the dashboard</label>
           <select name="transcript_access" id="f-transcript-access">
-            <option value="managers">Everyone with dashboard access (Manage Server) - default</option>
-            <option value="staff">Staff roles only (support roles above + server support roles)</option>
-            <option value="opener">Staff roles + the member who opened the ticket</option>
+            <option value="managers">Dashboard managers (default)</option>
+            <option value="staff">Staff roles only</option>
+            <option value="opener">Staff roles + the opener</option>
           </select>
-          <div class="hint">Staff and opener access need a Discord login on the dashboard. With "Staff roles only", people who only have Manage Server can't open them. Administrators always can. The closing DM includes a transcript link when the opener may open it.</div>
+          <div class="hint">"Staff roles only" means this panel's support roles plus the server's ticket support roles. Staff and opener access need a Discord login on the dashboard. With "Staff roles only", people who only have Manage Server can't open them. Administrators always can. The closing DM includes a transcript link when the opener may open it.</div>
 
           <label class="t-label"><input type="checkbox" name="thread_mode" id="f-thread-mode" onchange="toggleThreadMode()"> Open tickets as private threads (instead of channels)</label>
           <div id="thread-box">
@@ -406,11 +424,11 @@
 
           <label class="t-label"><input type="checkbox" name="priority_enabled" id="f-priority"> Priority: add a Priority button and show it in the ticket</label>
           <select name="priority_rename" id="f-priority-rename">
-            <option value="off">Don't rename the channel when the priority changes</option>
-            <option value="emoji">Add an emoji in front of the name (🔴-name)</option>
-            <option value="prefix">Add a word in front of the name (urgent-name)</option>
+            <option value="off">Don't rename the channel</option>
+            <option value="emoji">Emoji prefix (🔴-name)</option>
+            <option value="prefix">Word prefix (urgent-name)</option>
           </select>
-          <div class="hint">Staff can always use <code>/ticket priority</code>. Normal has no prefix. Discord limits channel renames to about 2 per 10 minutes.</div>
+          <div class="hint">When the priority changes, the channel name gets a prefix. Staff can always use <code>/ticket priority</code>. Normal has no prefix. Discord limits channel renames to about 2 per 10 minutes.</div>
 
           <label class="t-label">Linked panels (Ctrl/Cmd for multiple)</label>
           <select name="linked_type_ids" id="f-linked" multiple size="4">
@@ -555,21 +573,21 @@
     <div class="t-section-head"><h2>📄 Latest transcripts</h2>
       <div class="toolbar"><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.transcripts_page', guild_id=guild_id) }}">🔎 Search all transcripts</a></div>
     </div>
-    <table>
+    <div class="tbl-scroll"><table class="cards">
       <tr><th>Channel</th><th>Opened By</th><th>Closed By</th><th>Reason</th><th>Date</th><th></th></tr>
       {% for t in transcripts %}
       <tr>
-        <td>#{{ t.channel_name }}</td>
-        <td>{{ t.opener_name or t.opener_id }}</td>
-        <td>{{ t.closer_name or t.closed_by_id }}</td>
-        <td>{{ t.reason or "" }}</td>
-        <td>{{ t.created_at }}</td>
-        <td><a class="btn" href="{{ url_for('dashboard.view_transcript', guild_id=guild_id, transcript_id=t._id) }}" target="_blank">View</a></td>
+        <td class="title" data-label="Channel">#{{ t.channel_name }}</td>
+        <td data-label="Opened by">{{ t.opener_name or t.opener_id }}</td>
+        <td data-label="Closed by">{{ t.closer_name or t.closed_by_id }}</td>
+        <td data-label="Reason">{{ t.reason or "" }}</td>
+        <td data-label="Date">{{ t.created_at }}</td>
+        <td class="act"><a class="btn" href="{{ url_for('dashboard.view_transcript', guild_id=guild_id, transcript_id=t._id) }}" target="_blank">View</a></td>
       </tr>
       {% else %}
       <tr><td colspan="6">No transcripts yet.</td></tr>
       {% endfor %}
-    </table>
+    </table></div>
   </div>
 </div>
 

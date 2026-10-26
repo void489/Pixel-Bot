@@ -2,7 +2,7 @@
 
 Base structure for a multi-system Discord bot (giveaways, applications, security,
 vouch/counter-vouch, spawner panel, anti-nuke, anti-raid) with a
-web dashboard and MongoDB. Deployed on bot-hosting (startup file: main.py).
+web dashboard and MongoDB. Deployed on Railway.
 
 ## Structure
 - `main.py` - bot entrypoint, loads cogs

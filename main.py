@@ -84,10 +84,10 @@ async def on_guild_join(guild):
 
 
 def run_dashboard():
-    """Runs the Flask dashboard in this background thread. Hosts inject SERVER_PORT (bot-hosting) or PORT (Railway) -
-    the dashboard must bind to that, not DASHBOARD_PORT."""
+    """Runs the Flask dashboard in this background thread. Railway injects PORT -
+    the dashboard must bind to that, not DASHBOARD_PORT, when running on Railway."""
     from dashboard.app import app
-    port = int(os.getenv("SERVER_PORT") or os.getenv("PORT") or settings.DASHBOARD_PORT)
+    port = int(os.getenv("PORT", settings.DASHBOARD_PORT))
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 

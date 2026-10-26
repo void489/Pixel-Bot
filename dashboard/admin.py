@@ -1,7 +1,7 @@
 """/admin - owner-only page: set the bot's activity, see every server the bot is in,
 open any server's dashboard, make the bot leave, or get an invite.
 
-Switched off unless ALL of these are set in the environment (environment variables):
+Switched off unless ALL of these are set in the environment (Railway variables):
     ADMIN_USERNAME, ADMIN_PASSWORD, DASHBOARD_SECRET_KEY (a real, fixed secret)
 The login is stored in Flask's signed session cookie, so a weak/default secret key
 would let someone forge it - that's why the page refuses to run with one.

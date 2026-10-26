@@ -25,7 +25,7 @@
       <h2>Admin</h2>
       {% if disabled %}
         <div class="err">The admin page is switched off.</div>
-        <p>{{ disabled }} Set them in your environment variables and redeploy.</p>
+        <p>{{ disabled }} Set them in your Railway variables and redeploy.</p>
       {% else %}
         <p>Owner login.</p>
         {% if error %}<div class="err">{{ error }}</div>{% endif %}

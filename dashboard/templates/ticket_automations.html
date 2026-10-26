@@ -33,6 +33,12 @@
     .pill { display:inline-block; padding:1px 7px; border-radius:99px; font-size:11px; font-weight:700; margin:1px 2px 1px 0; }
     .pill.ok { background:rgba(34,197,94,.15); color:#4ade80; } .pill.bad { background:rgba(239,68,68,.15); color:#f87171; }
     .dim { color:var(--text-muted); }
+    @media (max-width:640px) {
+      body .t-section { padding:16px; } body .page-title { font-size:22px; }
+      .auto { flex-wrap:wrap; gap:10px; } .auto .info { flex:1 1 100%; } .auto .nm { overflow-wrap:anywhere; }
+      .step { grid-template-columns:22px 1fr; } .step .f { grid-column:1 / -1; } .step .f > * { flex:1 1 100%; }
+      .hint { overflow-wrap:anywhere; }
+    }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
@@ -60,15 +66,15 @@
         <input type="hidden" name="form_type" value="toggle_automation">
         <input type="hidden" name="automation_id" value="{{ a.id }}"><input type="hidden" name="name" value="{{ a.name }}">
         <input type="hidden" name="enabled" value="{{ '0' if a.enabled else '1' }}">
-        <button class="btn-xs" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button>
+        <button class="btn-xs btn-xs-ghost" type="submit">{{ 'Disable' if a.enabled else 'Enable' }}</button>
       </form>
-      <button class="btn-xs" type="button" onclick='openAutoForm({{ {
+      <button class="btn-xs btn-xs-ghost" type="button" onclick='openAutoForm({{ {
         "_id": a.id, "name": a.name, "enabled": a.enabled, "trigger": a.trigger, "steps": a.steps } | tojson }})'>Edit</button>
       <form method="POST" onsubmit="return confirm('Delete this automation?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="delete_automation">
         <input type="hidden" name="automation_id" value="{{ a.id }}"><input type="hidden" name="name" value="{{ a.name }}">
-        <button class="btn-xs" type="submit">Delete</button>
+        <button class="btn-xs btn-xs-danger" type="submit">Delete</button>
       </form>
     </div>
     {% else %}
@@ -152,7 +158,7 @@
 
       <div style="margin-top:18px;display:flex;gap:8px;">
         <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save</button>
-        <button class="btn-xs" type="button" onclick="document.getElementById('auto-form').classList.remove('open')">Cancel</button>
+        <button class="btn-xs btn-xs-ghost" type="button" onclick="document.getElementById('auto-form').classList.remove('open')">Cancel</button>
       </div>
     </form>
   </div>
@@ -160,19 +166,19 @@
   <div class="t-section">
     <h2>Recent runs <span class="dim" style="font-weight:400;">(kept 30 days)</span></h2>
     {% if not runs %}<div class="dim">Nothing has run yet.</div>{% else %}
-    <table class="log">
+    <div class="tbl-scroll"><table class="log cards">
       <thead><tr><th>When (UTC)</th><th>Automation</th><th>Ticket</th><th>Trigger</th><th>Steps</th></tr></thead>
       <tbody>
       {% for r in runs %}
         <tr>
-          <td class="dim">{{ r.at.strftime('%b %d %H:%M') }}</td><td>{{ r.automation_name }}</td><td>#{{ r.channel_name or r.channel_id }}</td>
-          <td class="dim">{{ r.trigger }}{% if r.context and r.context.keyword %}: “{{ r.context.keyword }}”{% endif %}</td>
-          <td>{% for s in r.results %}<span class="pill {{ 'ok' if s.ok else 'bad' }}" title="{{ s.note }}">{{ '✓' if s.ok else '✗' }} {{ limits.STEP_LABELS.get(s.type, s.type) }}</span>{% endfor %}
+          <td class="dim" data-label="When">{{ r.at.strftime('%b %d %H:%M') }}</td><td class="title" data-label="Automation">{{ r.automation_name }}</td><td data-label="Ticket">#{{ r.channel_name or r.channel_id }}</td>
+          <td class="dim" data-label="Trigger">{{ r.trigger }}{% if r.context and r.context.keyword %}: “{{ r.context.keyword }}”{% endif %}</td>
+          <td class="stack" data-label="Steps">{% for s in r.results %}<span class="pill {{ 'ok' if s.ok else 'bad' }}" title="{{ s.note }}">{{ '✓' if s.ok else '✗' }} {{ limits.STEP_LABELS.get(s.type, s.type) }}</span>{% endfor %}
               {% for s in r.results if not s.ok %}<div class="dim">{{ s.note }}</div>{% endfor %}</td>
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 </div>

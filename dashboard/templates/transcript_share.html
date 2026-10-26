@@ -12,6 +12,7 @@
     .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; margin-bottom:24px; max-width:900px; }
     .t-section h2 { font-size:16px; margin:0 0 14px; color:var(--text-bright); }
     .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    @media (max-width:640px) { body .t-section { padding:16px; } body .page-title { font-size:22px; } .row input[type=number] { flex:1; min-width:0; } .link-box input { min-width:0; width:100%; } }
     .row input[type=number] { width:90px; }
     table.tr { width:100%; border-collapse:collapse; font-size:13px; }
     table.tr th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
@@ -61,30 +62,27 @@
     {% if not shares %}
       <div class="dim">No links yet.</div>
     {% else %}
-    <table class="tr">
+    <div class="tbl-scroll"><table class="tr cards">
       <thead><tr><th>Link</th><th>Status</th><th>Expires</th><th>Views</th><th>Created by</th><th></th></tr></thead>
       <tbody>
       {% for sh in shares %}
         <tr>
-          <td>{% if sh.state == 'active' %}<div class="link-box"><input type="text" readonly value="{{ sh.url }}" onclick="this.select()"></div>{% else %}<span class="dim">—</span>{% endif %}</td>
-          <td><span class="pill {{ sh.state }}">{{ sh.state }}</span></td>
-          <td class="dim">{{ sh.expires_at.strftime('%Y-%m-%d %H:%M UTC') if sh.expires_at else '' }}</td>
-          <td class="dim">{{ sh.views or 0 }}</td>
-          <td class="dim">{{ sh.created_by_name }}</td>
-          <td>
-            {% if sh.state == 'active' %}
+          <td class="stack" data-label="Link">{% if sh.state == 'active' %}<div class="link-box"><input type="text" readonly value="{{ sh.url }}" onclick="this.select()"></div>{% else %}<span class="dim">—</span>{% endif %}</td>
+          <td data-label="Status"><span class="pill {{ sh.state }}">{{ sh.state }}</span></td>
+          <td class="dim" data-label="Expires">{{ sh.expires_at.strftime('%Y-%m-%d %H:%M UTC') if sh.expires_at else '' }}</td>
+          <td class="dim" data-label="Views">{{ sh.views or 0 }}</td>
+          <td class="dim" data-label="Created by">{{ sh.created_by_name }}</td>
+          <td class="act">{%- if sh.state == 'active' %}
             <form method="POST" style="margin:0" onsubmit="return confirm('Revoke this link? It stops working right away.');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="form_type" value="revoke_share">
               <input type="hidden" name="share_id" value="{{ sh._id }}">
-              <button class="btn-xs" type="submit">Revoke</button>
-            </form>
-            {% endif %}
-          </td>
+              <button class="btn-xs btn-xs-danger" type="submit">Revoke</button>
+            </form>{%- endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% endif %}
   </div>
 </div>

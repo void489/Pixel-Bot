@@ -52,6 +52,22 @@ turn something on. No migration is needed: new fields are read with safe default
   message, add member). Once per ticket, never triggered by bots, failures skipped and logged.
 - `dashboard/ticket_live.py`, `utils/ticket_automation.py`
 
+## Phone / tablet layout fixes (dashboard)
+Checked in a real browser at 360, 390, 768, 1024 and 1280 px wide.
+- Tables on the ticket pages (Transcripts, Latest transcripts on the Tickets page, Analytics, Automations
+  runs, share links, Live Tickets) are now small cards on phones and tablets (up to 820 px), the same idea as
+  the Ticket Ratings page. Wider than that, a table that doesn't fit scrolls inside its box.
+- Shared styles are in `dashboard/static/style.css` (section "Phones and tablets"): `table.cards`
+  with `data-label`s, `.filters` bars, date pickers, `.tbl-scroll`.
+- Transcript page: the menu is now the same swipeable strip as other pages (it used to wrap into a tall
+  block), the tall header no longer sticks, long attachment names wrap.
+- Live ticket view: compact header, long names wrap, the reply box stays at the bottom of the screen.
+- Panel settings: button rows, toggles and dropdown texts fit a phone; secondary / delete buttons use the
+  grey / red styles like the rest of the dashboard.
+- Filter bars: compact on desktop, one control per line on phones.
+- Already too wide in your original upload and fixed here: the Transcripts list and the Tickets page's
+  "Latest transcripts" table.
+
 ## Data added (all optional)
 - Ticket type: overflow_category_ids, button_label, max_open_tickets, required_role_ids,
   welcome_message, created_message, claiming_enabled, claim_only_visible, save_transcripts,
