@@ -372,7 +372,7 @@ def _placeholders(guild, opener, channel, ticket_type: dict, number=None) -> dic
 
 
 async def _linked_type_names(ticket_type: dict) -> list:
-    """Names of the panels this one is linked to (deleted ones are skipped)."""
+    """Names of the ticket types this one is linked to (deleted ones are skipped)."""
     names = []
     for tid in ts.settings_for(ticket_type)["linked_type_ids"][:ts.MAX_LINKED]:
         try:
@@ -407,7 +407,7 @@ def _build_welcome_embed(ticket_type: dict, opener: discord.Member, answers: lis
         ans = answers[i] if i < len(answers) and answers[i] else "*(no answer)*"
         embed.add_field(name=f"{i + 1}. {q}"[:250], value=str(ans)[:1000], inline=False)
     if linked_names:
-        embed.add_field(name="🔗 Related panels", value=", ".join(linked_names)[:1000], inline=False)
+        embed.add_field(name="🔗 Related ticket types", value=", ".join(linked_names)[:1000], inline=False)
     if priority:
         embed.insert_field_at(0, name="Priority", value=ts.priority_label(priority), inline=True)
     return embed
@@ -2320,7 +2320,7 @@ class Tickets(commands.Cog):
         old_welcome_id = ticket_doc.get("welcome_message_id")
         current_type_id = ticket_doc.get("ticket_type_id")
 
-        # A panel with linked panels only offers those; none linked = every type (as before).
+        # A ticket type with linked ticket types only offers those; none linked = every type (as before).
         current_type = await _ticket_type_of(ticket_doc)
         linked = ts.settings_for(current_type)["linked_type_ids"] if current_type else []
         if linked:

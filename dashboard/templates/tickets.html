@@ -394,7 +394,7 @@
         </div>
 
         <details class="adv ps" style="margin-top:18px;">
-          <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">⚙️ Panel settings</summary>
+          <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">⚙️ Ticket settings</summary>
 
           <label class="t-label">Required Roles - members need one of these to open a ticket</label>
           <select name="required_role_ids" id="f-required" multiple size="4">
@@ -402,12 +402,12 @@
           </select>
           <div class="hint">Leave empty to let everyone open this ticket.</div>
 
-          <label class="t-label">Max open tickets per member (this panel)</label>
+          <label class="t-label">Max open tickets per member (this ticket type)</label>
           <select name="max_open_tickets" id="f-max-open">
             <option value="0">Default (1 across the server)</option>
-            {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }} per member in this panel</option>{% endfor %}
+            {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }} per member in this ticket type</option>{% endfor %}
           </select>
-          <div class="hint">A number here only counts tickets of this panel. Panels left on Default keep the old rule.</div>
+          <div class="hint">A number here only counts tickets of this ticket type. Types left on Default keep the old rule.</div>
 
           <label class="t-label">Welcome message (inside the ticket)</label>
           <textarea name="welcome_message" id="f-welcome" rows="3" maxlength="1500"
@@ -417,7 +417,7 @@
                     placeholder="Your ticket has been created: {channel}"></textarea>
           <div class="hint">Placeholders: <code>{user}</code> <code>{username}</code> <code>{server}</code> <code>{channel}</code> <code>{panel}</code> <code>{number}</code>. Blank = the normal message.</div>
 
-          <label class="t-label">Panel button label (blank = the type name)</label>
+          <label class="t-label">Button label (blank = the type name)</label>
           <input type="text" name="button_label" id="f-button-label" maxlength="80">
 
           <label class="t-label">Ticket buttons</label>
@@ -440,13 +440,13 @@
           <div class="hint">Admins still see everything. Works for ticket channels.</div>
           <label class="t-label"><input type="checkbox" name="save_transcripts" id="f-save-transcripts" checked> Save a transcript when the ticket closes</label>
 
-          <label class="t-label">Who can open this panel's transcripts on the dashboard</label>
+          <label class="t-label">Who can open this ticket type's transcripts on the dashboard</label>
           <select name="transcript_access" id="f-transcript-access">
             <option value="managers">Dashboard managers (default)</option>
             <option value="staff">Staff roles only</option>
             <option value="opener">Staff roles + the opener</option>
           </select>
-          <div class="hint">"Staff roles only" means this panel's support roles plus the server's ticket support roles. Staff and opener access need a Discord login on the dashboard. With "Staff roles only", people who only have Manage Server can't open them. Administrators always can. The closing DM includes a transcript link when the opener may open it.</div>
+          <div class="hint">"Staff roles only" means this ticket type's support roles plus the server's ticket support roles. Staff and opener access need a Discord login on the dashboard. With "Staff roles only", people who only have Manage Server can't open them. Administrators always can. The closing DM includes a transcript link when the opener may open it.</div>
 
           <label class="t-label"><input type="checkbox" name="thread_mode" id="f-thread-mode" onchange="toggleThreadMode()"> Open tickets as private threads (instead of channels)</label>
           <div id="thread-box">
@@ -470,7 +470,7 @@
           </div>
 
           <label class="t-label"><input type="checkbox" name="web_reply" id="f-web-reply"> Live replies: let staff read and answer open tickets from the dashboard (Live Tickets)</label>
-          <div class="hint">Who: administrators, dashboard managers (Manage Server) and members with this panel's support roles. If the transcript access above is "Staff roles only" (or "+ opener"), managers need a support role too. Replies are posted by the bot with the staff member's name. Staff points and taskbooks don't count web replies.</div>
+          <div class="hint">Who: administrators, dashboard managers (Manage Server) and members with this ticket type's support roles. If the transcript access above is "Staff roles only" (or "+ opener"), managers need a support role too. Replies are posted by the bot with the staff member's name. Staff points and taskbooks don't count web replies.</div>
 
           <label class="t-label"><input type="checkbox" name="priority_enabled" id="f-priority"> Priority: add a Priority button and show it in the ticket</label>
           <select name="priority_rename" id="f-priority-rename">
@@ -480,11 +480,11 @@
           </select>
           <div class="hint">When the priority changes, the channel name gets a prefix. Staff can always use <code>/ticket priority</code>. Normal has no prefix. Discord limits channel renames to about 2 per 10 minutes.</div>
 
-          <label class="t-label">Linked panels (Ctrl/Cmd for multiple)</label>
+          <label class="t-label">Linked ticket types (Ctrl/Cmd for multiple)</label>
           <select name="linked_type_ids" id="f-linked" multiple size="4">
             {% for tt in ticket_types %}<option value="{{ tt._id }}">{{ tt.name }}</option>{% endfor %}
           </select>
-          <div class="hint">Shown in the ticket, and <code>/ticket move</code> only offers these. Empty = every type.</div>
+          <div class="hint">Listed in the ticket as related types, and <code>/ticket move</code> only offers these. Empty = every ticket type.</div>
         </details>
 
         <div style="margin-top:18px; display:flex; gap:8px;">

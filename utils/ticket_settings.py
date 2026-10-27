@@ -15,7 +15,7 @@ change until they are edited and saved.
     claiming_enabled    show the Claim / Unclaim buttons (default True)
     claim_only_visible  after a claim only the claimer (and admins) can see the ticket
     save_transcripts    save a transcript on close (default True)
-    linked_type_ids     related panels: listed in the welcome embed, and /ticket move only
+    linked_type_ids     related ticket types: listed in the welcome embed, and /ticket move only
                         offers these (blank = every type, like before)
     transcript_access   who may open this panel's transcripts on the dashboard:
                         "managers" (default, as before) | "staff" | "opener"
