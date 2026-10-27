@@ -180,15 +180,20 @@ async def _cleanup_empty_category(guild: discord.Guild, category, gone_ids=()):
                            if cid in [str(x) for x in (t.get("overflow_category_ids") or [])]]
             claim_cfg = await models.get_claim_ticket_config(guild.id)
             claim_uses_it = str(claim_cfg.get("category_id")) == cid
+            claim_spares = [str(x) for x in (claim_cfg.get("overflow_category_ids") or [])]
+            claim_spare_uses_it = cid in claim_spares
             spawner_cfg = await models.get_spawner_config(guild.id)
             spawner_uses_it = str(spawner_cfg.get("category_id")) == cid
+            spawner_spares = [str(x) for x in (spawner_cfg.get("overflow_category_ids") or [])]
+            spawner_spare_uses_it = cid in spawner_spares
             apps = [a for a in await models.get_applications(guild.id)
                     if str(a.get("ticket_category_id")) == cid]
             fixed_entry, server_spares = await ticket_core.server_category_block(guild.id)
             fixed_uses_it = fixed_entry == cid
             server_spare_uses_it = cid in server_spares
             if not (main_types or spare_types or claim_uses_it or spawner_uses_it or apps
-                    or fixed_uses_it or server_spare_uses_it):
+                    or fixed_uses_it or server_spare_uses_it
+                    or claim_spare_uses_it or spawner_spare_uses_it):
                 return
 
             # Main, spare and server-wide categories all work the same: whoever used this
@@ -204,6 +209,12 @@ async def _cleanup_empty_category(guild: discord.Guild, category, gone_ids=()):
                 await models.update_guild_settings(guild.id, {"claim_tickets.category_id": pending})
             if spawner_uses_it:
                 await models.update_guild_settings(guild.id, {"spawners.category_id": pending})
+            if claim_spare_uses_it:
+                await models.update_guild_settings(guild.id, {
+                    "claim_tickets.overflow_category_ids": [pending if x == cid else x for x in claim_spares]})
+            if spawner_spare_uses_it:
+                await models.update_guild_settings(guild.id, {
+                    "spawners.overflow_category_ids": [pending if x == cid else x for x in spawner_spares]})
             if fixed_uses_it:
                 await models.update_guild_settings(guild.id, {"tickets.fixed_category_id": pending})
             if server_spare_uses_it:

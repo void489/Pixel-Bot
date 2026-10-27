@@ -467,6 +467,7 @@ async def get_claim_ticket_config(guild_id: int) -> dict:
     cfg = settings.get("claim_tickets") or {}
     return {
         "category_id": cfg.get("category_id"),
+        "overflow_category_ids": [str(x) for x in (cfg.get("overflow_category_ids") or [])],
         "ping_role_ids": cfg.get("ping_role_ids") or [],
         "allow_role_ids": cfg.get("allow_role_ids") or [],
         "questions": (cfg.get("questions") or ["What is your Minecraft IGN?"])[:5],
@@ -526,6 +527,7 @@ async def get_spawner_config(guild_id: int) -> dict:
     cfg = settings.get("spawners") or {}
     return {
         "category_id": cfg.get("category_id"),
+        "overflow_category_ids": [str(x) for x in (cfg.get("overflow_category_ids") or [])],
         "ping_role_ids": cfg.get("ping_role_ids") or [],
         "allow_role_ids": cfg.get("allow_role_ids") or [],
         "notes": cfg.get("notes") or "",

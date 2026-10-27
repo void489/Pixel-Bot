@@ -101,6 +101,12 @@
   </div>
   {% endif %}
 
+  {% if error == "claim_question_required" %}
+  <div class="banner-error">
+    <strong>⚠️ Claim tickets need at least one question.</strong> Fill in Question 1 and save again.
+  </div>
+  {% endif %}
+
   {% if error == "category_required" %}
   <div class="banner-error">
     <strong>⚠️ Category is required.</strong> Pick an existing category or create a new one.
@@ -122,8 +128,9 @@
   <div class="t-section" style="margin-bottom:24px;">
     <div class="t-section-head"><h2>📁 Server-wide Categories</h2></div>
     <p class="hint" style="margin:-8px 0 12px;font-style:normal;">
-      Used by <b>claim</b>, <b>spawner</b> and <b>application</b> tickets, and by any ticket type that has
-      no category of its own. Leave the main category empty to keep each one on the category it already uses.
+      Used by any ticket type that has no category of its own. <b>Claim</b> and <b>Spawner</b> tickets only use it
+      until you give them their own category on their cards below; <b>application</b> tickets never use it.
+      Leave the main category empty to keep each one on the category it already uses.
     </p>
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -151,6 +158,48 @@
       <div class="t-section-head">
         <h2>📋 Ticket Types</h2>
         <button class="btn-xs btn-xs-accent" onclick="openTypeForm(null)">+ New Type</button>
+      </div>
+
+      <!-- Built-in kinds (fixed cards): their existing settings are edited here -->
+      <div class="t-card" style="border-style:dashed;">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">🎁 Claim <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-meta">
+              📁 {{ claim_view.main_name or "— server-wide category —" }}{% if claim_view.spare_names %} (+{{ claim_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              ❓ {{ claim_view.questions|length }} question(s)
+            </div>
+            <div style="margin-top:6px">
+              {% for rid in claim_view.allow_role_ids %}
+                {% set r = (roles | selectattr("id", "equalto", rid) | list | first) %}
+                {% if r %}<span class="tag">{{ r.name }}</span>{% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button type="button" class="btn-xs btn-xs-ghost" onclick="openClaimForm()">Edit</button>
+          </div>
+        </div>
+      </div>
+      <div class="t-card" style="border-style:dashed;">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">🌀 Spawner <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-meta">
+              📁 {{ spawner_view.main_name or "— server-wide category —" }}{% if spawner_view.spare_names %} (+{{ spawner_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              <a href="{{ url_for('dashboard.spawners_page', guild_id=guild_id) }}">Prices &amp; types →</a>
+            </div>
+            <div style="margin-top:6px">
+              {% for rid in spawner_view.allow_role_ids %}
+                {% set r = (roles | selectattr("id", "equalto", rid) | list | first) %}
+                {% if r %}<span class="tag">{{ r.name }}</span>{% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button type="button" class="btn-xs btn-xs-ghost" onclick="openSpawnerForm()">Edit</button>
+          </div>
+        </div>
       </div>
 
       {% for t in ticket_types %}
@@ -231,8 +280,9 @@
       {% endfor %}
     </div>
 
+    <div>
     <!-- Ticket Type form -->
-    <div class="t-section">
+    <div class="t-section" id="type-form-section">
       <div class="t-section-head">
         <h2 id="type-form-heading">✏️ New Ticket Type</h2>
       </div>
@@ -443,6 +493,108 @@
         </div>
       </form>
     </div>
+
+    <!-- Claim settings form (built-in card) -->
+    <div class="t-section hidden" id="claim-form-section">
+      <div class="t-section-head"><h2>✏️ Edit Claim Tickets</h2></div>
+      <form method="POST" id="claim-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_claim_settings">
+
+        <label class="t-label">Discord Category</label>
+        <input type="text" name="category_name" id="cl-category" list="cat-list" maxlength="100"
+               placeholder="e.g. Claim Tickets" autocomplete="off">
+        <div class="hint">Type a name. If the category exists claim tickets go there; if not it's created when needed and removed again when empty. Leave empty to use the server-wide categories at the top.</div>
+
+        <label class="t-label">Spare Categories (max 5)</label>
+        {% for i in range(5) %}
+        <input type="text" name="overflow_category_names" id="cl-overflow-{{ i }}" list="cat-list" maxlength="100"
+               placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+        {% endfor %}
+        <div class="hint">Only claim tickets use these. A spare is only used once the one before it holds 50 channels.</div>
+
+        <label class="t-label">Ping mode (who gets pinged when a claim ticket opens)</label>
+        <select name="ping_mode" id="cl-ping-mode">
+          <option value="roles">Ping roles - the ticket opener + the Ping Roles below</option>
+          <option value="host">Ping host - the ticket opener + the giveaway host (no roles)</option>
+        </select>
+        <div class="hint">The Allow Roles setting below is not affected by this.</div>
+
+        <label class="t-label">Ping Roles (used when Ping mode is "Ping roles")</label>
+        <select name="ping_role_ids" id="cl-ping-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
+
+        <label class="t-label">Allow Roles (who can see &amp; reply in claim tickets)</label>
+        <select name="allow_role_ids" id="cl-allow-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">These roles also count as staff for the Close Ticket button.</div>
+
+        <label class="t-label">Rock Paper Scissors timer (seconds)</label>
+        <input type="number" name="rps_timer" id="cl-rps" min="10" max="600" step="1" style="width:110px;">
+        <label class="t-label">Split or Steal timer (seconds)</label>
+        <input type="number" name="splitsteal_timer" id="cl-split" min="10" max="600" step="1" style="width:110px;">
+        <div class="hint">How long each player has to pick in the giveaway games (10 to 600 seconds).</div>
+
+        <label class="t-label">Claim Questions (asked when a winner presses Claim)</label>
+        <input type="text" name="q0" id="cl-q0" maxlength="45" required placeholder="Question 1 *">
+        {% for i in range(1, 5) %}
+        <input type="text" name="q{{ i }}" id="cl-q{{ i }}" maxlength="45" placeholder="Question {{ i + 1 }}" style="margin-top:6px;">
+        {% endfor %}
+        <div class="hint">Up to 5 questions, 45 characters each. Question 1 is required.</div>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Claim Settings</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Spawner ticket settings form (built-in card) -->
+    <div class="t-section hidden" id="spawner-form-section">
+      <div class="t-section-head"><h2>✏️ Edit Spawner Tickets</h2></div>
+      <form method="POST" id="spawner-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_spawner_settings">
+
+        <label class="t-label">Ticket Category</label>
+        <input type="text" name="category_name" id="sp-category" list="cat-list" maxlength="100"
+               placeholder="e.g. Spawner Tickets" autocomplete="off">
+        <div class="hint">Type a name. If the category exists spawner tickets go there; if not it's created when needed and removed again when empty. Leave empty to use the server-wide categories at the top.</div>
+
+        <label class="t-label">Spare Categories (max 5)</label>
+        {% for i in range(5) %}
+        <input type="text" name="overflow_category_names" id="sp-overflow-{{ i }}" list="cat-list" maxlength="100"
+               placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+        {% endfor %}
+        <div class="hint">Only spawner tickets use these. A spare is only used once the one before it holds 50 channels.</div>
+
+        <label class="t-label">Ping Roles (pinged when a spawner ticket opens)</label>
+        <select name="ping_role_ids" id="sp-ping-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
+
+        <label class="t-label">Allow Roles (who can see &amp; reply in spawner tickets)</label>
+        <select name="allow_role_ids" id="sp-allow-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">These roles also count as staff for the Close Ticket button. With none selected, only the customer and admins can see a ticket.</div>
+
+        <div class="hint" style="margin-top:14px;font-style:normal;">
+          Spawner prices, types and the panel notes are on the
+          <a href="{{ url_for('dashboard.spawners_page', guild_id=guild_id) }}">Spawners page</a>.
+        </div>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Spawner Settings</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
+        </div>
+      </form>
+    </div>
+    </div>
   </div>
 
   <hr>
@@ -641,7 +793,55 @@
     document.getElementById('thread-box').style.opacity = on ? '1' : '.55';
   }
 
+  // Right-hand column: the ticket type form, or the Claim / Spawner settings form
+  function showPane(which) {
+    const panes = {type: 'type-form-section', claim: 'claim-form-section', spawner: 'spawner-form-section'};
+    for (const k in panes) document.getElementById(panes[k]).classList.toggle('hidden', k !== which);
+    if (which !== 'type') document.getElementById(panes[which]).scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+  const CLAIM = {{ {
+    "main": claim_view.main_name,
+    "spares": claim_view.spare_names,
+    "ping_mode": claim_view.ping_mode,
+    "ping_role_ids": claim_view.ping_role_ids,
+    "allow_role_ids": claim_view.allow_role_ids,
+    "rps_timer": claim_view.rps_timer,
+    "splitsteal_timer": claim_view.splitsteal_timer,
+    "questions": claim_view.questions
+  } | tojson }};
+  const SPAWNER = {{ {
+    "main": spawner_view.main_name,
+    "spares": spawner_view.spare_names,
+    "ping_role_ids": spawner_view.ping_role_ids,
+    "allow_role_ids": spawner_view.allow_role_ids
+  } | tojson }};
+  function _pickValues(id, vals) {
+    for (const o of document.getElementById(id).options) o.selected = vals.includes(o.value);
+  }
+  function _fillSpares(prefix, spares) {
+    for (let i = 0; i < 5; i++) document.getElementById(prefix + '-overflow-' + i).value = spares[i] || '';
+  }
+  function openClaimForm() {
+    document.getElementById('cl-category').value = CLAIM.main || '';
+    _fillSpares('cl', CLAIM.spares || []);
+    document.getElementById('cl-ping-mode').value = CLAIM.ping_mode || 'roles';
+    _pickValues('cl-ping-roles', CLAIM.ping_role_ids || []);
+    _pickValues('cl-allow-roles', CLAIM.allow_role_ids || []);
+    document.getElementById('cl-rps').value   = CLAIM.rps_timer || 60;
+    document.getElementById('cl-split').value = CLAIM.splitsteal_timer || 60;
+    for (let i = 0; i < 5; i++) document.getElementById('cl-q' + i).value = (CLAIM.questions || [])[i] || '';
+    showPane('claim');
+  }
+  function openSpawnerForm() {
+    document.getElementById('sp-category').value = SPAWNER.main || '';
+    _fillSpares('sp', SPAWNER.spares || []);
+    _pickValues('sp-ping-roles', SPAWNER.ping_role_ids || []);
+    _pickValues('sp-allow-roles', SPAWNER.allow_role_ids || []);
+    showPane('spawner');
+  }
+
   function openTypeForm(t) {
+    showPane('type');
     document.getElementById('type-form-heading').textContent = t ? '✏️ Edit Ticket Type' : '✏️ New Ticket Type';
     document.getElementById('f-type-id').value  = t ? t._id : '';
     document.getElementById('f-name').value     = t ? t.name : '';

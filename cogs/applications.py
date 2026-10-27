@@ -537,7 +537,7 @@ class _ReviewDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         try:
             # (_resolve_app_category above takes the lock itself, so it can't run in here)
             async with category_lock(guild.id):
-                category, overflow = await ticket_core.kind_category_plan(guild, category)
+                category, overflow = await ticket_core.kind_category_plan(guild, category, "application")
                 channel = await ticket_core.create_ticket_channel(
                     guild, category, overflow,
                     name=f"app-{sub.get('applicant_name', 'user')}"[:90],

@@ -455,10 +455,11 @@ async def create_claim_ticket(interaction: discord.Interaction, message_id: str,
 
         async with category_lock(guild.id):
             category, overflow = await ticket_core.kind_category_plan(
-                guild, await _resolve_claim_category(guild, cfg)
+                guild, await _resolve_claim_category(guild, cfg),
+                "claim", cfg.get("overflow_category_ids"),
             )
             channel = await ticket_core.create_ticket_channel(
-                guild, category, overflow,
+                guild, category, overflow, owner=("claim", guild.id),
                 name=channel_name,
                 overwrites=overwrites,
                 topic=f"Prize claim | {user} | {g['prize']}"[:1024],

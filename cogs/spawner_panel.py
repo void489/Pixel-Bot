@@ -430,10 +430,11 @@ async def create_spawner_ticket(interaction: discord.Interaction, key: str, side
                 return await fail(f"You already have an open ticket for this: {existing.mention}")
 
             category, overflow = await ticket_core.kind_category_plan(
-                guild, await _resolve_category(guild, cfg)
+                guild, await _resolve_category(guild, cfg),
+                "spawner", cfg.get("overflow_category_ids"),
             )
             channel = await ticket_core.create_ticket_channel(
-                guild, category, overflow,
+                guild, category, overflow, owner=("spawner", guild.id),
                 name=channel_name,
                 overwrites=overwrites,
                 topic=f"Spawner {side} | {user} | {amount:,} {t['name']}"[:1024],

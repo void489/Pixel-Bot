@@ -1,0 +1,1 @@
+Delete this file from your project: dashboard/templates/claim_tickets.html

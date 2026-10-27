@@ -9,9 +9,14 @@ Step 1 - overflow categories
 
     Where the categories are set (all optional, nothing changes until they are filled in):
         ticket type   -> category_id + overflow_category_ids        (Tickets page, per type)
+        claim tickets -> claim_tickets.category_id + claim_tickets.overflow_category_ids
+                         (Tickets page, "Claim" card)
+        spawner       -> spawners.category_id + spawners.overflow_category_ids
+                         (Tickets page, "Spawner" card)
+        application   -> its own ticket category only, NO spare categories
         server-wide   -> tickets.fixed_category_id + tickets.overflow_category_ids
-                         (Tickets page; used by claim / spawner / application tickets, and by
-                         any type that has no category of its own)
+                         (Tickets page; used by any type that has no category of its own, and
+                         by claim / spawner tickets until they get a category of their own)
 
     ALWAYS call create_ticket_channel() while holding category_lock(guild.id) from
     cogs/tickets.py, so two people can't both take the last free slot.
@@ -85,11 +90,27 @@ async def _make_category(guild: discord.Guild, name: str):
         return None
 
 
+# owner kind -> the guild_settings key that holds its own spare categories
+_KIND_SETTINGS = {"claim": "claim_tickets", "spawner": "spawners"}
+
+
 async def _persist_overflow(owner, old_entry: str, new_id: str) -> None:
     """Swap a "__new__:Name" spare for the real category ID where it's stored.
-    owner = ("type", ticket_type_id) or ("server", guild_id). Never raises."""
+    owner = ("type", ticket_type_id), ("claim", guild_id), ("spawner", guild_id) or
+    ("server", guild_id). Never raises."""
     try:
         kind, ref = owner
+        if kind in _KIND_SETTINGS:
+            key = _KIND_SETTINGS[kind]
+            current = ((await models.get_guild_settings(int(ref))).get(key) or {}).get(
+                "overflow_category_ids") or []
+            updated = []
+            for x in current:
+                x = new_id if str(x) == old_entry else str(x)
+                if x not in updated:
+                    updated.append(x)
+            await models.update_guild_settings(int(ref), {f"{key}.overflow_category_ids": updated})
+            return
         if kind == "type":
             tt = await models.get_ticket_type(str(ref))
             if not tt:
@@ -149,14 +170,23 @@ async def server_category_block(guild_id: int) -> tuple:
     return fixed, clean_overflow_ids(cfg.get("overflow_category_ids"), fixed)
 
 
-async def kind_category_plan(guild: discord.Guild, own_primary):
+async def kind_category_plan(guild: discord.Guild, own_primary, kind=None, own_overflow=None):
     """For claim / spawner / application tickets (and types without a category).
 
-    own_primary is the category that kind already resolves for itself (or None). If the
-    server-wide block is filled in, its main category wins; otherwise the kind keeps using
-    its own. The server-wide spares apply either way.
+    own_primary is the category that kind already resolves for itself (or None).
+    kind = "application": that category only, no spare categories, no server-wide block.
+    kind = "claim" / "spawner": once the kind has its own main category or its own spare
+        categories (own_overflow), only those are used. Until then it behaves as before:
+        the server-wide block, then its own category.
+    Anything else (types without a category): the server-wide block as before.
     Returns (primary CategoryChannel or None, [spare entries]). Call under category_lock:
     a "__new__" main category is created here."""
+    if kind == "application":
+        return own_primary, []
+    if kind in _KIND_SETTINGS:
+        own_spares = clean_overflow_ids(own_overflow, own_primary.id if own_primary else None)
+        if own_primary is not None or own_spares:
+            return own_primary, own_spares
     fixed, overflow = await server_category_block(guild.id)
     primary = await _resolve_fixed(guild, fixed) if fixed else None
     if primary is None:

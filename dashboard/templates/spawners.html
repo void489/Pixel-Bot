@@ -93,34 +93,11 @@
 
       <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="t-label">Ticket Category</label>
-        <input type="text" id="f-category-name" list="cat-list" maxlength="100"
-               placeholder="e.g. Spawner Tickets" autocomplete="off"
-               oninput="syncCategory()">
-        <datalist id="cat-list">
-          {% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}
-        </datalist>
-        <!-- what the server actually receives -->
-        <input type="hidden" name="category_mode" id="f-category-mode" value="existing">
-        <input type="hidden" name="category_id" id="f-category" value="">
-        <input type="hidden" name="category_new_name" id="f-category-new" value="">
-        <div class="hint" id="cat-status"></div>
-
-        <label class="t-label">Ping Roles (pinged when a spawner ticket opens)</label>
-        <select name="ping_role_ids" multiple>
-          {% for r in roles %}
-          <option value="{{ r.id }}" {% if r.id in (cfg.ping_role_ids or []) %}selected{% endif %}>{{ r.name }}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
-
-        <label class="t-label">Allow Roles (who can see &amp; reply in spawner tickets)</label>
-        <select name="allow_role_ids" multiple>
-          {% for r in roles %}
-          <option value="{{ r.id }}" {% if r.id in (cfg.allow_role_ids or []) %}selected{% endif %}>{{ r.name }}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">These roles also count as staff for the Close Ticket button. With none selected, only the customer and admins can see a ticket.</div>
+        <div class="hint" style="margin:0 0 14px;font-style:normal;">
+          Ticket category, spare categories, ping roles and allow roles for spawner tickets are now set on the
+          <a href="{{ url_for('dashboard.tickets_page', guild_id=guild_id) }}" style="color:var(--accent,#86efac);">Tickets page</a>
+          (the built-in <b>Spawner</b> card).
+        </div>
 
         <label class="t-label">Notes (shown on the panel, under the prices)</label>
         <textarea name="notes" id="f-notes" class="notes-area" maxlength="{{ notes_max }}" oninput="countNotes()">{{ notes }}</textarea>
@@ -195,38 +172,7 @@
 </div>
 
 <script>
-  const CATEGORIES = [{% for c in categories %}{ id: {{ c.id|string|tojson }}, name: {{ c.name|tojson }} },{% endfor %}];
-  const HINT_EMPTY = "Optional. Type a category name - if it exists tickets go there, if not it's created. Leave empty for no category.";
-
-  // One name field drives the three fields the server reads:
-  //   existing name -> category_mode=existing + category_id
-  //   new name      -> category_mode=new      + category_new_name
-  function syncCategory() {
-    const name  = document.getElementById('f-category-name').value.trim();
-    const match = CATEGORIES.find(c => c.name.trim().toLowerCase() === name.toLowerCase());
-    const status = document.getElementById('cat-status');
-    document.getElementById('f-category-mode').value = match ? 'existing' : 'new';
-    document.getElementById('f-category').value      = match ? match.id : '';
-    document.getElementById('f-category-new').value  = match ? '' : name;
-    if (!name)      status.textContent = HINT_EMPTY;
-    else if (match) status.textContent = '✅ "' + match.name + '" already exists - spawner tickets will be placed in it.';
-    else            status.textContent = '➕ "' + name + '" doesn\'t exist yet - it will be created automatically.';
-  }
-
-  // Pre-fill from the saved value: a real category ID, or a pending "__new__:" name.
-  (function () {
-    const current = {{ (cfg.category_id or '')|string|tojson }};
-    let name = '';
-    if (current.startsWith('__new__:')) {
-      name = current.slice(8);
-    } else if (current) {
-      const found = CATEGORIES.find(c => c.id === current);
-      name = found ? found.name : '';
-    }
-    document.getElementById('f-category-name').value = name;
-    syncCategory();
-    countNotes();
-  })();
+  countNotes();
 
   function countNotes() {
     document.getElementById('notes-count').textContent = document.getElementById('f-notes').value.length;

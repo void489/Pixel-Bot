@@ -98,3 +98,17 @@ Checked in a real browser at 360, 390, 768, 1024 and 1280 px wide.
 - Manage Threads on the parent makes support roles see every ticket thread.
 - The bot needs Create Private Threads, Send Messages in Threads and Manage Threads there, and
   Manage Permissions to set the staff overwrite itself.
+
+## Claim + Spawner on the Tickets page (own categories)
+- The **Claim Tickets** page is gone. "🎁 Claim" and "🌀 Spawner" are now fixed built-in cards at the top of
+  the Ticket Types list on the Tickets page; **Edit** opens the same settings as before in a form next to it.
+- Claim card: category, spare categories (max 5), ping mode / roles, allow roles, RPS + Split-or-Steal timers,
+  claim questions. Spawner card: category, spare categories (max 5), ping roles, allow roles. Prices, types and
+  the panel notes stay on the Spawners page (it now only saves the notes).
+- Each of them has its **own** spare categories (`claim_tickets.overflow_category_ids`,
+  `spawners.overflow_category_ids`). Until one has its own category or spares it behaves as before (server-wide
+  block). Empty spare categories are removed again, like the others.
+- **Application tickets** use only their own ticket category: no spare categories, no server-wide block.
+- Files: `utils/ticket_core.py` (kind_category_plan), `cogs/giveaways.py`, `cogs/spawner_panel.py`,
+  `cogs/applications.py`, `cogs/tickets.py` (cleanup), `database/models.py`, `dashboard/routes.py`,
+  `dashboard/templates/tickets.html`, `spawners.html`, `_sidebar.html`. Deleted: `claim_tickets.html`.

@@ -416,6 +416,48 @@ def register_routes(app, discord_session):
                     "tickets.overflow_category_ids": _overflow_from_form(guild_id, fixed),
                 })
 
+            elif form_type == "save_claim_settings":
+                # The built-in "Claim" card. Dotted keys, so nothing else under
+                # "claim_tickets" (like the spare categories) is ever wiped by a save.
+                questions = [request.form.get(f"q{i}", "").strip()[:45] for i in range(5)]
+                questions = [q for q in questions if q]
+                if not questions:
+                    return redirect(url_for(
+                        "dashboard.tickets_page", guild_id=guild_id, error="claim_question_required"
+                    ))
+                ping_mode = request.form.get("ping_mode")
+                if ping_mode not in ("roles", "host"):
+                    ping_mode = "roles"
+
+                def _claim_timer(name):
+                    try:
+                        return max(10, min(int(request.form.get(name, 60)), 600))
+                    except (TypeError, ValueError):
+                        return 60
+
+                main = _category_entry(guild_id, request.form.get("category_name"))
+                dashboard_db.update_guild_settings(guild_id, {
+                    "claim_tickets.category_id": main,
+                    "claim_tickets.overflow_category_ids": _overflow_from_form(guild_id, main),
+                    "claim_tickets.ping_mode": ping_mode,
+                    "claim_tickets.ping_role_ids": [str(r) for r in request.form.getlist("ping_role_ids")],
+                    "claim_tickets.allow_role_ids": [str(r) for r in request.form.getlist("allow_role_ids")],
+                    "claim_tickets.questions": questions,
+                    "claim_tickets.rps_timer": _claim_timer("rps_timer"),
+                    "claim_tickets.splitsteal_timer": _claim_timer("splitsteal_timer"),
+                })
+
+            elif form_type == "save_spawner_settings":
+                # The built-in "Spawner" card: ticket settings only (prices, types and notes
+                # stay on the Spawners page). Dotted keys, as everywhere under "spawners".
+                main = _category_entry(guild_id, request.form.get("category_name"))
+                dashboard_db.update_guild_settings(guild_id, {
+                    "spawners.category_id": main,
+                    "spawners.overflow_category_ids": _overflow_from_form(guild_id, main),
+                    "spawners.ping_role_ids": [str(r) for r in request.form.getlist("ping_role_ids")],
+                    "spawners.allow_role_ids": [str(r) for r in request.form.getlist("allow_role_ids")],
+                })
+
             elif form_type == "delete_ticket_type":
                 dashboard_db.delete_ticket_type(request.form.get("type_id"))
 
@@ -484,11 +526,30 @@ def register_routes(app, discord_session):
         server_main_name = _entry_name(_tcfg.get("fixed_category_id") or "")
         server_spare_names = [n for n in (_entry_name(e) for e in (_tcfg.get("overflow_category_ids") or [])) if n]
 
+        # built-in "Claim" and "Spawner" cards: what is saved now, with category names resolved
+        def _kind_view(key):
+            cfg = settings_doc.get(key) or {}
+            return {
+                "cfg": cfg,
+                "main_name": _entry_name(cfg.get("category_id") or ""),
+                "spare_names": [n for n in (_entry_name(e) for e in (cfg.get("overflow_category_ids") or [])) if n],
+                "ping_role_ids": [str(r) for r in (cfg.get("ping_role_ids") or [])],
+                "allow_role_ids": [str(r) for r in (cfg.get("allow_role_ids") or [])],
+            }
+        claim_view = _kind_view("claim_tickets")
+        claim_view["questions"] = list((claim_view["cfg"].get("questions") or ["What is your Minecraft IGN?"])[:5])
+        claim_view["ping_mode"] = claim_view["cfg"].get("ping_mode") if claim_view["cfg"].get("ping_mode") in ("roles", "host") else "roles"
+        claim_view["rps_timer"] = claim_view["cfg"].get("rps_timer") or 60
+        claim_view["splitsteal_timer"] = claim_view["cfg"].get("splitsteal_timer") or 60
+        spawner_view = _kind_view("spawners")
+
         return render_template(
             "tickets.html",
             guild_id=guild_id,
             server_main_name=server_main_name,
             server_spare_names=server_spare_names,
+            claim_view=claim_view,
+            spawner_view=spawner_view,
             settings=settings_doc,
             ticket_types=ticket_types,
             panels=panels,
@@ -769,73 +830,6 @@ def register_routes(app, discord_session):
         })
 
     # -----------------------------------------------------------------
-    # Claim tickets
-    # -----------------------------------------------------------------
-    @bp.route("/guild/<guild_id>/claim-tickets", methods=["GET", "POST"])
-    def claim_tickets_page(guild_id):
-        if not _is_authed(discord_session):
-            return redirect(url_for("dashboard.login"))
-        _require_guild_access(discord_session, guild_id)
-
-        if request.method == "POST":
-            category_id = None
-            if request.form.get("category_mode", "existing") == "new":
-                new_name = (request.form.get("category_new_name") or "").strip()
-                if new_name:
-                    category_id = f"__new__:{new_name}"
-            else:
-                category_id = request.form.get("category_id") or None
-
-            server_cat = (dashboard_db.get_guild_settings(guild_id).get("tickets") or {}).get(
-                "fixed_category_id")
-            if not category_id and not server_cat:
-                return redirect(url_for(
-                    "dashboard.claim_tickets_page", guild_id=guild_id, error="category_required"
-                ))
-
-            questions = [request.form.get(f"q{i}", "").strip()[:45] for i in range(5)]
-            questions = [q for q in questions if q]
-            if not questions:
-                return redirect(url_for(
-                    "dashboard.claim_tickets_page", guild_id=guild_id, error="question_required"
-                ))
-
-            ping_mode = request.form.get("ping_mode")
-            if ping_mode not in ("roles", "host"):
-                ping_mode = "roles"
-
-            def _timer(name):
-                try:
-                    return max(10, min(int(request.form.get(name, 60)), 600))
-                except (TypeError, ValueError):
-                    return 60
-
-            dashboard_db.update_guild_settings(guild_id, {"claim_tickets": {
-                "category_id": str(category_id) if category_id else None,
-                "ping_mode": ping_mode,
-                "ping_role_ids": [str(r) for r in request.form.getlist("ping_role_ids")],
-                "allow_role_ids": [str(r) for r in request.form.getlist("allow_role_ids")],
-                "questions": questions,
-                "rps_timer": _timer("rps_timer"),
-                "splitsteal_timer": _timer("splitsteal_timer"),
-            }})
-            return redirect(url_for("dashboard.claim_tickets_page", guild_id=guild_id, saved=1))
-
-        settings_doc = dashboard_db.get_guild_settings(guild_id)
-        cfg = settings_doc.get("claim_tickets") or {}
-        return render_template(
-            "claim_tickets.html",
-            guild_id=guild_id,
-            cfg=cfg,
-            configured=bool(cfg.get("category_id")),
-            server_category=(settings_doc.get("tickets") or {}).get("fixed_category_id"),
-            categories=get_categories(int(guild_id)),
-            roles=get_guild_roles(int(guild_id)),
-            saved=request.args.get("saved"),
-            error=request.args.get("error"),
-        )
-
-    # -----------------------------------------------------------------
     # Spawners (price panel + spawner tickets). Prices and spawner types are
     # managed here AND in Discord with /spawner; this page also holds the rest.
     # NOTE: every field is saved with a dotted key ("spawners.notes") so saving here
@@ -848,23 +842,11 @@ def register_routes(app, discord_session):
         _require_guild_access(discord_session, guild_id)
 
         if request.method == "POST":
-            category_id = None
-            if request.form.get("category_mode", "existing") == "new":
-                new_name = (request.form.get("category_new_name") or "").strip()
-                if new_name:
-                    category_id = f"__new__:{new_name}"
-            else:
-                category_id = request.form.get("category_id") or None
-
             notes = (request.form.get("notes") or "").replace("\r\n", "\n").replace("\r", "\n")
             notes = notes.strip()[:SPAWNER_NOTES_MAX]
 
-            dashboard_db.update_guild_settings(guild_id, {
-                "spawners.category_id": str(category_id) if category_id else None,
-                "spawners.ping_role_ids": [str(r) for r in request.form.getlist("ping_role_ids")],
-                "spawners.allow_role_ids": [str(r) for r in request.form.getlist("allow_role_ids")],
-                "spawners.notes": notes,
-            })
+            # Ticket category / ping roles / allow roles live on the Tickets page now.
+            dashboard_db.update_guild_settings(guild_id, {"spawners.notes": notes})
             # Tell the bot to re-draw the live panel(s) with the new notes.
             dashboard_db.enqueue_task("refresh_spawner_panels", guild_id)
             return redirect(url_for("dashboard.spawners_page", guild_id=guild_id, saved=1))
