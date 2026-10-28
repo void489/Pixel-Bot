@@ -2,6 +2,7 @@
 config/logs, vouches, applications, moderation, auto-mod, role panels, security,
 blacklist requests."""
 import re
+import secrets
 import hashlib
 import io
 import json
@@ -41,6 +42,10 @@ from database.automod_config import (
 bp = Blueprint("dashboard", __name__)
 
 _GUILD_CACHE_TTL = 300  # seconds
+# The guild list is kept here, in memory, and NOT in the login cookie: for someone in many
+# servers it made the cookie bigger than a browser accepts (4 KB), so the browser dropped it
+# and every save failed with "Security check failed". The cookie only holds a short random id.
+_GUILD_CACHE = {}  # session id -> (timestamp, raw guild list)
 
 SPAWNER_NOTES_MAX = 2000
 MAX_SPAWNER_TYPES = 25  # a Discord select menu holds 25 options (same as the bot)
@@ -108,9 +113,14 @@ class _GuildShim:
 
 def _get_manageable_guilds(discord_session):
     now = time.time()
-    cached = session.get("_guilds_cache")
-    if cached and now - cached.get("t", 0) < _GUILD_CACHE_TTL:
-        raw = cached["g"]
+    session.pop("_guilds_cache", None)  # old versions stored the whole list in the cookie
+    sid = session.get("_gsid")
+    if not sid:
+        sid = secrets.token_urlsafe(12)
+        session["_gsid"] = sid
+    cached = _GUILD_CACHE.get(sid)
+    if cached and now - cached[0] < _GUILD_CACHE_TTL:
+        raw = cached[1]
     else:
         raw = []
         for g in discord_session.fetch_guilds():
@@ -126,7 +136,9 @@ def _get_manageable_guilds(discord_session):
                 "owner": bool(getattr(g, "owner", False)),
                 "permissions": perms_value,
             })
-        session["_guilds_cache"] = {"t": now, "g": raw}
+        for k in [k for k, v in _GUILD_CACHE.items() if now - v[0] >= _GUILD_CACHE_TTL]:
+            _GUILD_CACHE.pop(k, None)  # drop expired entries so the dict can't grow forever
+        _GUILD_CACHE[sid] = (now, raw)
 
     return [_GuildShim(d) for d in raw]
 
@@ -278,6 +290,7 @@ def register_routes(app, discord_session):
     def callback():
         discord_session.callback()
         session.pop("_guilds_cache", None)
+        _GUILD_CACHE.pop(session.get("_gsid"), None)  # a fresh login reloads the server list
         return redirect(url_for("dashboard.index"))
 
     @bp.route("/logout")
