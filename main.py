@@ -29,7 +29,6 @@ COGS = [
     "cogs.events",
     "cogs.tickets",
     "cogs.ticket_automations",
-    "cogs.temp_cleanup",
     "cogs.help",
     "cogs.giveaways",
     "cogs.logs",

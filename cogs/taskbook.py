@@ -33,6 +33,16 @@ Admin-only commands:
     /taskbook add <number> <amount>
     /taskbook remove <number> <amount>
 
+Automatic taskbooks (staff roles from the dashboard):
+  * gaining a staff role  -> a taskbook + thread is opened for that person
+  * losing their LAST staff role (or leaving the server) -> the taskbook is wiped
+    (stats included) and its thread is deleted
+  * stats are NEVER reset except by `/taskbook reset` or the dashboard reset button;
+    a reset also clears every message in the thread except the top embed message
+  * the embed message and the thread can only be deleted by a manager (the "allowed
+    roles" from the dashboard, or an Administrator). Anyone else deleting them gets
+    them put straight back (needs the bot to have View Audit Log).
+
 Deleting a taskbook on the dashboard deletes its thread too. The dashboard
 talks to the bot through the `dashboard_tasks` queue (taskbook_create /
 taskbook_delete), like the other tabs.
@@ -44,6 +54,7 @@ break ticket closing:
     adjust_handled(guild, user_id, delta)
     record_blacklist(guild, req)
 """
+import asyncio
 import time
 from datetime import datetime, timezone
 
@@ -206,6 +217,50 @@ async def refresh_embed(guild: discord.Guild, tb: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Manager checks / protection helpers
+# ---------------------------------------------------------------------------
+
+# ids (threads / messages) the bot is deleting on purpose, so the protection
+# listeners don't "restore" them
+_bot_deleting: set = set()
+# taskbook _ids currently being restored (stops double restores)
+_restoring: set = set()
+# per-user locks so a burst of role updates can't create two taskbooks
+_user_locks: dict = {}
+
+
+def _is_manager(member, cfg: dict) -> bool:
+    """Administrator, or holds one of the 'allowed in threads' roles."""
+    if member is None or not hasattr(member, "guild_permissions"):
+        return False
+    if member.guild_permissions.administrator:
+        return True
+    allow = set(cfg.get("allow_role_ids") or [])
+    return any(str(r.id) in allow for r in getattr(member, "roles", []))
+
+
+async def _who_deleted(guild: discord.Guild, action, target_id: int, channel_id: int = None):
+    """Look in the audit log for who just deleted this message/thread.
+    Returns (user_or_None, readable). readable=False means the audit log couldn't be used."""
+    await asyncio.sleep(1.5)   # audit log entries land a moment after the event
+    try:
+        now = datetime.now(timezone.utc)
+        async for entry in guild.audit_logs(limit=15, action=action):
+            if (now - entry.created_at).total_seconds() > 20:
+                break
+            if entry.target is None or entry.target.id != target_id:
+                continue
+            if channel_id is not None:
+                ch = getattr(entry.extra, "channel", None)
+                if ch is None or ch.id != channel_id:
+                    continue
+            return entry.user, True
+        return None, True
+    except (discord.Forbidden, discord.HTTPException):
+        return None, False
+
+
+# ---------------------------------------------------------------------------
 # Create / delete
 # ---------------------------------------------------------------------------
 
@@ -217,6 +272,42 @@ async def _next_number(guild_id: int) -> int:
         return_document=True,
     )
     return int((doc.get("taskbooks") or {}).get("next_number") or 1)
+
+
+async def _open_thread(guild: discord.Guild, channel: discord.TextChannel,
+                       member: discord.Member, tb: dict, cfg: dict):
+    """Creates the private thread, adds the member, posts + pins the embed.
+    Returns (thread, message). Cleans up after itself and re-raises on failure."""
+    thread = None
+    try:
+        thread = await channel.create_thread(
+            name=f"taskbook-{tb['number']}-{member.display_name}"[:100],
+            type=discord.ChannelType.private_thread,
+            invitable=False,
+            auto_archive_duration=10080,
+            reason=f"Taskbook #{tb['number']} for {member}",
+        )
+        await thread.add_user(member)
+        pings = [member.mention] + [f"<@&{r}>" for r in cfg["allow_role_ids"]
+                                    if guild.get_role(int(r))]
+        msg = await thread.send(
+            content=" ".join(pings),
+            embed=build_embed(guild, tb),
+            allowed_mentions=discord.AllowedMentions(users=True, roles=True),
+        )
+        try:
+            await msg.pin()
+        except discord.HTTPException:
+            pass
+        return thread, msg
+    except (discord.Forbidden, discord.HTTPException):
+        if thread is not None:
+            _bot_deleting.add(thread.id)
+            try:
+                await thread.delete()
+            except discord.HTTPException:
+                pass
+        raise
 
 
 async def create_taskbook(guild: discord.Guild, user_id: int) -> str:
@@ -261,33 +352,9 @@ async def create_taskbook(guild: discord.Guild, user_id: int) -> str:
     tb["_id"] = inserted.inserted_id
 
     try:
-        thread = await channel.create_thread(
-            name=f"taskbook-{number}-{member.display_name}"[:100],
-            type=discord.ChannelType.private_thread,
-            invitable=False,
-            auto_archive_duration=10080,
-            reason=f"Taskbook #{number} for {member}",
-        )
-        await thread.add_user(member)
-
-        pings = [member.mention] + [f"<@&{r}>" for r in cfg["allow_role_ids"]
-                                    if guild.get_role(int(r))]
-        msg = await thread.send(
-            content=" ".join(pings),
-            embed=build_embed(guild, tb),
-            allowed_mentions=discord.AllowedMentions(users=True, roles=True),
-        )
-        try:
-            await msg.pin()
-        except discord.HTTPException:
-            pass
+        thread, msg = await _open_thread(guild, channel, member, tb, cfg)
     except (discord.Forbidden, discord.HTTPException) as e:
         await taskbooks_col().delete_one({"_id": tb["_id"]})
-        try:
-            if "thread" in locals():
-                await thread.delete()
-        except discord.HTTPException:
-            pass
         return (f"I couldn't create the thread: {e}. I need View Channel, Create Private "
                 f"Threads, Send Messages in Threads and Manage Threads in {channel.mention}.")
 
@@ -299,6 +366,7 @@ async def create_taskbook(guild: discord.Guild, user_id: int) -> str:
 
 
 async def delete_thread(guild: discord.Guild, thread_id: int) -> None:
+    _bot_deleting.add(int(thread_id))
     thread = await _get_thread(guild, thread_id)
     if thread is None:
         return
@@ -306,6 +374,102 @@ async def delete_thread(guild: discord.Guild, thread_id: int) -> None:
         await thread.delete(reason="Taskbook deleted on the dashboard")
     except discord.HTTPException as e:
         print(f"[taskbook] couldn't delete thread {thread_id}: {e}")
+
+
+async def delete_taskbook(guild: discord.Guild, tb: dict, reason: str = "") -> None:
+    """Wipes the taskbook (stats and all) and deletes its thread."""
+    await taskbooks_col().delete_one({"_id": tb["_id"]})
+    if tb.get("thread_id"):
+        await delete_thread(guild, int(tb["thread_id"]))
+    print(f"[taskbook] deleted taskbook #{tb.get('number')} ({reason or 'no reason'})")
+
+
+async def sync_member(guild: discord.Guild, member) -> None:
+    """Open / delete a member's taskbook to match whether they hold a staff role."""
+    cfg = await get_config(guild.id)
+    # nothing configured -> never touch anything (an empty list must NOT mean 'nobody is staff')
+    if not cfg["staff_role_ids"] or not cfg["channel_id"]:
+        return
+    lock = _user_locks.setdefault((guild.id, member.id), asyncio.Lock())
+    async with lock:
+        staff = set(cfg["staff_role_ids"])
+        has_role = any(str(r.id) in staff for r in member.roles)
+        tb = await taskbooks_col().find_one(
+            {"guild_id": str(guild.id), "user_id": str(member.id)})
+        if has_role and not tb:
+            err = await create_taskbook(guild, member.id)
+            if err:
+                print(f"[taskbook] auto-create for {member} failed: {err}")
+        elif not has_role and tb:
+            await delete_taskbook(guild, tb, "staff role removed")
+
+
+async def _repost_embed(guild: discord.Guild, tb: dict, thread: discord.Thread) -> None:
+    """Post a fresh embed in the thread, pin it and remember its id."""
+    msg = await thread.send(embed=build_embed(guild, tb))
+    try:
+        await msg.pin()
+    except discord.HTTPException:
+        pass
+    await taskbooks_col().update_one({"_id": tb["_id"]}, {"$set": {"message_id": str(msg.id)}})
+    tb["message_id"] = str(msg.id)
+
+
+async def clear_thread(guild: discord.Guild, tb: dict) -> None:
+    """Delete every message in the taskbook's thread except the embed message."""
+    try:
+        if not tb.get("thread_id"):
+            return
+        thread = await _get_thread(guild, int(tb["thread_id"]))
+        if thread is None:
+            return
+        if thread.archived:
+            await thread.edit(archived=False)
+        # make sure there IS an embed to keep (it could have been deleted by a manager)
+        keep = int(tb["message_id"]) if tb.get("message_id") else 0
+        exists = False
+        if keep:
+            try:
+                await thread.fetch_message(keep)
+                exists = True
+            except discord.NotFound:
+                pass
+        if not exists:
+            await _repost_embed(guild, tb, thread)
+            keep = int(tb["message_id"])
+        await thread.purge(limit=None, check=lambda m: m.id != keep, bulk=True)
+    except (discord.Forbidden, discord.HTTPException) as e:
+        print(f"[taskbook] couldn't clear thread for #{tb.get('number')}: {e}")
+
+
+async def restore_thread(guild: discord.Guild, tb: dict) -> None:
+    """A non-manager deleted the thread: make a new one with the same stats."""
+    if tb["_id"] in _restoring:
+        return
+    _restoring.add(tb["_id"])
+    try:
+        cfg = await get_config(guild.id)
+        channel = guild.get_channel(int(tb.get("channel_id") or cfg["channel_id"] or 0))
+        if not isinstance(channel, discord.TextChannel):
+            await taskbooks_col().delete_one({"_id": tb["_id"]})
+            return
+        member = guild.get_member(int(tb["user_id"]))
+        if member is None:
+            try:
+                member = await guild.fetch_member(int(tb["user_id"]))
+            except (discord.NotFound, discord.HTTPException):
+                await taskbooks_col().delete_one({"_id": tb["_id"]})
+                return
+        try:
+            thread, msg = await _open_thread(guild, channel, member, tb, cfg)
+        except (discord.Forbidden, discord.HTTPException) as e:
+            print(f"[taskbook] couldn't restore thread for #{tb.get('number')}: {e}")
+            return
+        await taskbooks_col().update_one(
+            {"_id": tb["_id"]},
+            {"$set": {"thread_id": str(thread.id), "message_id": str(msg.id)}})
+    finally:
+        _restoring.discard(tb["_id"])
 
 
 # ---------------------------------------------------------------------------
@@ -391,6 +555,7 @@ async def reset_taskbooks(guild: discord.Guild, number=None) -> int:
     await taskbooks_col().update_many(flt, {"$set": dict(ZERO_STATS)})
     for d in docs:
         d.update(ZERO_STATS)
+        await clear_thread(guild, d)       # wipes everything but the embed message
         await refresh_embed(guild, d)
     return len(docs)
 
@@ -521,13 +686,109 @@ class Taskbook(commands.Cog):
 
     # ── Listeners ─────────────────────────────────────────────────────────
     @commands.Cog.listener()
-    async def on_raw_thread_delete(self, payload: discord.RawThreadDeleteEvent):
-        """Thread deleted by hand -> forget the taskbook so the dashboard stays in sync."""
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        """Staff role given -> open a taskbook; last staff role taken -> delete it."""
         try:
-            await taskbooks_col().delete_one(
+            if before.roles == after.roles:
+                return
+            cfg = await get_config(after.guild.id)
+            staff = set(cfg["staff_role_ids"])
+            if not staff:
+                return
+            had = any(str(r.id) in staff for r in before.roles)
+            has = any(str(r.id) in staff for r in after.roles)
+            if had != has:
+                await sync_member(after.guild, after)
+        except Exception as e:
+            print(f"[taskbook] member update sync failed: {e}")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        """Left / kicked / banned -> their taskbook and thread go too."""
+        try:
+            tb = await taskbooks_col().find_one(
+                {"guild_id": str(member.guild.id), "user_id": str(member.id)})
+            if tb:
+                await delete_taskbook(member.guild, tb, "member left the server")
+        except Exception as e:
+            print(f"[taskbook] member remove cleanup failed: {e}")
+
+    @commands.Cog.listener()
+    async def on_raw_thread_delete(self, payload: discord.RawThreadDeleteEvent):
+        """Thread deleted. Bot / manager deletions -> forget the taskbook.
+        Anyone else -> put the thread back."""
+        try:
+            if payload.thread_id in _bot_deleting:
+                _bot_deleting.discard(payload.thread_id)
+                await taskbooks_col().delete_one(
+                    {"guild_id": str(payload.guild_id), "thread_id": str(payload.thread_id)})
+                return
+            tb = await taskbooks_col().find_one(
                 {"guild_id": str(payload.guild_id), "thread_id": str(payload.thread_id)})
-        except Exception:
-            pass
+            if not tb:
+                return
+            guild = self.bot.get_guild(payload.guild_id)
+            if guild is None:
+                return
+            user, readable = await _who_deleted(
+                guild, discord.AuditLogAction.thread_delete, payload.thread_id)
+            if not readable:
+                print("[taskbook] can't read the audit log (give the bot View Audit Log) "
+                      "- restoring the thread to be safe")
+            elif user is not None:
+                if user.id == self.bot.user.id:
+                    await taskbooks_col().delete_one({"_id": tb["_id"]})
+                    return
+                if _is_manager(guild.get_member(user.id), await get_config(guild.id)):
+                    await taskbooks_col().delete_one({"_id": tb["_id"]})
+                    return
+            await restore_thread(guild, tb)
+        except Exception as e:
+            print(f"[taskbook] thread delete handler failed: {e}")
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
+        """The embed message can only be deleted by a manager; otherwise it comes back."""
+        try:
+            if not payload.guild_id or payload.message_id in _bot_deleting:
+                return
+            tb = await taskbooks_col().find_one({
+                "guild_id": str(payload.guild_id),
+                "thread_id": str(payload.channel_id),
+                "message_id": str(payload.message_id),
+            })
+            if not tb or tb["_id"] in _restoring:
+                return
+            guild = self.bot.get_guild(payload.guild_id)
+            if guild is None:
+                return
+            user, readable = await _who_deleted(
+                guild, discord.AuditLogAction.message_delete,
+                self.bot.user.id, payload.channel_id)
+            if readable and user is not None:
+                if user.id == self.bot.user.id:
+                    return
+                if _is_manager(guild.get_member(user.id), await get_config(guild.id)):
+                    return
+            if not readable:
+                print("[taskbook] can't read the audit log (give the bot View Audit Log) "
+                      "- restoring the embed to be safe")
+            # make sure it is still the current embed (a reset may have replaced it)
+            fresh = await taskbooks_col().find_one({"_id": tb["_id"]})
+            if not fresh or fresh.get("message_id") != str(payload.message_id):
+                return
+            thread = await _get_thread(guild, payload.channel_id)
+            if thread is None:
+                return
+            _restoring.add(tb["_id"])
+            try:
+                if thread.archived:
+                    await thread.edit(archived=False)
+                await _repost_embed(guild, fresh, thread)
+            finally:
+                _restoring.discard(tb["_id"])
+        except Exception as e:
+            print(f"[taskbook] embed restore failed: {e}")
 
     # ── Commands ──────────────────────────────────────────────────────────
     async def _number_autocomplete(self, interaction: discord.Interaction, current: str):
@@ -559,27 +820,19 @@ class Taskbook(commands.Cog):
             return await ctx.send(embed=error_embed("Only administrators can use this."), ephemeral=True)
         await ctx.defer(ephemeral=True)
 
-        zero = dict(ZERO_STATS)
         t = target.strip().lstrip("#").lower()
         if t == "all":
-            docs = await taskbooks_col().find({"guild_id": str(ctx.guild.id)}).to_list(None)
-            await taskbooks_col().update_many({"guild_id": str(ctx.guild.id)}, {"$set": zero})
-            for d in docs:
-                d.update(zero)
-                await refresh_embed(ctx.guild, d)
+            n = await reset_taskbooks(ctx.guild, None)
             return await ctx.send(embed=success_embed(
-                f"Reset **{len(docs)}** taskbook{'' if len(docs) == 1 else 's'}."), ephemeral=True)
+                f"Reset **{n}** taskbook{'' if n == 1 else 's'}."), ephemeral=True)
 
         if not t.isdigit():
             return await ctx.send(embed=error_embed(
                 "Use `all` or a taskbook number, e.g. `3`."), ephemeral=True)
-        tb = await taskbooks_col().find_one_and_update(
-            {"guild_id": str(ctx.guild.id), "number": int(t)},
-            {"$set": zero}, return_document=True)
-        if not tb:
+        n = await reset_taskbooks(ctx.guild, int(t))
+        if not n:
             return await ctx.send(embed=error_embed(f"There's no taskbook #{t}."), ephemeral=True)
-        await refresh_embed(ctx.guild, tb)
-        await ctx.send(embed=success_embed(f"Reset taskbook **#{tb['number']}**."), ephemeral=True)
+        await ctx.send(embed=success_embed(f"Reset taskbook **#{t}**."), ephemeral=True)
 
     @taskbook_reset.autocomplete("target")
     async def _reset_autocomplete(self, interaction: discord.Interaction, current: str):
