@@ -61,6 +61,7 @@ ADMIN_CATEGORIES = {
     "taskbook": "Taskbooks",
     "modlog": "Moderation", "nuke": "Moderation", "lockdown": "Moderation",
     "unlockdown": "Moderation", "tempban": "Moderation", "tempbans": "Moderation",
+    "quarantine": "Moderation", "unquarantine": "Moderation",
 }
 ADMIN_ORDER = ["Staff management", "LOA", "Tickets", "Roles & utilities", "Vouches",
                "Leveling", "Panels", "Taskbooks", "Moderation", "Other"]
@@ -93,6 +94,8 @@ OVERRIDES = {
     "warnings remove": "Remove a warn by its case number.",
     "tempban": "Ban a member for a set time (30m, 2h, 7d, up to 365d); they're unbanned automatically.",
     "tempbans": "See who is temp banned and when they're unbanned.",
+    "quarantine": "Save and remove a member's roles and lock them to the quarantine channel (they're re-quarantined if they rejoin).",
+    "unquarantine": "Release a member from quarantine and give their old roles back.",
     "invites": "How many people you (or someone) invited, and who invited them.",
     "topinviters": "The members who have invited the most people who are still here.",
     "reactionrole mode": "normal = un-reacting removes the role, unique = one role per message, verify = un-reacting keeps it.",

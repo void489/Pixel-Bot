@@ -49,7 +49,7 @@ CASE_ICONS = {
     "warn": "⚠️", "mute": "🔇", "unmute": "🔊", "ban": "🔨", "unban": "♻️", "kick": "👢",
     "softban": "🧹", "purge": "🗑️", "lock": "🔒", "unlock": "🔓", "slowmode": "🐌",
     "nuke": "💥", "lockdown": "🚨", "unlockdown": "✅", "clearwarns": "🧽",
-    "tempban": "⏳", "automod": "🤖",
+    "tempban": "⏳", "automod": "🤖", "quarantine": "🚷", "unquarantine": "✅",
 }
 
 

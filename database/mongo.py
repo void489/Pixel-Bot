@@ -89,6 +89,11 @@ def mod_cases_col():
     return get_db()["mod_cases"]
 
 
+def quarantines_col():
+    """One doc per quarantined member: the roles to give back on /unquarantine."""
+    return get_db()["quarantines"]
+
+
 def nuke_events_col():
     return get_db()["nuke_events"]
 

@@ -81,7 +81,7 @@
     <form method="GET" class="filters">
       <select name="action">
         <option value="">All actions</option>
-        {% for a in ["warn","mute","unmute","ban","unban","kick","softban","tempban","automod","purge","lock","unlock"] %}
+        {% for a in ["warn","mute","unmute","ban","unban","kick","softban","tempban","quarantine","unquarantine","automod","purge","lock","unlock"] %}
         <option value="{{ a }}" {% if selected_action == a %}selected{% endif %}>{{ a }}</option>
         {% endfor %}
       </select>

@@ -19,6 +19,11 @@ Staff commands (all hybrid, all @command_check()):
 Admin commands (listed under /admin help -> Moderation, NOT /staffhelp):
     /tempban <user> <duration> [reason]  -> ban, then unban automatically when time is up
     /tempbans                            -> list the active temp bans
+    /quarantine <user> [reason]          -> save + strip their roles, lock them to #quarantine
+    /unquarantine <user> [reason]        -> give their roles back
+  Quarantine sets itself up on first use (Quarantine role + #quarantine channel, role hidden
+  from every other channel, new channels included). Someone who leaves while quarantined is
+  quarantined again when they rejoin.
 
 Prefix forms use the guild's configured prefix (e.g. "!warn @user spam", "?ban @user").
 
@@ -41,6 +46,7 @@ import discord
 from discord.ext import commands, tasks
 
 from database import models
+from database.mongo import quarantines_col
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
 from config import constants
@@ -115,6 +121,75 @@ async def _dm_target(target: discord.abc.User, guild: discord.Guild, title: str,
         await target.send(embed=base_embed(title=title, description=description, color=color))
     except (discord.Forbidden, discord.HTTPException):
         pass
+
+
+# ---------------------------------------------------------------------------
+# Quarantine
+# ---------------------------------------------------------------------------
+
+# roles with any of these can see the quarantine channel (so staff can talk to the member)
+_QUARANTINE_STAFF_PERMS = ("administrator", "manage_guild", "manage_messages",
+                           "moderate_members", "kick_members", "ban_members")
+
+
+async def _quarantine_cfg(guild_id: int) -> dict:
+    return (await models.get_guild_settings(guild_id)).get("quarantine") or {}
+
+
+async def ensure_quarantine(guild: discord.Guild):
+    """Make sure the Quarantine role + #quarantine channel exist (creating whatever is
+    missing). Returns (role, channel, hide_failures, error). error is "" on success."""
+    cfg = await _quarantine_cfg(guild.id)
+    role = guild.get_role(int(cfg["role_id"])) if cfg.get("role_id") else None
+    channel = guild.get_channel(int(cfg["channel_id"])) if cfg.get("channel_id") else None
+    if not isinstance(channel, discord.TextChannel):
+        channel = None
+    failures = 0
+    try:
+        new_role = role is None
+        if new_role:
+            role = await guild.create_role(
+                name="Quarantine", permissions=discord.Permissions.none(),
+                color=discord.Color.dark_grey(), reason="Quarantine setup")
+            # the role can't see anything except the quarantine channel
+            for ch in guild.channels:
+                if channel is not None and ch.id == channel.id:
+                    continue
+                try:
+                    await ch.set_permissions(role, view_channel=False, reason="Quarantine setup")
+                except (discord.Forbidden, discord.HTTPException):
+                    failures += 1
+        if channel is None:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                role: discord.PermissionOverwrite(view_channel=True, send_messages=True,
+                                                  read_message_history=True),
+                guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True,
+                                                      embed_links=True),
+            }
+            for r in guild.roles:
+                if r.is_default() or r == role or r in overwrites:
+                    continue
+                if any(getattr(r.permissions, p) for p in _QUARANTINE_STAFF_PERMS):
+                    overwrites[r] = discord.PermissionOverwrite(
+                        view_channel=True, send_messages=True, read_message_history=True)
+            channel = await guild.create_text_channel(
+                "quarantine", overwrites=overwrites,
+                topic="Quarantined members can only see this channel. Staff will talk to you here.",
+                reason="Quarantine setup")
+        elif new_role:
+            await channel.set_permissions(role, view_channel=True, send_messages=True,
+                                          read_message_history=True, reason="Quarantine setup")
+    except discord.Forbidden:
+        return None, None, failures, ("I need **Manage Roles** and **Manage Channels** to set up "
+                                      "the quarantine role and channel.")
+    except discord.HTTPException as e:
+        return None, None, failures, f"Discord error while setting up quarantine: {e}"
+
+    if str(role.id) != str(cfg.get("role_id")) or str(channel.id) != str(cfg.get("channel_id")):
+        await models.update_guild_settings(
+            guild.id, {"quarantine": {"role_id": str(role.id), "channel_id": str(channel.id)}})
+    return role, channel, failures, ""
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +518,141 @@ class Moderation(commands.Cog):
             f"They're unbanned {discord.utils.format_dt(expires_at, 'R')}. "
             f"Case `#{case['case_num']}`."
         ))
+
+    # ------------------------------------------------------------------
+    # Quarantine / unquarantine
+    # ------------------------------------------------------------------
+    @commands.hybrid_command(name="quarantine",
+                             description="Strip a member's roles and lock them to the quarantine channel")
+    @command_check()
+    async def quarantine(self, ctx: commands.Context, member: discord.Member,
+                         *, reason: str = None):
+        guild = ctx.guild
+        if member.id == ctx.author.id:
+            return await ctx.send(embed=error_embed("You can't quarantine yourself."))
+        if member.id == guild.owner_id or member.top_role >= guild.me.top_role:
+            return await ctx.send(embed=error_embed(
+                "I can't quarantine that member — their top role is at or above mine."))
+        if await quarantines_col().find_one({"guild_id": str(guild.id), "user_id": str(member.id)}):
+            return await ctx.send(embed=error_embed("That member is already quarantined."))
+        await ctx.defer()
+
+        role, channel, failures, err = await ensure_quarantine(guild)
+        if err:
+            return await ctx.send(embed=error_embed(err))
+
+        others = [r for r in member.roles if not r.is_default() and r.id != role.id]
+        removable = [r for r in others if not r.managed and r < guild.me.top_role]
+        kept = [r for r in others if r not in removable]      # booster / bot / higher roles
+
+        # save first, so the roles can always be given back
+        await quarantines_col().update_one(
+            {"guild_id": str(guild.id), "user_id": str(member.id)},
+            {"$set": {"role_ids": [str(r.id) for r in removable],
+                      "moderator_id": str(ctx.author.id), "reason": (reason or "")[:1000],
+                      "created_at": datetime.now(timezone.utc)}},
+            upsert=True)
+        try:
+            await member.edit(roles=kept + [role],
+                              reason=f"Quarantined by {ctx.author}: {reason or 'no reason'}")
+        except discord.Forbidden:
+            await quarantines_col().delete_one({"guild_id": str(guild.id), "user_id": str(member.id)})
+            return await ctx.send(embed=error_embed("Missing permission to change that member's roles."))
+        except discord.HTTPException as e:
+            await quarantines_col().delete_one({"guild_id": str(guild.id), "user_id": str(member.id)})
+            return await ctx.send(embed=error_embed(f"Discord error: {e}"))
+
+        case = await models.create_mod_case(
+            guild.id, "quarantine", ctx.author.id, member.id, reason=reason)
+        await _log_case(self.bot, guild, case, constants.COLOR_ERROR, "🚷 Quarantined")
+        await _dm_target(member, guild, f"🚷 You were quarantined in {guild.name}",
+                         f"Your roles were removed and you can only see {channel.mention} "
+                         f"until staff release you.\nReason: {reason or 'none'}",
+                         constants.COLOR_ERROR)
+        note = ""
+        if kept:
+            note += f" Couldn't remove {len(kept)} role{'' if len(kept) == 1 else 's'} (booster/bot/higher than mine)."
+        if failures:
+            note += (f" ⚠️ I couldn't hide {failures} channel{'' if failures == 1 else 's'} from the "
+                     f"role — check my permissions there.")
+        await ctx.send(embed=success_embed(
+            f"Quarantined {member.mention} — {len(removable)} role{'' if len(removable) == 1 else 's'} "
+            f"saved. They can only see {channel.mention}. Case `#{case['case_num']}`.{note}"))
+
+    @commands.hybrid_command(name="unquarantine",
+                             description="Release a member from quarantine and give their roles back")
+    @command_check()
+    async def unquarantine(self, ctx: commands.Context, member: discord.Member,
+                           *, reason: str = None):
+        guild = ctx.guild
+        cfg = await _quarantine_cfg(guild.id)
+        qrole = guild.get_role(int(cfg["role_id"])) if cfg.get("role_id") else None
+        rec = await quarantines_col().find_one(
+            {"guild_id": str(guild.id), "user_id": str(member.id)})
+        if rec is None and not (qrole and qrole in member.roles):
+            return await ctx.send(embed=error_embed("That member isn't quarantined."))
+        await ctx.defer()
+
+        restore = []
+        for rid in (rec or {}).get("role_ids", []):
+            r = guild.get_role(int(rid))
+            if r is not None and not r.managed and r < guild.me.top_role:
+                restore.append(r)
+        current = [r for r in member.roles if not r.is_default() and r != qrole]
+        new_roles = current + [r for r in restore if r not in current]
+        try:
+            await member.edit(roles=new_roles,
+                              reason=f"Released from quarantine by {ctx.author}: {reason or 'no reason'}")
+        except discord.Forbidden:
+            return await ctx.send(embed=error_embed("Missing permission to change that member's roles."))
+        except discord.HTTPException as e:
+            return await ctx.send(embed=error_embed(f"Discord error: {e}"))
+        await quarantines_col().delete_one({"guild_id": str(guild.id), "user_id": str(member.id)})
+
+        case = await models.create_mod_case(
+            guild.id, "unquarantine", ctx.author.id, member.id, reason=reason)
+        await _log_case(self.bot, guild, case, constants.COLOR_SUCCESS, "✅ Released from quarantine")
+        await _dm_target(member, guild, f"✅ You were released from quarantine in {guild.name}",
+                         f"Your roles have been given back.\nReason: {reason or 'none'}",
+                         constants.COLOR_SUCCESS)
+        await ctx.send(embed=success_embed(
+            f"Released {member.mention} — gave back {len(restore)} role{'' if len(restore) == 1 else 's'}. "
+            f"Case `#{case['case_num']}`."))
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        """Left (or got kicked) while quarantined and came back -> quarantine again."""
+        try:
+            rec = await quarantines_col().find_one(
+                {"guild_id": str(member.guild.id), "user_id": str(member.id)})
+            if not rec:
+                return
+            cfg = await _quarantine_cfg(member.guild.id)
+            role = member.guild.get_role(int(cfg["role_id"])) if cfg.get("role_id") else None
+            if role is None:
+                return
+            await member.add_roles(role, reason="Rejoined while quarantined")
+            case = await models.create_mod_case(
+                member.guild.id, "quarantine", self.bot.user.id, member.id,
+                reason="Rejoined the server while quarantined")
+            await _log_case(self.bot, member.guild, case, constants.COLOR_ERROR,
+                            "🚷 Re-quarantined (rejoined)")
+        except Exception as e:
+            print(f"[quarantine] rejoin handling failed: {e}")
+
+    @commands.Cog.listener()
+    async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
+        """New channels are hidden from the Quarantine role automatically."""
+        try:
+            cfg = await _quarantine_cfg(channel.guild.id)
+            role = channel.guild.get_role(int(cfg["role_id"])) if cfg.get("role_id") else None
+            if role is None or channel.overwrites_for(role).view_channel is not None:
+                return    # no quarantine set up yet, or it's the quarantine channel / already set
+            await channel.set_permissions(role, view_channel=False, reason="Quarantine role hidden")
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+        except Exception as e:
+            print(f"[quarantine] new channel hide failed: {e}")
 
     @commands.hybrid_command(name="tempbans", description="List the active temp bans")
     @command_check()
