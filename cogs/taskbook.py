@@ -37,6 +37,8 @@ Automatic taskbooks (staff roles from the dashboard):
   * gaining a staff role  -> a taskbook + thread is opened for that person
   * losing their LAST staff role (or leaving the server) -> the taskbook is wiped
     (stats included) and its thread is deleted
+  * the dashboard has a "Sync with staff roles" button (preview, then confirm) that
+    does the same for everyone at once and repairs taskbooks whose thread is gone
   * stats are NEVER reset except by `/taskbook reset` or the dashboard reset button;
     a reset also clears every message in the thread except the top embed message
   * the embed message and the thread can only be deleted by a manager (the "allowed
@@ -77,6 +79,7 @@ DELETE_TASK = "taskbook_delete"
 IMPORT_TASK = "taskbook_import_blacklists"
 REFRESH_TASK = "taskbook_refresh_all"
 RESET_TASK = "taskbook_reset"
+SYNC_TASK = "taskbook_sync"
 
 # Every counter a reset puts back to 0 (blacklist `taskbook_counted` flags stay).
 # Counters that also keep a lifetime total (life_<name>) which /taskbook reset never touches.
@@ -442,6 +445,89 @@ async def clear_thread(guild: discord.Guild, tb: dict) -> None:
         print(f"[taskbook] couldn't clear thread for #{tb.get('number')}: {e}")
 
 
+async def _thread_missing(guild: discord.Guild, thread_id) -> bool:
+    """True only when Discord says the thread is really gone (a hiccup is NOT 'missing')."""
+    if not thread_id:
+        return True
+    if guild.get_thread(int(thread_id)) is not None:
+        return False
+    try:
+        await guild.fetch_channel(int(thread_id))
+        return False
+    except discord.NotFound:
+        return True
+    except (discord.Forbidden, discord.HTTPException):
+        return False
+
+
+async def sync_all(guild: discord.Guild, delete_user_ids) -> str:
+    """Dashboard 'Sync with staff roles': create missing taskbooks, delete the previewed
+    ones whose owner really has no staff role any more, repair dead threads."""
+    cfg = await get_config(guild.id)
+    if not cfg["staff_role_ids"] or not cfg["channel_id"]:
+        return ""   # caller reports the error
+    staff = set(cfg["staff_role_ids"])
+
+    def has_staff(m):
+        return any(str(r.id) in staff for r in m.roles)
+
+    if not guild.chunked:
+        try:
+            await guild.chunk()
+        except Exception:
+            pass
+
+    # 1) delete - only people the preview listed, and only if they STILL qualify
+    deleted = skipped = 0
+    for uid in {str(u) for u in (delete_user_ids or [])}:
+        tb = await taskbooks_col().find_one({"guild_id": str(guild.id), "user_id": uid})
+        if not tb:
+            continue
+        member = guild.get_member(int(uid))
+        if member is None:
+            try:
+                member = await guild.fetch_member(int(uid))
+            except discord.NotFound:
+                member = None                      # really left the server
+            except discord.HTTPException:
+                skipped += 1                       # can't tell -> leave it alone
+                continue
+        if member is not None and has_staff(member):
+            skipped += 1
+            continue
+        await delete_taskbook(guild, tb, "dashboard sync")
+        deleted += 1
+
+    # 2) create - everyone with a staff role who has no taskbook
+    created = failed = 0
+    have = {d["user_id"] async for d in taskbooks_col().find({"guild_id": str(guild.id)})}
+    for m in list(guild.members):
+        if m.bot or str(m.id) in have or not has_staff(m):
+            continue
+        err = await create_taskbook(guild, m.id)
+        if err:
+            failed += 1
+            print(f"[taskbook] sync couldn't create for {m}: {err}")
+        else:
+            created += 1
+        await asyncio.sleep(1)
+
+    # 3) repair - taskbooks whose thread is gone
+    repaired = 0
+    for tb in await taskbooks_col().find({"guild_id": str(guild.id)}).to_list(None):
+        if await _thread_missing(guild, tb.get("thread_id")):
+            await restore_thread(guild, tb)
+            repaired += 1
+            await asyncio.sleep(1)
+
+    out = f"Sync done: created {created}, deleted {deleted}, repaired {repaired}."
+    if skipped:
+        out += f" Skipped {skipped} (they have a staff role again or couldn't be checked)."
+    if failed:
+        out += f" {failed} couldn't be created - check the bot's permissions in the taskbook channel."
+    return out
+
+
 async def restore_thread(guild: discord.Guild, tb: dict) -> None:
     """A non-manager deleted the thread: make a new one with the same stats."""
     if tb["_id"] in _restoring:
@@ -647,7 +733,7 @@ class Taskbook(commands.Cog):
         try:
             batch = await models.take_pending_dashboard_tasks(
                 limit=10, types=[CREATE_TASK, DELETE_TASK, IMPORT_TASK,
-                                     REFRESH_TASK, RESET_TASK])
+                                     REFRESH_TASK, RESET_TASK, SYNC_TASK])
             for t in batch:
                 error = ""
                 result = ""
@@ -658,6 +744,12 @@ class Taskbook(commands.Cog):
                         error = "The bot isn't in that server."
                     elif t["type"] == CREATE_TASK:
                         error = await create_taskbook(guild, int(payload["user_id"]))
+                    elif t["type"] == SYNC_TASK:
+                        cfg = await get_config(guild.id)
+                        if not cfg["staff_role_ids"] or not cfg["channel_id"]:
+                            error = "Pick a taskbook channel and staff role(s) and save first."
+                        else:
+                            result = await sync_all(guild, payload.get("delete_user_ids") or [])
                     elif t["type"] == IMPORT_TASK:
                         result = await import_blacklists(guild)
                     elif t["type"] == REFRESH_TASK:

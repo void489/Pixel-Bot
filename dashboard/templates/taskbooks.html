@@ -68,6 +68,8 @@
   {% if deleted %}<div class="banner-ok">🗑️ Taskbook deleted. Its thread is being removed.</div>{% endif %}
   {% if error == 'no_channel' %}<div class="banner-warn">Choose and save a taskbook channel first.</div>
   {% elif error == 'no_user' %}<div class="banner-warn">Pick a staff member first.</div>
+  {% elif error == 'sync_setup' %}<div class="banner-warn">Pick a taskbook channel and staff role(s) and save first.</div>
+  {% elif error == 'sync_members' %}<div class="banner-warn">Couldn't load the server's member list, so nothing was checked. Try again in a moment.</div>
   {% elif error == 'exists' %}<div class="banner-warn">That person already has a taskbook.</div>{% endif %}
   {% for e in errors %}<div class="banner-error">❌ Couldn't create a taskbook: {{ e }}</div>{% endfor %}
 
@@ -109,6 +111,36 @@
 
       <div style="margin-top:18px;"><button class="btn-xs btn-xs-accent" type="submit">Save settings</button></div>
     </form>
+  </div>
+
+  <div class="t-section">
+    <div class="t-section-head">
+      <h2>🔁 Sync with staff roles</h2>
+      <form method="POST" style="display:inline">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="sync_preview">
+        <button class="btn-xs btn-xs-accent" type="submit">🔍 Check what would change</button>
+      </form>
+    </div>
+    <p class="hint" style="margin:-6px 0 12px;">Opens taskbooks for staff who don't have one, deletes the taskbook (stats and thread) of people who no longer have a staff role or left, and recreates threads that were deleted. You see exactly what will happen first - nothing changes until you confirm.</p>
+    {% if sync_preview %}
+      {% set nc = sync_preview.create|length %}{% set nd = sync_preview.delete|length %}
+      <div class="banner-warn">Will create <b>{{ nc }}</b> · delete <b>{{ nd }}</b> · plus recreate any taskbook whose thread is gone (the bot finds those when you confirm).</div>
+      {% if nc %}<label class="t-label">Will be created</label><div class="hint" style="font-style:normal;">{{ sync_preview.create|join(', ') }}</div>{% endif %}
+      {% if nd %}
+        <label class="t-label">Will be deleted (stats are wiped for good)</label>
+        <div class="tbl-wrap"><table>
+          {% for d in sync_preview.delete %}<tr><td class="num">#{{ d.number }}</td><td>{{ d.name }}</td><td>{{ d.why }}</td></tr>{% endfor %}
+        </table></div>
+      {% endif %}
+      <form method="POST" style="margin-top:16px;" onsubmit="return confirm('Run the sync now? {{ nd }} taskbook(s) will be deleted permanently.')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="sync_confirm">
+        {% for d in sync_preview.delete %}<input type="hidden" name="delete_user_ids" value="{{ d.id }}">{% endfor %}
+        <button class="btn-xs btn-xs-danger" type="submit">✅ Confirm sync</button>
+        <a href="{{ url_for('dashboard.taskbooks_page', guild_id=guild_id) }}" class="btn-xs btn-xs-warn" style="text-decoration:none;">Cancel</a>
+      </form>
+    {% endif %}
   </div>
 
   <div class="t-section">

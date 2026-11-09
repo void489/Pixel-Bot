@@ -2660,8 +2660,47 @@ def register_routes(app, discord_session):
                 "allow_role_ids": [str(r) for r in (raw.get("allow_role_ids") or [])],
             }
 
+        sync_preview = None
+
         if request.method == "POST":
             form_type = request.form.get("form_type")
+
+            if form_type == "sync_preview":
+                wanted = set(_tb_settings()["staff_role_ids"])
+                if not wanted or not _tb_settings()["channel_id"]:
+                    return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, error="sync_setup"))
+                members = {str((m.get("user") or {}).get("id")): m for m in get_guild_members(gid)}
+                if not members:
+                    return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, error="sync_members"))
+                all_books = list(db.taskbooks.find({"guild_id": guild_id}).sort("number", 1))
+                have_ids = {b["user_id"] for b in all_books}
+                to_create, to_delete = [], []
+                for uid, m in members.items():
+                    if (m.get("user") or {}).get("bot") or uid in have_ids:
+                        continue
+                    if wanted & {str(r) for r in (m.get("roles") or [])}:
+                        to_create.append(member_display_name(m, uid))
+                for b in all_books:
+                    m = members.get(b["user_id"])
+                    if m is None:
+                        m = get_guild_member(gid, b["user_id"])   # list can be partial - double check
+                        if m is None:
+                            to_delete.append({"id": b["user_id"], "number": b["number"],
+                                              "name": b.get("user_name") or b["user_id"],
+                                              "why": "left the server"})
+                            continue
+                    if not (wanted & {str(r) for r in (m.get("roles") or [])}):
+                        to_delete.append({"id": b["user_id"], "number": b["number"],
+                                          "name": b.get("user_name") or b["user_id"],
+                                          "why": "no staff role"})
+                sync_preview = {"create": sorted(to_create, key=str.lower), "delete": to_delete}
+
+            elif form_type == "sync_confirm":
+                ids = [i for i in request.form.getlist("delete_user_ids") if i.isdigit()]
+                dashboard_db.enqueue_task("taskbook_sync", guild_id, {"delete_user_ids": ids})
+                dashboard_db.log_audit(guild_id, *_audit_actor(discord_session), "taskbook_sync",
+                                       f"Synced taskbooks with staff roles ({len(ids)} to delete)")
+                return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, queued="sync"))
 
             if form_type == "save_settings":
                 channel_id = request.form.get("channel_id") or ""
@@ -2718,7 +2757,8 @@ def register_routes(app, discord_session):
                                            f"Deleted taskbook #{number} ({tb.get('user_name') or tb.get('user_id')})")
                 return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, deleted=1))
 
-            return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id))
+            if sync_preview is None:
+                return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id))
 
         cfg = _tb_settings()
         if not cfg["channel_id"]:  # suggest a channel called "taskbooks" until one is saved
@@ -2745,14 +2785,15 @@ def register_routes(app, discord_session):
             t["error"] for t in db.dashboard_tasks.find(
                 {"guild_id": guild_id,
                  "type": {"$in": ["taskbook_create", "taskbook_import_blacklists",
-                                  "taskbook_refresh_all", "taskbook_reset"]},
+                                  "taskbook_refresh_all", "taskbook_reset", "taskbook_sync"]},
                  "done": True, "created_at": {"$gte": recent},
                  "error": {"$nin": [None, ""]}}
             ).sort("created_at", -1).limit(3)
         ]
         last_task = db.dashboard_tasks.find_one(
             {"guild_id": guild_id,
-             "type": {"$in": ["taskbook_import_blacklists", "taskbook_refresh_all", "taskbook_reset"]},
+             "type": {"$in": ["taskbook_import_blacklists", "taskbook_refresh_all", "taskbook_reset",
+                              "taskbook_sync"]},
              "done": True, "created_at": {"$gte": recent}, "result": {"$nin": [None, ""]}},
             sort=[("created_at", -1)])
         task_result = (last_task or {}).get("result") or ""
@@ -2769,6 +2810,7 @@ def register_routes(app, discord_session):
             roles=roles,
             channels=channels,
             books=books,
+            sync_preview=sync_preview,
             candidates=candidates,
             errors=errors,
             task_result=task_result,
