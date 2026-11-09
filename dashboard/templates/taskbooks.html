@@ -122,24 +122,33 @@
         <button class="btn-xs btn-xs-accent" type="submit">🔍 Check what would change</button>
       </form>
     </div>
-    <p class="hint" style="margin:-6px 0 12px;">Opens taskbooks for staff who don't have one, deletes the taskbook (stats and thread) of people who no longer have a staff role or left, and recreates threads that were deleted. You see exactly what will happen first - nothing changes until you confirm.</p>
+    <p class="hint" style="margin:-6px 0 12px;">Opens taskbooks for staff who don't have one, deletes the taskbook (stats and thread) of people who no longer have a staff role, left, or hold a manager role (the roles allowed in threads never get a taskbook), and recreates threads that are missing. You see exactly what will happen first - nothing changes until you confirm.</p>
     {% if sync_preview %}
-      {% set nc = sync_preview.create|length %}{% set nd = sync_preview.delete|length %}
-      <div class="banner-warn">Will create <b>{{ nc }}</b> · delete <b>{{ nd }}</b> · plus recreate any taskbook whose thread is gone (the bot finds those when you confirm).</div>
+      {% set nc = sync_preview.create|length %}{% set nd = sync_preview.delete|length %}{% set nr = sync_preview.repair|length %}
+      {% if not (nc or nd or nr) %}
+        <div class="banner-ok">✅ Everything is in sync - nothing to do.</div>
+      {% else %}
+      <div class="banner-warn">Will create <b>{{ nc }}</b> · delete <b>{{ nd }}</b> · recreate <b>{{ nr }}</b> missing thread{{ '' if nr == 1 else 's' }}.</div>
       {% if nc %}<label class="t-label">Will be created</label><div class="hint" style="font-style:normal;">{{ sync_preview.create|join(', ') }}</div>{% endif %}
-      {% if nd %}
-        <label class="t-label">Will be deleted (stats are wiped for good)</label>
-        <div class="tbl-wrap"><table>
-          {% for d in sync_preview.delete %}<tr><td class="num">#{{ d.number }}</td><td>{{ d.name }}</td><td>{{ d.why }}</td></tr>{% endfor %}
-        </table></div>
-      {% endif %}
-      <form method="POST" style="margin-top:16px;" onsubmit="return confirm('Run the sync now? {{ nd }} taskbook(s) will be deleted permanently.')">
+      {% if nr %}<label class="t-label">Thread missing - will be recreated (stats kept)</label>
+        <div class="hint" style="font-style:normal;">{% for r in sync_preview.repair %}#{{ r.number }} {{ r.name }}{{ ', ' if not loop.last }}{% endfor %}</div>{% endif %}
+      <form method="POST" style="margin-top:16px;" onsubmit="return confirm('Run the sync now? Every ticked taskbook is deleted permanently (stats and thread).')">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="sync_confirm">
-        {% for d in sync_preview.delete %}<input type="hidden" name="delete_user_ids" value="{{ d.id }}">{% endfor %}
-        <button class="btn-xs btn-xs-danger" type="submit">✅ Confirm sync</button>
-        <a href="{{ url_for('dashboard.taskbooks_page', guild_id=guild_id) }}" class="btn-xs btn-xs-warn" style="text-decoration:none;">Cancel</a>
+        {% if nd %}
+        <label class="t-label">Will be deleted - stats are wiped for good (untick anyone you want to keep)</label>
+        <div class="tbl-wrap"><table>
+          {% for d in sync_preview.delete %}<tr>
+            <td><input type="checkbox" name="delete_user_ids" value="{{ d.id }}" checked></td>
+            <td class="num">#{{ d.number }}</td><td>{{ d.name }}</td><td>{{ d.why }}</td></tr>{% endfor %}
+        </table></div>
+        {% endif %}
+        <div style="margin-top:14px;">
+          <button class="btn-xs btn-xs-danger" type="submit">✅ Confirm sync</button>
+          <a href="{{ url_for('dashboard.taskbooks_page', guild_id=guild_id) }}" class="btn-xs btn-xs-warn" style="text-decoration:none;">Cancel</a>
+        </div>
       </form>
+      {% endif %}
     {% endif %}
   </div>
 

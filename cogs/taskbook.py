@@ -37,6 +37,7 @@ Automatic taskbooks (staff roles from the dashboard):
   * gaining a staff role  -> a taskbook + thread is opened for that person
   * losing their LAST staff role (or leaving the server) -> the taskbook is wiped
     (stats included) and its thread is deleted
+  * members holding an "allowed in threads" (manager) role never get a taskbook
   * the dashboard has a "Sync with staff roles" button (preview, then confirm) that
     does the same for everyone at once and repairs taskbooks whose thread is gone
   * stats are NEVER reset except by `/taskbook reset` or the dashboard reset button;
@@ -396,10 +397,12 @@ async def sync_member(guild: discord.Guild, member) -> None:
     lock = _user_locks.setdefault((guild.id, member.id), asyncio.Lock())
     async with lock:
         staff = set(cfg["staff_role_ids"])
+        allow = set(cfg["allow_role_ids"])
         has_role = any(str(r.id) in staff for r in member.roles)
+        is_mgr = any(str(r.id) in allow for r in member.roles)   # managers get no taskbook
         tb = await taskbooks_col().find_one(
             {"guild_id": str(guild.id), "user_id": str(member.id)})
-        if has_role and not tb:
+        if has_role and not tb and not is_mgr:
             err = await create_taskbook(guild, member.id)
             if err:
                 print(f"[taskbook] auto-create for {member} failed: {err}")
@@ -467,9 +470,13 @@ async def sync_all(guild: discord.Guild, delete_user_ids) -> str:
     if not cfg["staff_role_ids"] or not cfg["channel_id"]:
         return ""   # caller reports the error
     staff = set(cfg["staff_role_ids"])
+    allow = set(cfg["allow_role_ids"])
 
     def has_staff(m):
         return any(str(r.id) in staff for r in m.roles)
+
+    def is_mgr(m):
+        return any(str(r.id) in allow for r in m.roles)
 
     if not guild.chunked:
         try:
@@ -492,8 +499,8 @@ async def sync_all(guild: discord.Guild, delete_user_ids) -> str:
             except discord.HTTPException:
                 skipped += 1                       # can't tell -> leave it alone
                 continue
-        if member is not None and has_staff(member):
-            skipped += 1
+        if member is not None and has_staff(member) and not is_mgr(member):
+            skipped += 1                           # qualifies for a taskbook after all
             continue
         await delete_taskbook(guild, tb, "dashboard sync")
         deleted += 1
@@ -502,7 +509,7 @@ async def sync_all(guild: discord.Guild, delete_user_ids) -> str:
     created = failed = 0
     have = {d["user_id"] async for d in taskbooks_col().find({"guild_id": str(guild.id)})}
     for m in list(guild.members):
-        if m.bot or str(m.id) in have or not has_staff(m):
+        if m.bot or str(m.id) in have or not has_staff(m) or is_mgr(m):
             continue
         err = await create_taskbook(guild, m.id)
         if err:

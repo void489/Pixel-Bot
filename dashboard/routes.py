@@ -2669,6 +2669,7 @@ def register_routes(app, discord_session):
                 wanted = set(_tb_settings()["staff_role_ids"])
                 if not wanted or not _tb_settings()["channel_id"]:
                     return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, error="sync_setup"))
+                allow = set(_tb_settings()["allow_role_ids"])
                 members = {str((m.get("user") or {}).get("id")): m for m in get_guild_members(gid)}
                 if not members:
                     return redirect(url_for("dashboard.taskbooks_page", guild_id=guild_id, error="sync_members"))
@@ -2678,7 +2679,8 @@ def register_routes(app, discord_session):
                 for uid, m in members.items():
                     if (m.get("user") or {}).get("bot") or uid in have_ids:
                         continue
-                    if wanted & {str(r) for r in (m.get("roles") or [])}:
+                    mroles = {str(r) for r in (m.get("roles") or [])}
+                    if wanted & mroles and not (allow & mroles):   # managers get no taskbook
                         to_create.append(member_display_name(m, uid))
                 for b in all_books:
                     m = members.get(b["user_id"])
@@ -2689,11 +2691,41 @@ def register_routes(app, discord_session):
                                               "name": b.get("user_name") or b["user_id"],
                                               "why": "left the server"})
                             continue
-                    if not (wanted & {str(r) for r in (m.get("roles") or [])}):
-                        to_delete.append({"id": b["user_id"], "number": b["number"],
-                                          "name": b.get("user_name") or b["user_id"],
-                                          "why": "no staff role"})
-                sync_preview = {"create": sorted(to_create, key=str.lower), "delete": to_delete}
+                    mroles = {str(r) for r in (m.get("roles") or [])}
+                    if allow & mroles:
+                        why = "manager role"
+                    elif not (wanted & mroles):
+                        why = "no staff role"
+                    else:
+                        continue
+                    to_delete.append({"id": b["user_id"], "number": b["number"],
+                                      "name": b.get("user_name") or b["user_id"], "why": why})
+
+                # taskbooks whose thread is gone get a new one (asks Discord; a hiccup = left alone)
+                deleting = {d["id"] for d in to_delete}
+                from concurrent.futures import ThreadPoolExecutor
+                from utils.helpers import DISCORD_API, _headers
+
+                def _thread_state(b):
+                    if b["user_id"] in deleting:
+                        return None
+                    tid = b.get("thread_id")
+                    if not tid:
+                        return True
+                    try:
+                        r = requests.get(f"{DISCORD_API}/channels/{tid}", headers=_headers(), timeout=6)
+                    except requests.RequestException:
+                        return None
+                    if r.status_code == 404:
+                        return True
+                    return None   # exists, or can't tell -> don't touch
+
+                with ThreadPoolExecutor(max_workers=8) as pool:
+                    states = list(pool.map(_thread_state, all_books))
+                to_repair = [{"number": b["number"], "name": b.get("user_name") or b["user_id"]}
+                             for b, gone in zip(all_books, states) if gone]
+                sync_preview = {"create": sorted(to_create, key=str.lower),
+                                "delete": to_delete, "repair": to_repair}
 
             elif form_type == "sync_confirm":
                 ids = [i for i in request.form.getlist("delete_user_ids") if i.isdigit()]
@@ -2771,11 +2803,15 @@ def register_routes(app, discord_session):
         candidates = []
         if cfg["staff_role_ids"]:
             wanted = set(cfg["staff_role_ids"])
+            mgr_roles = set(cfg["allow_role_ids"])
             for m in get_guild_members(gid):
                 user = m.get("user") or {}
                 if user.get("bot") or str(user.get("id")) in have:
                     continue
-                if wanted & {str(r) for r in (m.get("roles") or [])}:
+                mroles = {str(r) for r in (m.get("roles") or [])}
+                if mroles & mgr_roles:
+                    continue   # roles allowed in the threads (managers) get no taskbook
+                if wanted & mroles:
                     candidates.append({"id": str(user["id"]), "name": member_display_name(m, str(user["id"]))})
             candidates.sort(key=lambda c: c["name"].lower())
 
