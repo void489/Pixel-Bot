@@ -16,6 +16,18 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-13",
+        "title": "Ticket transcript images are deleted after 7 days",
+        "tags": ["Database", "Admin"],
+        "summary": "Saved transcript images now expire after 7 days to keep the free MongoDB under its size limit.",
+        "details": [
+            "On startup and every 6 hours the bot deletes transcript images older than 7 days (all old ones are removed on the first run).",
+            "Transcript text, messages and ratings are kept; only the images go.",
+            "Old transcripts on the dashboard simply show no image instead of a broken one.",
+        ],
+        "files": ["cogs/transcript_cleanup.py", "database/models.py", "main.py"],
+    },
+    {
+        "date": "2026-11-13",
         "title": "Bot Changes page",
         "tags": ["Dashboard"],
         "summary": "New sidebar tab that lists every change made to the bot, newest first.",

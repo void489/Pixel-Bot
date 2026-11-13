@@ -337,6 +337,37 @@ async def save_transcript_file(transcript_id: str, guild_id: int, filename: str,
     return str(file_id)
 
 
+async def prune_transcript_images(older_than_days: int = 7) -> dict:
+    """Delete transcript images (GridFS) older than N days, and blank the dead
+    file_id references in the transcripts so the dashboard doesn't show broken
+    images. The transcript text itself is kept."""
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=older_than_days)
+    db = get_db()
+    files = db[f"{TRANSCRIPT_FILES_BUCKET}.files"]
+    chunks = db[f"{TRANSCRIPT_FILES_BUCKET}.chunks"]
+
+    old_ids = [d["_id"] async for d in files.find({"uploadDate": {"$lt": cutoff}}, {"_id": 1})]
+    deleted = 0
+    for i in range(0, len(old_ids), 500):
+        batch = old_ids[i:i + 500]
+        await chunks.delete_many({"files_id": {"$in": batch}})
+        res = await files.delete_many({"_id": {"$in": batch}})
+        deleted += res.deleted_count
+
+    # Orphaned chunks (file doc already gone) - safety net.
+    live = [d["_id"] async for d in files.find({}, {"_id": 1})]
+    orphans = await chunks.delete_many({"files_id": {"$nin": live}})
+
+    # Clear dangling references in transcripts older than the cutoff.
+    await transcripts_col().update_many(
+        {"created_at": {"$lt": cutoff}, "messages.attachments.file_id": {"$ne": None}},
+        {"$set": {"messages.$[].attachments.$[a].file_id": None}},
+        array_filters=[{"a.file_id": {"$ne": None}}],
+    )
+    return {"files": deleted, "orphan_chunks": orphans.deleted_count}
+
+
 async def save_structured_transcript(transcript_id, guild_id: int, channel_id: int,
                                      channel_name: str, opener_id: int, closed_by_id: int,
                                      reason: str, opener_name: str, closer_name: str,
