@@ -11,7 +11,8 @@
   <a class="nav-item" href="{{ url_for('dashboard.index') }}">← Back to Servers</a>
   {% endif %}
   {% set items = [
-    ('setup',         '🚀 Setup Guide',         'dashboard.setup_guild_page'),
+    ('setup',         'Setup Guide',            'dashboard.setup_guild_page'),
+    ('bot_changes',   'Bot Changes',            'dashboard.bot_changes_page'),
     ('tickets',       'Ticket Types & Panels',  'dashboard.tickets_page'),
     ('spawners',      'Spawners',               'dashboard.spawners_page'),
     ('announcements', 'Announcements',          'dashboard.announcements_page'),
@@ -42,7 +43,6 @@
     ('blacklist',     'Blacklist Requests',     'dashboard.blacklist_requests_page'),
     ('permissions',   'Command Permissions',    'dashboard.permissions_page'),
     ('config',        'Config & Logs',          'dashboard.config_logs_page'),
-    ('bot_changes',   'Bot Changes',            'dashboard.bot_changes_page'),
   ] %}
   {% for key, label, endpoint in items %}
   <a class="nav-item{% if active_nav == key %} active{% endif %}" href="{{ url_for(endpoint, guild_id=guild_id) }}">{{ label }}</a>

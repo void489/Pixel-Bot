@@ -16,6 +16,14 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-13",
+        "title": "Sidebar: Bot Changes moved under Setup Guide",
+        "tags": ["Dashboard"],
+        "summary": "Bot Changes is now the second sidebar tab, right below Setup Guide, and the Setup Guide no longer has an emoji.",
+        "files": ["dashboard/templates/_sidebar.html", "dashboard/templates/setup.html",
+                  "dashboard/bot_changes.py"],
+    },
+    {
+        "date": "2026-11-13",
         "title": "Ticket transcript images are deleted after 7 days",
         "tags": ["Database", "Admin"],
         "summary": "Saved transcript images now expire after 7 days to keep the free MongoDB under its size limit.",
