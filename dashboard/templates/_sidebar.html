@@ -42,6 +42,7 @@
     ('blacklist',     'Blacklist Requests',     'dashboard.blacklist_requests_page'),
     ('permissions',   'Command Permissions',    'dashboard.permissions_page'),
     ('config',        'Config & Logs',          'dashboard.config_logs_page'),
+    ('bot_changes',   'Bot Changes',            'dashboard.bot_changes_page'),
   ] %}
   {% for key, label, endpoint in items %}
   <a class="nav-item{% if active_nav == key %} active{% endif %}" href="{{ url_for(endpoint, guild_id=guild_id) }}">{{ label }}</a>

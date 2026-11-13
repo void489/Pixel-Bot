@@ -6,6 +6,9 @@ How it works
   * This cog picks the task up within a few seconds and calls change_presence().
   * It's applied again every time the bot starts, so it survives restarts/deploys.
   * Empty text = no activity (only the online/idle/dnd/invisible status is set).
+  * The text can use {servers} (how many servers the bot is in) and {members} (total
+    members across all of those servers). They are filled in when the presence is applied
+    and refreshed every 5 minutes, so the numbers stay current.
 """
 from datetime import datetime, timezone
 
@@ -31,6 +34,18 @@ _STATUSES = {
 }
 
 
+PLACEHOLDERS = ("{servers}", "{members}")
+
+
+def fill_placeholders(text: str, bot: commands.Bot) -> str:
+    """{servers} -> number of servers the bot is in, {members} -> members across them all."""
+    if "{servers}" in text:
+        text = text.replace("{servers}", str(len(bot.guilds)))
+    if "{members}" in text:
+        text = text.replace("{members}", str(sum((g.member_count or 0) for g in bot.guilds)))
+    return text
+
+
 async def apply_presence(bot: commands.Bot) -> tuple:
     """Apply the saved presence. Returns (ok, message)."""
     doc = await bot_settings_col().find_one({"_id": "presence"})
@@ -42,7 +57,7 @@ async def apply_presence(bot: commands.Bot) -> tuple:
     activity = None
     if text:
         kind = _TYPES.get(doc.get("type"), discord.ActivityType.playing)
-        activity = discord.Activity(type=kind, name=text[:128])
+        activity = discord.Activity(type=kind, name=fill_placeholders(text, bot)[:128])
 
     try:
         await bot.change_presence(status=status, activity=activity)
@@ -65,10 +80,27 @@ class AdminTools(commands.Cog):
     async def cog_load(self):
         self._poll.start()
         self._startup.start()
+        self._refresh_counts.start()
 
     async def cog_unload(self):
         self._poll.cancel()
         self._startup.cancel()
+        self._refresh_counts.cancel()
+
+    @tasks.loop(minutes=5)
+    async def _refresh_counts(self):
+        """Keep {servers} / {members} current. Only touches Discord if the text uses one."""
+        try:
+            doc = await bot_settings_col().find_one({"_id": "presence"}) or {}
+            text = doc.get("text") or ""
+            if any(ph in text for ph in PLACEHOLDERS):
+                await apply_presence(self.bot)
+        except Exception as e:
+            print(f"[admin_tools] count refresh error: {e}")
+
+    @_refresh_counts.before_loop
+    async def _before_refresh_counts(self):
+        await self.bot.wait_until_ready()
 
     @tasks.loop(seconds=3)
     async def _poll(self):

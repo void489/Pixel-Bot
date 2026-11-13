@@ -74,7 +74,8 @@
 
   <div class="sec">
     <h2>Bot activity</h2>
-    <div class="sub">What shows under the bot's name. Leave the text empty to remove the activity.</div>
+    <div class="sub">What shows under the bot's name. Leave the text empty to remove the activity.<br>
+      You can use <code>{servers}</code> (how many servers the bot is in) and <code>{members}</code> (total members in all those servers). Example: <code>{members} members in {servers} servers</code>. The numbers refresh every 5 minutes.</div>
     <form method="POST" action="{{ url_for('admin.set_activity') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <div class="act-grid">
@@ -86,7 +87,7 @@
         </div>
         <div>
           <label for="a-text">Text</label>
-          <input id="a-text" type="text" name="text" maxlength="{{ max_len }}" value="{{ presence.text }}" placeholder="e.g. your tickets">
+          <input id="a-text" type="text" name="text" maxlength="{{ max_len }}" value="{{ presence.text }}" placeholder="e.g. {members} members in {servers} servers">
         </div>
         <div>
           <label for="a-status">Status</label>

@@ -3579,6 +3579,24 @@ def register_routes(app, discord_session):
         )
 
     # -----------------------------------------------------------------
+    # Bot changes (everything that was changed in the bot; data in dashboard/bot_changes.py)
+    # -----------------------------------------------------------------
+    @bp.route("/guild/<guild_id>/bot-changes")
+    def bot_changes_page(guild_id):
+        if not _is_authed(discord_session):
+            return redirect(url_for("dashboard.login"))
+        _require_guild_access(discord_session, guild_id)
+
+        from dashboard.bot_changes import CHANGES
+        tags = sorted({t for c in CHANGES for t in c.get("tags", [])})
+        return render_template(
+            "bot_changes.html",
+            guild_id=guild_id,
+            changes=CHANGES,
+            tags=tags,
+        )
+
+    # -----------------------------------------------------------------
     # Command permissions
     # -----------------------------------------------------------------
     @bp.route("/guild/<guild_id>/permissions", methods=["GET", "POST"])
