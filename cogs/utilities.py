@@ -78,6 +78,7 @@ from discord.ext import commands, tasks
 from database import models
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils import review_queue_core as rq
 from config import constants
 
 
@@ -533,6 +534,20 @@ class _BlacklistDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
                 except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                     pass
 
+        if not (ch_id and msg_id):
+            # Came from the blacklist queue (no channel message): leave a decided record.
+            try:
+                log_id = cfg.get("request_channel_id")
+                log_ch = guild.get_channel(int(log_id)) if log_id else None
+                if log_ch is not None:
+                    await log_ch.send(
+                        embed=build_blacklist_embed(fresh, guild),
+                        view=_BlacklistDecisionView(self.request_id, disabled=True),
+                    )
+            except (discord.Forbidden, discord.HTTPException):
+                pass
+        await rq.refresh(interaction.client, guild.id, BLACKLIST_QUEUE)
+
         await interaction.followup.send(
             embed=success_embed(
                 f"Request `{self.request_id}` marked **{status}**."
@@ -570,6 +585,57 @@ class _BlacklistDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         except discord.HTTPException as e:
             return f"Discord error: {e}"
         return None
+
+
+# ---------------------------------------------------------------------------
+# Blacklist review queue (one embed + dropdown; see utils/review_queue_core.py)
+# ---------------------------------------------------------------------------
+
+async def _queue_gather(guild: discord.Guild) -> list:
+    items = []
+    for r in await models.get_pending_blacklist_requests(guild.id):
+        verb = "Blacklist" if r.get("action") == "add" else "Unblacklist"
+        items.append({
+            "id": str(r["_id"]),
+            "created_at": r.get("created_at"),
+            "label": f"{verb} ({_blacklist_type_label(r.get('type'))}) — "
+                     f"{rq.display_name(guild, r.get('target_id'))}",
+            "desc": f"By {rq.display_name(guild, r.get('applicant_id'))} • {rq.age(r.get('created_at'))}",
+        })
+    return items
+
+
+async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, item_id: str):
+    """Private copy of the normal blacklist embed + Accept / Deny buttons."""
+    async def _no(text):
+        await interaction.response.send_message(embed=error_embed(text), ephemeral=True)
+
+    req = await models.get_blacklist_request(item_id)
+    if not req or str(req.get("guild_id")) != str(guild.id):
+        return await _no("This request no longer exists.")
+    cfg = await models.get_blacklist_config(guild.id)
+    user = interaction.user
+    is_admin = isinstance(user, discord.Member) and user.guild_permissions.administrator
+    is_staff = bool(cfg["staff_role_id"]) and isinstance(user, discord.Member) and any(
+        str(r.id) == str(cfg["staff_role_id"]) for r in user.roles)
+    if not (is_admin or is_staff):
+        return await _no("Only Admins or the blacklist staff role can review these requests.")
+    if req.get("status") != "Pending":
+        return await interaction.response.send_message(
+            embed=info_embed(f"This request was already **{req.get('status')}**."), ephemeral=True
+        )
+    await interaction.response.send_message(
+        embed=build_blacklist_embed(req, guild),
+        view=_BlacklistDecisionView(str(req["_id"])),
+        ephemeral=True,
+    )
+
+
+BLACKLIST_QUEUE = rq.QueueSpec(
+    key="blacklist", select_id="blacklist_queue:select",
+    title="Blacklist Queue", emoji="🚫", noun="blacklist requests",
+    gather=_queue_gather, open_item=_queue_open,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -976,6 +1042,7 @@ class Utilities(commands.Cog):
 
     async def cog_load(self):
         self.bot.add_dynamic_items(_BlacklistDecisionButton, PollVoteButton)
+        self.bot.add_view(rq.persistent_view(BLACKLIST_QUEUE))
         self._check_temp_roles.start()
         self._update_stat_channels.start()
 
@@ -1525,8 +1592,21 @@ class Utilities(commands.Cog):
             await _reply(ctx, info_embed(
                 "Use `/blacklist add <user> <type> <reason> <proof1> [proof2] [proof3]` "
                 "or `/blacklist remove <user> <type> <reason> [proof1] [proof2] [proof3]`.\n"
-                "`type` is `giveaway`, `ticket` or `application`. Requests go through staff approval."
+                "`type` is `giveaway`, `ticket` or `application`. Requests go through staff approval.\n"
+                "Admins: `/blacklist setqueue <channel>` reviews requests from one dropdown."
             ))
+
+    @blacklist.command(name="setqueue",
+                       description="Review blacklist requests from one dropdown in a channel")
+    @command_check()
+    async def blacklist_setqueue(self, ctx: commands.Context, channel: discord.TextChannel):
+        await rq.setup_command(ctx, BLACKLIST_QUEUE, channel)
+
+    @blacklist.command(name="removequeue",
+                       description="Turn the blacklist queue off (requests use the request channel again)")
+    @command_check()
+    async def blacklist_removequeue(self, ctx: commands.Context):
+        await rq.remove_command(ctx, BLACKLIST_QUEUE)
 
     @blacklist.command(name="add",
                        description="Submit a request to blacklist a user")
@@ -1608,16 +1688,20 @@ class Utilities(commands.Cog):
                 f"{user.mention} doesn't have the **{type_}** blacklist role."
             ))
 
-        if not cfg["request_channel_id"]:
-            return await _reply(ctx, error_embed(
-                "No blacklist request channel configured. "
-                "Set it on the dashboard's Config & Logs page."
-            ))
-        channel = ctx.guild.get_channel(int(cfg["request_channel_id"]))
-        if channel is None:
-            return await _reply(ctx, error_embed(
-                "The configured blacklist request channel no longer exists."
-            ))
+        queue_channel = await rq.get_channel(ctx.guild, BLACKLIST_QUEUE)
+        if queue_channel is not None:
+            channel = queue_channel
+        else:
+            if not cfg["request_channel_id"]:
+                return await _reply(ctx, error_embed(
+                    "No blacklist request channel configured. "
+                    "Set it on the dashboard's Config & Logs page."
+                ))
+            channel = ctx.guild.get_channel(int(cfg["request_channel_id"]))
+            if channel is None:
+                return await _reply(ctx, error_embed(
+                    "The configured blacklist request channel no longer exists."
+                ))
 
         proof_urls = [p.url for p in proofs if p]
         request_id = await models.create_blacklist_request(
@@ -1639,6 +1723,17 @@ class Utilities(commands.Cog):
             staff_role = ctx.guild.get_role(int(cfg["staff_role_id"]))
             if staff_role:
                 content = staff_role.mention
+
+        if queue_channel is not None:
+            # Blacklist queue is on: no separate message, it joins the dropdown.
+            await rq.notify_new(
+                self.bot, ctx.guild, BLACKLIST_QUEUE,
+                role_ids=[cfg["staff_role_id"]] if cfg["staff_role_id"] else [],
+                text="New blacklist request to review.",
+            )
+            return await _reply(ctx, success_embed(
+                f"Blacklist request submitted. Staff will review it in {channel.mention}."
+            ))
 
         try:
             msg = await channel.send(

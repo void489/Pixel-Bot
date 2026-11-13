@@ -1073,9 +1073,10 @@ async def get_guild_vouch_channel_ids(guild_id: int) -> set:
 # ---------------------------------------------------------------------------
 
 async def create_report(guild_id: int, reported_id: int, reporter_id: int,
-                        reason: str, photo_urls: list, channel_id: int,
-                        message_id: int) -> str:
-    report_id = f"R{message_id}"
+                        reason: str, photo_urls: list, channel_id: int = None,
+                        message_id: int = None) -> str:
+    # Review-queue mode has no channel message, so make an id that still matches R[0-9]+.
+    report_id = f"R{message_id}" if message_id else f"R{int(datetime.now(timezone.utc).timestamp() * 1000)}"
     doc = {
         "_id": report_id,
         "guild_id": str(guild_id),
@@ -1083,8 +1084,8 @@ async def create_report(guild_id: int, reported_id: int, reporter_id: int,
         "reporter_id": str(reporter_id),
         "reason": reason,
         "photo_urls": list(photo_urls),
-        "channel_id": str(channel_id),
-        "message_id": str(message_id),
+        "channel_id": str(channel_id) if channel_id else None,
+        "message_id": str(message_id) if message_id else None,
         "status": "Pending",
         "staff_id": None,
         "decided_at": None,
@@ -1107,6 +1108,48 @@ async def claim_report_decision(report_id: str, staff_id: int, status: str) -> d
             "decided_at": datetime.now(timezone.utc),
         }},
     )
+
+
+async def get_pending_reports(guild_id: int) -> list:
+    cursor = reports_col().find(
+        {"guild_id": str(guild_id), "status": "Pending"}
+    ).sort("created_at", 1)
+    return [doc async for doc in cursor]
+
+
+# ---------------------------------------------------------------------------
+# REVIEW QUEUES (one embed + dropdown per type: applications, blacklist, reports)
+# ---------------------------------------------------------------------------
+
+async def get_review_queue_config(guild_id: int, key: str) -> dict:
+    """key: 'applications' | 'blacklist' | 'reports' - each has its own queue."""
+    settings = await get_guild_settings(guild_id)
+    cfg = (settings.get("review_queues") or {}).get(key) or {}
+    return {
+        "channel_id": str(cfg["channel_id"]) if cfg.get("channel_id") else None,
+        "message_id": str(cfg["message_id"]) if cfg.get("message_id") else None,
+    }
+
+
+async def set_review_queue_config(guild_id: int, key: str, channel_id, message_id) -> None:
+    await update_guild_settings(guild_id, {f"review_queues.{key}": {
+        "channel_id": str(channel_id) if channel_id else None,
+        "message_id": str(message_id) if message_id else None,
+    }})
+
+
+async def get_pending_submissions(guild_id: int) -> list:
+    cursor = application_submissions_col().find(
+        {"guild_id": str(guild_id), "status": "Pending"}
+    ).sort("created_at", 1)
+    return [doc async for doc in cursor]
+
+
+async def get_pending_blacklist_requests(guild_id: int) -> list:
+    cursor = blacklist_requests_col().find(
+        {"guild_id": str(guild_id), "status": "Pending"}
+    ).sort("created_at", 1)
+    return [doc async for doc in cursor]
 
 
 # ---------------------------------------------------------------------------

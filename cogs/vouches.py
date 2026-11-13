@@ -49,6 +49,7 @@ from discord.ext import commands
 from database import models
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils import review_queue_core as rq
 from config import constants
 
 
@@ -253,6 +254,11 @@ class _ReportDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
             await self._handle_reject(interaction, report, guild)
 
     async def _edit_report_message(self, interaction, guild, report, role_warning=None):
+        if not (report.get("channel_id") and report.get("message_id")):
+            # Came from the report queue: no original message. Leave a decided record
+            # in the configured report channel (if any), then refresh the queue.
+            await self._log_queued_decision(interaction, guild, report, role_warning)
+            return
         channel = guild.get_channel(int(report["channel_id"]))
         if channel is None:
             return
@@ -297,6 +303,31 @@ class _ReportDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
             await message.edit(embed=embed, view=disabled_view)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException):
             pass
+        await rq.refresh(interaction.client, guild.id, REPORT_QUEUE)
+
+    async def _log_queued_decision(self, interaction, guild, report, role_warning=None):
+        try:
+            cfg = await models.get_vouch_config(guild.id)
+            log_id = cfg.get("report_channel_id")
+            log_ch = guild.get_channel(int(log_id)) if log_id else None
+            if log_ch is not None:
+                try:
+                    reported = guild.get_member(int(report["reported_id"])) or \
+                        await interaction.client.fetch_user(int(report["reported_id"]))
+                    reporter = await interaction.client.fetch_user(int(report["reporter_id"]))
+                except (discord.NotFound, discord.HTTPException):
+                    reported = reporter = None
+                if reported is not None and reporter is not None:
+                    merged = dict(report)
+                    if role_warning:
+                        merged["role_warning"] = role_warning
+                    await log_ch.send(
+                        embed=_report_embed(merged, reported, reporter),
+                        view=_build_report_view(str(report["_id"]), disabled=True),
+                    )
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+        await rq.refresh(interaction.client, guild.id, REPORT_QUEUE)
 
     async def _handle_accept(self, interaction, report, guild):
         claimed = await models.claim_report_decision(
@@ -390,6 +421,62 @@ def _build_report_view(report_id: str, disabled: bool = False) -> discord.ui.Vie
 
 
 # ---------------------------------------------------------------------------
+# Scam report review queue (one embed + dropdown; see utils/review_queue_core.py)
+# ---------------------------------------------------------------------------
+
+async def _queue_gather(guild: discord.Guild) -> list:
+    return [{
+        "id": str(r["_id"]),
+        "created_at": r.get("created_at"),
+        "label": f"Scam report — {rq.display_name(guild, r.get('reported_id'))}",
+        "desc": f"By {rq.display_name(guild, r.get('reporter_id'))} • {rq.age(r.get('created_at'))}",
+    } for r in await models.get_pending_reports(guild.id)]
+
+
+async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, item_id: str):
+    """Private copy of the normal report embed + Accept / Reject buttons."""
+    async def _no(text):
+        await interaction.response.send_message(embed=error_embed(text), ephemeral=True)
+
+    report = await models.get_report(item_id)
+    if not report or str(report.get("guild_id")) != str(guild.id):
+        return await _no("This report no longer exists.")
+    cfg = await models.get_vouch_config(guild.id)
+    if not _member_can_decide(interaction.user, cfg):
+        return await _no("Only Admins or the report staff role can review reports.")
+    if report.get("status") != "Pending":
+        return await interaction.response.send_message(
+            embed=info_embed(f"This report was already **{report.get('status')}**."), ephemeral=True
+        )
+
+    async def _user(uid):
+        m = guild.get_member(int(uid))
+        if m:
+            return m
+        try:
+            return await interaction.client.fetch_user(int(uid))
+        except (discord.NotFound, discord.HTTPException):
+            return None
+
+    reported = await _user(report["reported_id"])
+    reporter = await _user(report["reporter_id"])
+    if reported is None or reporter is None:
+        return await _no("Couldn't load the users in this report.")
+    await interaction.response.send_message(
+        embed=_report_embed(report, reported, reporter),
+        view=_build_report_view(str(report["_id"])),
+        ephemeral=True,
+    )
+
+
+REPORT_QUEUE = rq.QueueSpec(
+    key="reports", select_id="report_queue:select",
+    title="Scam Report Queue", emoji="📨", noun="scam reports",
+    gather=_queue_gather, open_item=_queue_open,
+)
+
+
+# ---------------------------------------------------------------------------
 # Scan helpers
 # ---------------------------------------------------------------------------
 
@@ -425,6 +512,7 @@ class Vouches(commands.Cog):
     async def cog_load(self):
         # Persistent staff decision buttons.
         self.bot.add_dynamic_items(_ReportDecisionButton)
+        self.bot.add_view(rq.persistent_view(REPORT_QUEUE))
 
     # ------------------------------------------------------------------
     # on_message: vouch + scam vouch text triggers
@@ -487,7 +575,7 @@ class Vouches(commands.Cog):
         if ctx.invoked_subcommand is None:
             await ctx.send(embed=info_embed(
                 "Use `/vouches view [user]`, `/vouches top`, `/vouches channels`, `/vouches setreportchannel`, "
-                "`/vouches scan`, `/vouches add`, `/vouches remove`, "
+                "`/vouches setreportqueue`, `/vouches scan`, `/vouches add`, `/vouches remove`, "
                 "`/vouches scammer add`, or `/vouches scammer remove`."
             ))
 
@@ -532,6 +620,18 @@ class Vouches(commands.Cog):
                                        channel: discord.TextChannel):
         await models.set_vouch_config(ctx.guild.id, report_channel_id=str(channel.id))
         await ctx.send(embed=success_embed(f"Report channel set to {channel.mention}."))
+
+    @vouches.command(name="setreportqueue",
+                     description="Review scam reports from one dropdown in a channel")
+    @command_check()
+    async def vouches_setreportqueue(self, ctx: commands.Context, channel: discord.TextChannel):
+        await rq.setup_command(ctx, REPORT_QUEUE, channel)
+
+    @vouches.command(name="removereportqueue",
+                     description="Turn the scam report queue off (reports use the report channel again)")
+    @command_check()
+    async def vouches_removereportqueue(self, ctx: commands.Context):
+        await rq.remove_command(ctx, REPORT_QUEUE)
 
     # -- scan ---------------------------------------------------------
     @vouches.command(name="scan", description="Import vouch messages from a channel")
@@ -873,6 +973,30 @@ class Vouches(commands.Cog):
             return await ctx.send(embed=error_embed("You can't report a bot."))
 
         cfg = await models.get_vouch_config(ctx.guild.id)
+
+        photos = [photo1.url]
+        if photo2 is not None:
+            photos.append(photo2.url)
+        if photo3 is not None:
+            photos.append(photo3.url)
+
+        queue_channel = await rq.get_channel(ctx.guild, REPORT_QUEUE)
+        if queue_channel is not None:
+            # Report queue is on: no separate message, it joins the dropdown.
+            report_id = await models.create_report(
+                guild_id=ctx.guild.id, reported_id=user.id, reporter_id=ctx.author.id,
+                reason=reason, photo_urls=photos,
+            )
+            staff_role = cfg.get("report_staff_role_id")
+            await rq.notify_new(
+                self.bot, ctx.guild, REPORT_QUEUE,
+                role_ids=[staff_role] if staff_role else [],
+                text="New scam report to review.",
+            )
+            return await ctx.send(embed=success_embed(
+                f"Report `{report_id}` submitted to {queue_channel.mention}."
+            ))
+
         report_channel_id = cfg.get("report_channel_id")
         if not report_channel_id:
             return await ctx.send(embed=error_embed(
@@ -884,12 +1008,6 @@ class Vouches(commands.Cog):
             return await ctx.send(embed=error_embed(
                 "The configured report channel no longer exists."
             ))
-
-        photos = [photo1.url]
-        if photo2 is not None:
-            photos.append(photo2.url)
-        if photo3 is not None:
-            photos.append(photo3.url)
 
         placeholder = base_embed(
             title="📨 Report — Submitting...",

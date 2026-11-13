@@ -40,6 +40,7 @@ from config import constants, settings
 
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils import review_queue_core as rq
 MAX_APPS_PER_PANEL = 5
 
 
@@ -671,6 +672,8 @@ class _ReviewDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         except (discord.Forbidden, discord.NotFound, discord.HTTPException):
             pass
 
+        await rq.refresh(interaction.client, guild.id, APP_QUEUE)
+
         await interaction.followup.send(
             embed=success_embed(
                 f"Submission `{sub['_id']}` marked **{status}**."
@@ -801,6 +804,51 @@ def build_panel_view(apps: list) -> discord.ui.View:
 # Cog
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Application review queue (one embed + dropdown; see utils/review_queue_core.py)
+# ---------------------------------------------------------------------------
+
+async def _queue_gather(guild: discord.Guild) -> list:
+    return [{
+        "id": str(s["_id"]),
+        "created_at": s.get("created_at"),
+        "label": f"{s.get('application_name') or 'Application'} — "
+                 f"{s.get('applicant_name') or s.get('applicant_id')}",
+        "desc": f"Application • {rq.age(s.get('created_at'))}",
+    } for s in await models.get_pending_submissions(guild.id)]
+
+
+async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, item_id: str):
+    """Private copy of the normal review embed + buttons (the same ones the old channel post had)."""
+    async def _no(text):
+        await interaction.response.send_message(embed=error_embed(text), ephemeral=True)
+
+    sub = await models.get_application_submission(item_id)
+    if not sub or str(sub.get("guild_id")) != str(guild.id):
+        return await _no("This submission no longer exists.")
+    app = await models.get_application(guild.id, sub.get("application_id"))
+    if not app:
+        return await _no("The application this came from no longer exists.")
+    if not _member_can_decide(interaction.user, app):
+        return await _no("You can't review this application. Only Admins or its decision roles can.")
+    if sub.get("status") != "Pending":
+        return await interaction.response.send_message(
+            embed=info_embed(f"This submission was already **{sub.get('status')}**."), ephemeral=True
+        )
+    await interaction.response.send_message(
+        embed=_review_embed(sub, app, guild),
+        view=build_review_view(sub, getattr(settings, "DASHBOARD_BASE_URL", None)),
+        ephemeral=True,
+    )
+
+
+APP_QUEUE = rq.QueueSpec(
+    key="applications", select_id="app_queue:select",
+    title="Application Queue", emoji="📝", noun="applications",
+    gather=_queue_gather, open_item=_queue_open,
+)
+
+
 class Applications(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -809,6 +857,7 @@ class Applications(commands.Cog):
         self.bot.add_dynamic_items(_PanelOpenButton)
         self.bot.add_dynamic_items(_ReviewDecisionButton)
         self.bot.add_dynamic_items(_StartConfirmButton)
+        self.bot.add_view(rq.persistent_view(APP_QUEUE))
         self._sweep_sessions.start()
         self._poll_dashboard_tasks.start()
 
@@ -947,11 +996,20 @@ class Applications(commands.Cog):
             submission["_id"] = submission_id
             submission["guild_id"] = str(guild.id)
 
+        queued = (await rq.get_channel(guild, APP_QUEUE)) is not None
+
         submit_channel = None
         if app.get("submit_channel_id"):
             submit_channel = guild.get_channel(int(app["submit_channel_id"]))
 
-        if submit_channel is None:
+        if queued:
+            # Application queue is on: no separate message, it just joins the dropdown.
+            await rq.notify_new(
+                self.bot, guild, APP_QUEUE,
+                role_ids=(app.get("ping_role_ids") or app.get("decision_ping_role_ids") or []),
+                text=f"New **{app.get('name', 'Application')}** application to review.",
+            )
+        elif submit_channel is None:
             try:
                 await dm.send(embed=info_embed(
                     "Your application was submitted, but the submit channel isn't "
@@ -997,7 +1055,8 @@ class Applications(commands.Cog):
     async def applications(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
             await ctx.send(embed=info_embed(
-                "Use `/applications panel` to post or refresh the applications panel."
+                "Use `/applications panel` to post or refresh the applications panel, or "
+                "`/applications setqueue <channel>` to review applications from one dropdown."
             ))
 
     @applications.command(
@@ -1054,6 +1113,22 @@ class Applications(commands.Cog):
         await ctx.send(embed=success_embed(
             f"Panel posted in {channel.mention}."
         ), ephemeral=(ctx.interaction is not None))
+
+    @applications.command(
+        name="setqueue",
+        description="Review applications from one dropdown in a channel instead of one message each",
+    )
+    @command_check()
+    async def applications_setqueue(self, ctx: commands.Context, channel: discord.TextChannel):
+        await rq.setup_command(ctx, APP_QUEUE, channel)
+
+    @applications.command(
+        name="removequeue",
+        description="Turn the application queue off (new applications use their submit channel again)",
+    )
+    @command_check()
+    async def applications_removequeue(self, ctx: commands.Context):
+        await rq.remove_command(ctx, APP_QUEUE)
 
     # ------------------------------------------------------------------
     # Sweeper — expires stale sessions

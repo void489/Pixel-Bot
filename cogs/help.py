@@ -56,6 +56,7 @@ ADMIN_CATEGORIES = {
     "sticky": "Roles & utilities", "unsticky": "Roles & utilities",
     "embeds": "Roles & utilities", "count": "Roles & utilities",
     "vouches": "Vouches", "vouch": "Vouches", "config": "Vouches",
+    "blacklist": "Blacklists",
     "xp": "Leveling",
     "spawner": "Panels", "applications": "Panels",
     "taskbook": "Taskbooks",
@@ -63,7 +64,7 @@ ADMIN_CATEGORIES = {
     "unlockdown": "Moderation", "tempban": "Moderation", "tempbans": "Moderation",
     "quarantine": "Moderation", "unquarantine": "Moderation",
 }
-ADMIN_ORDER = ["Staff management", "LOA", "Tickets", "Roles & utilities", "Vouches",
+ADMIN_ORDER = ["Staff management", "LOA", "Tickets", "Roles & utilities", "Vouches", "Blacklists",
                "Leveling", "Panels", "Taskbooks", "Moderation", "Other"]
 
 EMOJI = {
@@ -79,6 +80,12 @@ OVERRIDES = {
                      "proof is required and staff approve or deny it.",
     "blacklist remove": "Request to unblacklist someone (type: giveaway, ticket or application). "
                         "Staff approve or deny it.",
+    "applications setqueue": "Review applications from ONE dropdown in a channel instead of one message each. Pick one to open it privately with its Accept / Deny buttons.",
+    "applications removequeue": "Turn the application queue off. New applications go back to each application's submit channel (needs no pending applications in the queue).",
+    "blacklist setqueue": "Review blacklist requests from ONE dropdown in a channel instead of one message each. Pick one to open it privately with Accept / Deny.",
+    "blacklist removequeue": "Turn the blacklist queue off. New requests go back to the request channel (needs no pending requests in the queue).",
+    "vouches setreportqueue": "Review scam reports from ONE dropdown in a channel instead of one message each. Pick one to open it privately with Accept / Reject.",
+    "vouches removereportqueue": "Turn the scam report queue off. New reports go back to the report channel (needs no pending reports in the queue).",
     "giveaway rps": "Giveaway where the 2 winners play Rock Paper Scissors for the prize.",
     "giveaway splitsteal": "Giveaway where the 2 winners play Split or Steal for the prize.",
     "giveaway membercount": "Giveaway with no timer - it ends when the server reaches the member count you set.",
