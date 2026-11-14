@@ -49,6 +49,7 @@ from discord.ext import commands
 from database import models
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from utils import review_queue_core as rq
 from config import constants
 
@@ -789,6 +790,7 @@ class Vouches(commands.Cog):
         ))
 
     @vouches_remove.autocomplete("vouch_num")
+    @safe_autocomplete
     async def vouches_remove_ac(self, ctx: commands.Context, current: str):
         # Discord.py exposes the other params via ctx.interaction.namespace on autocomplete.
         user_id = None

@@ -38,6 +38,7 @@ from database.mongo import staff_strikes_col, guild_settings_col
 from utils import strikes_core as sc
 from utils.embeds import base_embed, error_embed, info_embed, success_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from utils import changes_core as core
 
 
@@ -456,10 +457,12 @@ class StaffStrikes(commands.Cog):
         await _reply(ctx, embed, delete_after=30)
 
     @strike_add.autocomplete("type")
+    @safe_autocomplete
     async def _add_type_ac(self, interaction: discord.Interaction, current: str):
         return await _type_autocomplete(interaction, current)
 
     @strike_list.autocomplete("type")
+    @safe_autocomplete
     async def _list_type_ac(self, interaction: discord.Interaction, current: str):
         return await _type_autocomplete(interaction, current)
 

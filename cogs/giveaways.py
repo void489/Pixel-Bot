@@ -74,6 +74,7 @@ from typing import Literal, Optional
 from utils import flags_data, languages_data, ticket_core
 from utils.embeds import success_embed, error_embed, info_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from cogs.tickets import TicketControlView, category_lock, find_category_by_name
 
 EMBED_COLOR = 0x2B2D31
@@ -1047,8 +1048,18 @@ class Giveaways(commands.Cog):
         )
         self.check_giveaways.start()
         self.check_games.start()
+        asyncio.create_task(self._ensure_indexes())
         if self.bot.is_ready():
             asyncio.create_task(self._restore_caches())
+
+    async def _ensure_indexes(self):
+        """Indexes keep the giveaway lookups (autocomplete etc.) fast. Never blocks the cog."""
+        try:
+            col = models.giveaways_col()
+            await col.create_index([("guild_id", 1), ("created_at", -1)])
+            await col.create_index("message_id")
+        except Exception as e:
+            print(f"[giveaways] couldn't create indexes: {e}")
 
     # ------------------------------------------------------------------
     # In-memory lookups for the on_message listeners (rebuilt from Mongo on start)
@@ -1861,11 +1872,10 @@ class Giveaways(commands.Cog):
     async def _autocomplete(self, interaction: discord.Interaction, current: str):
         current = (current or "").lower()
         choices = []
-        for g in await models.get_guild_giveaways(interaction.guild.id):
+        for g in await models.search_guild_giveaways(interaction.guild.id, current, 25):
             status = "Ended" if g.get("ended") else "Active"
             label = f"{g['prize']} - {status} ({g['display_id']})"[:100]
-            if current in g["prize"].lower() or current in g["message_id"]:
-                choices.append(app_commands.Choice(name=label, value=g["message_id"]))
+            choices.append(app_commands.Choice(name=label, value=g["message_id"]))
         return choices[:25]
 
     @commands.hybrid_group(name="giveaway", description="Giveaway management commands")
@@ -2232,6 +2242,7 @@ class Giveaways(commands.Cog):
             await ctx.send(embed=error_embed("This giveaway has already ended!"), ephemeral=True)
 
     @giveaway_end.autocomplete("message_id")
+    @safe_autocomplete
     async def giveaway_end_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._autocomplete(interaction, current)
 
@@ -2373,6 +2384,7 @@ class Giveaways(commands.Cog):
         ), ephemeral=True)
 
     @giveaway_reroll.autocomplete("message_id")
+    @safe_autocomplete
     async def giveaway_reroll_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._autocomplete(interaction, current)
 
@@ -2407,6 +2419,7 @@ class Giveaways(commands.Cog):
         ), ephemeral=True)
 
     @giveaway_delete.autocomplete("message_id")
+    @safe_autocomplete
     async def giveaway_delete_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._autocomplete(interaction, current)
 

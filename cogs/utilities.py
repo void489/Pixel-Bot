@@ -78,6 +78,7 @@ from discord.ext import commands, tasks
 from database import models
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from utils import review_queue_core as rq
 from config import constants
 
@@ -1472,10 +1473,11 @@ class Utilities(commands.Cog):
         await _reply(ctx, success_embed("Poll ended. The final results are on the poll message."))
 
     @poll_end.autocomplete("message_id")
+    @safe_autocomplete
     async def poll_end_autocomplete(self, interaction: discord.Interaction, current: str):
         current = (current or "").lower()
         choices = []
-        for pl in await models.get_guild_polls(interaction.guild.id, active_only=True):
+        for pl in await models.get_guild_polls(interaction.guild.id, active_only=True, limit=100):
             label = f"{pl['question'][:70]} ({pl['message_id'][-4:]})"
             if current in pl["question"].lower() or current in pl["message_id"]:
                 choices.append(app_commands.Choice(name=label[:100], value=pl["message_id"]))

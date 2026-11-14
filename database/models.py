@@ -711,6 +711,21 @@ async def get_guild_giveaways(guild_id: int) -> list:
     return [doc async for doc in cursor]
 
 
+async def search_guild_giveaways(guild_id: int, text: str = "", limit: int = 25) -> list:
+    """Newest giveaways whose prize / message id contains `text` (for slash autocomplete).
+    Filtered and limited in MongoDB so it stays fast however many giveaways exist."""
+    query = {"guild_id": str(guild_id)}
+    text = (text or "").strip()
+    if text:
+        rx = re.escape(text)
+        query["$or"] = [{"prize": {"$regex": rx, "$options": "i"}},
+                        {"message_id": {"$regex": rx}}]
+    cursor = giveaways_col().find(
+        query, {"prize": 1, "ended": 1, "display_id": 1, "message_id": 1}
+    ).sort("created_at", -1).limit(limit)
+    return [doc async for doc in cursor]
+
+
 async def update_giveaway(message_id, **fields) -> None:
     await giveaways_col().update_one({"message_id": str(message_id)}, {"$set": fields})
 
@@ -938,11 +953,13 @@ async def get_poll(message_id) -> dict:
     return await polls_col().find_one({"message_id": str(message_id)})
 
 
-async def get_guild_polls(guild_id: int, active_only: bool = False) -> list:
+async def get_guild_polls(guild_id: int, active_only: bool = False, limit: int = 0) -> list:
     query = {"guild_id": str(guild_id)}
     if active_only:
         query["ended"] = False
     cursor = polls_col().find(query).sort("created_at", -1)
+    if limit:
+        cursor = cursor.limit(limit)
     return [doc async for doc in cursor]
 
 

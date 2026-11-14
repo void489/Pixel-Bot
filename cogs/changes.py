@@ -47,6 +47,7 @@ from utils import promotioncard
 from utils import changes_core as core
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from config import constants
 
 
@@ -788,10 +789,12 @@ class Changes(commands.Cog):
         await _reply(ctx, success_embed(msg))
 
     @promote.autocomplete("type")
+    @safe_autocomplete
     async def _promote_type_ac(self, interaction: discord.Interaction, current: str):
         return await _type_autocomplete(interaction, current)
 
     @demote.autocomplete("type")
+    @safe_autocomplete
     async def _demote_type_ac(self, interaction: discord.Interaction, current: str):
         return await _type_autocomplete(interaction, current)
 

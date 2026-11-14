@@ -15,6 +15,23 @@ Entry fields:
 
 CHANGES = [
     {
+        "date": "2026-11-14",
+        "title": "Fix: autocomplete options sometimes not showing",
+        "tags": ["Fix", "Commands", "Database"],
+        "summary": "Dropdown options (giveaway end/reroll/delete, spawner types, taskbooks, change types, poll end, activity check, vouches) no longer randomly come up empty.",
+        "details": [
+            "Discord drops an autocomplete answer if the bot takes over about 3 seconds. The giveaway one loaded every giveaway ever made, which got slower over time.",
+            "Giveaway autocomplete now searches and limits to 25 inside MongoDB, and the giveaways collection has indexes.",
+            "Every autocomplete is wrapped with a 2.5 second safety limit: if it is slow or errors it logs a line starting with [autocomplete] instead of failing silently.",
+        ],
+        "commands": ["/giveaway end", "/giveaway reroll", "/giveaway delete", "/poll end",
+                     "/strike add", "/strike list", "/promote", "/demote"],
+        "files": ["utils/autocomplete.py", "database/models.py", "cogs/giveaways.py",
+                  "cogs/taskbook.py", "cogs/staff_activity.py", "cogs/spawner_panel.py",
+                  "cogs/staff_strikes.py", "cogs/utilities.py", "cogs/changes.py",
+                  "cogs/vouches.py"],
+    },
+    {
         "date": "2026-11-13",
         "title": "Sidebar: Bot Changes moved under Setup Guide",
         "tags": ["Dashboard"],

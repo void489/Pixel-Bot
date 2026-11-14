@@ -73,6 +73,7 @@ from database.mongo import (
 )
 from utils.embeds import success_embed, error_embed, info_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from utils.spawner_math import parse_number, format_short, format_exact
 
 CREATE_TASK = "taskbook_create"
@@ -934,6 +935,7 @@ class Taskbook(commands.Cog):
         await ctx.send(embed=success_embed(f"Reset taskbook **#{t}**."), ephemeral=True)
 
     @taskbook_reset.autocomplete("target")
+    @safe_autocomplete
     async def _reset_autocomplete(self, interaction: discord.Interaction, current: str):
         choices = [app_commands.Choice(name="all — every taskbook", value="all")]
         for value, label in await self._number_autocomplete(interaction, current):
@@ -977,11 +979,13 @@ class Taskbook(commands.Cog):
         await self._change_sponsored(ctx, number, amount, -1)
 
     @taskbook_add.autocomplete("number")
+    @safe_autocomplete
     async def _add_number_autocomplete(self, interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name=l, value=v)
                 for v, l in await self._number_autocomplete(interaction, current)]
 
     @taskbook_remove.autocomplete("number")
+    @safe_autocomplete
     async def _remove_number_autocomplete(self, interaction: discord.Interaction, current: str):
         return [app_commands.Choice(name=l, value=v)
                 for v, l in await self._number_autocomplete(interaction, current)]

@@ -53,6 +53,7 @@ from discord.ext import commands, tasks
 from database import models
 from utils.embeds import success_embed, error_embed, info_embed
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from utils import ticket_core
 from utils.spawner_math import parse_amount, parse_price, format_short, format_both
 from cogs.tickets import (
@@ -942,6 +943,7 @@ class Spawners(commands.Cog):
         await ctx.send(embed=embed)
 
     @spawnercalc.autocomplete("spawner_type")
+    @safe_autocomplete
     async def spawnercalc_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._type_autocomplete(interaction, current)
 
@@ -1022,6 +1024,7 @@ class Spawners(commands.Cog):
         ), ephemeral=True)
 
     @spawner_setprice.autocomplete("spawner_type")
+    @safe_autocomplete
     async def spawner_setprice_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._type_autocomplete(interaction, current)
 
@@ -1088,6 +1091,7 @@ class Spawners(commands.Cog):
         ), ephemeral=True)
 
     @spawner_remove.autocomplete("spawner_type")
+    @safe_autocomplete
     async def spawner_remove_autocomplete(self, interaction: discord.Interaction, current: str):
         return await self._type_autocomplete(interaction, current)
 

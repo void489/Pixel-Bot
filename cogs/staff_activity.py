@@ -28,6 +28,7 @@ from database import models
 from utils import changes_core as core
 from utils import strikes_core as sc
 from utils.permissions import command_check
+from utils.autocomplete import safe_autocomplete
 from cogs.staff_strikes import give_strike
 
 DEFAULT_EMOJI = "💎"
@@ -337,6 +338,7 @@ class StaffActivity(commands.Cog):
         await ctx.send(embed=embed, ephemeral=True)
 
     @activitycheck.autocomplete("check")
+    @safe_autocomplete
     async def _check_autocomplete(self, interaction: discord.Interaction, current: str):
         if interaction.guild is None:
             return []
