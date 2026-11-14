@@ -16,6 +16,17 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-14",
+        "title": "Fix: deleted application types stuck in the application queue",
+        "tags": ["Fix", "Staff"],
+        "summary": "Pending applications whose application type was deleted no longer show in the queue.",
+        "details": [
+            "Those submissions can't be decided without their type, so they used to sit in the dropdown forever and block /applications removequeue.",
+            "They are only hidden from the queue. Nothing is deleted; they stay in the dashboard's submission history.",
+        ],
+        "files": ["cogs/applications.py"],
+    },
+    {
+        "date": "2026-11-14",
         "title": "Fix: autocomplete options sometimes not showing",
         "tags": ["Fix", "Commands", "Database"],
         "summary": "Dropdown options (giveaway end/reroll/delete, spawner types, taskbooks, change types, poll end, activity check, vouches) no longer randomly come up empty.",

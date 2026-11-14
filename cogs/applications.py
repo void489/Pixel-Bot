@@ -809,13 +809,18 @@ def build_panel_view(apps: list) -> discord.ui.View:
 # ---------------------------------------------------------------------------
 
 async def _queue_gather(guild: discord.Guild) -> list:
+    # Submissions whose application type was deleted can never be decided (the decision
+    # needs the type's roles / channels), so they are left out of the queue. Nothing is
+    # deleted from the database; they stay in the dashboard's submission history.
+    live_ids = {str(a["_id"]) for a in await models.get_applications(guild.id)}
     return [{
         "id": str(s["_id"]),
         "created_at": s.get("created_at"),
         "label": f"{s.get('application_name') or 'Application'} — "
                  f"{s.get('applicant_name') or s.get('applicant_id')}",
         "desc": f"Application • {rq.age(s.get('created_at'))}",
-    } for s in await models.get_pending_submissions(guild.id)]
+    } for s in await models.get_pending_submissions(guild.id)
+        if str(s.get("application_id")) in live_ids]
 
 
 async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, item_id: str):
