@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Share transcript</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -18,13 +19,13 @@
     table.tr th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
     table.tr td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
     .dim { color:var(--text-muted); }
-    .pill { padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
-    .pill.active { background:rgba(34,197,94,.15); color:#4ade80; }
+    .pill { padding:2px 8px; border-radius:var(--r-sm); font-size:11px; font-weight:700; }
+    .pill.active { background:rgba(var(--ok-rgb),.15); color:var(--ok); }
     .pill.expired, .pill.revoked { background:rgba(140,140,149,.15); color:var(--text-muted); }
     .link-box { display:flex; gap:6px; align-items:center; }
     .link-box input { flex:1; min-width:260px; font-size:12px; }
-    .msg-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
-    .msg-err { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
+    .msg-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
+    .msg-err { background:rgba(var(--danger-rgb),.12); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; max-width:900px; }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
@@ -35,7 +36,7 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">🔗 Share #{{ t.channel_name }}</div>
+  <div class="page-title">Share #{{ t.channel_name }}</div>
   <p class="page-sub"><a href="{{ back_url }}">← Back to the transcript</a> · Links open this one transcript, read-only, without a login.</p>
 
   {% if message %}<div class="msg-ok">{{ message }}</div>{% endif %}

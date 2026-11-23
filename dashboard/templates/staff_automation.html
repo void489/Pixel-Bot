@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Staff Automation</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -15,10 +16,10 @@
     .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin:12px 0 6px; }
     .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
     .row { display:flex; gap:14px; flex-wrap:wrap; }
-    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
     .btn-xs { padding:8px 16px; font-size:13px; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; }
-    .btn-xs-accent { background:var(--accent); color:#fff; }
+    .btn-xs-accent { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
     .btn-xs-ghost { background:var(--bg-muted); color:var(--text-main); }
     .sw { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--text-bright); font-weight:600; margin:4px 0 10px; }
@@ -28,9 +29,9 @@
     th, td { padding:8px 8px; text-align:left; border-bottom:1px solid var(--border); vertical-align:middle; }
     th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
     td input[type=number] { width:90px; }
-    .pill { display:inline-block; border-radius:99px; padding:2px 10px; font-size:11px; font-weight:800; }
-    .p-on   { color:#fde68a; background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); }
-    .p-over { color:#93c5fd; background:rgba(59,130,246,.15); border:1px solid rgba(59,130,246,.4); }
+    .pill { display:inline-block; border-radius:var(--r-sm); padding:2px 10px; font-size:11px; font-weight:800; }
+    .p-on   { color:var(--warn); background:rgba(var(--warn-rgb),.12); border:1px solid rgba(var(--warn-rgb),.4); }
+    .p-over { color:var(--info); background:rgba(var(--info-rgb),.15); border:1px solid rgba(var(--info-rgb),.4); }
     .empty { color:var(--text-muted); font-size:13px; font-style:italic; }
     .scroll-x { overflow-x:auto; }
   </style>
@@ -43,11 +44,11 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">🤖 Staff Automation</div>
+  <div class="page-title">Staff Automation</div>
   <p class="page-sub">Promotion suggestions, probation reviews and a weekly staff report, all driven by your <strong>Taskbooks</strong> and the <strong>Changes</strong> ladders. Nobody is ever promoted automatically: the bot posts a card with buttons and a person decides.</p>
 
-  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
-  {% if queued %}<div class="banner-ok">📤 Report queued. It should appear in the channel in a few seconds.</div>{% endif %}
+  {% if saved %}<div class="banner-ok">Saved.</div>{% endif %}
+  {% if queued %}<div class="banner-ok">Report queued. It should appear in the channel in a few seconds.</div>{% endif %}
   {% if error == 'tz' %}<div class="banner-error">Pick a valid timezone.</div>{% endif %}
   {% if error == 'channel' %}<div class="banner-error">Pick a report channel first.</div>{% endif %}
   {% if error == 'member' %}<div class="banner-error">Enter a valid member ID and type.</div>{% endif %}
@@ -55,7 +56,7 @@
 
   <!-- ============================ General ============================ -->
   <div class="t-section">
-    <div class="sec-title">📬 Where cards are posted</div>
+    <div class="sec-title">Where cards are posted</div>
     <div class="sec-sub">Promotion suggestions and probation reviews are posted here. Anyone with the <strong>Manage Roles</strong> permission can press the buttons.</div>
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="general">
@@ -71,7 +72,7 @@
             {% for r in roles %}<option value="{{ r.id }}" {% if r.id|string == cfg.ping_role_id %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
           </select></div>
       </div>
-      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">💾 Save</button></div>
+      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">Save</button></div>
     </form>
   </div>
 
@@ -79,7 +80,7 @@
 
   <!-- ============================ Suggestions ============================ -->
   <div class="t-section">
-    <div class="sec-title">📈 Promotion suggestions</div>
+    <div class="sec-title">Promotion suggestions</div>
     <div class="sec-sub">For each rank, set what a member needs from their taskbook. When someone holding the rank below meets <em>all</em> the filled-in requirements, the bot posts one suggestion with <strong>Promote</strong> and <strong>Dismiss</strong> buttons. Leave a rank at 0 for no suggestion. Members on LOA are skipped. A minimum rating only counts once they have at least that many ratings.</div>
     {% if not types %}<div class="empty">Set up a type and ladder on the Changes page first.</div>{% else %}
     <form method="POST">
@@ -106,14 +107,14 @@
       </div>
       {% endfor %}
       <div class="hint">Needs the management channel above, and staff need a taskbook. Lifetime totals start counting from when this feature was installed (existing taskbooks start from their current numbers).</div>
-      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">💾 Save suggestions</button></div>
+      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">Save suggestions</button></div>
     </form>
     {% endif %}
   </div>
 
   <!-- ============================ Probation ============================ -->
   <div class="t-section">
-    <div class="sec-title">🧪 Probation</div>
+    <div class="sec-title">Probation</div>
     <div class="sec-sub">New staff are reviewed after a set number of days. The start date is when their taskbook was created, unless you set a different date below. When it ends the bot posts their stats and strikes with <strong>Pass</strong> and <strong>Extend {{ 7 }} days</strong> buttons. Only members holding a rank above the base rung are reviewed. 0 days = no probation for that type.</div>
     {% if not types %}<div class="empty">Set up a type on the Changes page first.</div>{% else %}
     <form method="POST">
@@ -124,7 +125,7 @@
         <div><label class="t-label">{{ t.name }} (days)</label><input type="number" min="0" max="365" name="prob__{{ t.id }}" value="{{ t.days }}" style="width:110px;"></div>
         {% endfor %}
       </div>
-      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">💾 Save probation</button></div>
+      <div style="margin-top:14px;"><button class="btn-xs btn-xs-accent" type="submit">Save probation</button></div>
     </form>
 
     <div class="sec-title" style="margin-top:26px; font-size:15px;">Currently on probation</div>
@@ -155,7 +156,7 @@
 
   <!-- ============================ Weekly report ============================ -->
   <div class="t-section">
-    <div class="sec-title">📋 Weekly staff report</div>
+    <div class="sec-title">Weekly staff report</div>
     <div class="sec-sub">One summary posted automatically each week: tickets handled and closed per person, new ratings, strikes given and expired, activity checks held, promotions and demotions, and who is on LOA. Taskbook counters have no history, so the bot saves a snapshot each week and reports the difference: the <strong>first</strong> report shows running totals and real weekly numbers start from the second. If the bot is offline at the scheduled time it posts late (as long as it's within a day).</div>
     <form method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="report">
@@ -176,12 +177,12 @@
           </select></div>
       </div>
       <div style="margin-top:14px; display:flex; gap:8px;">
-        <button class="btn-xs btn-xs-accent" type="submit">💾 Save report settings</button>
+        <button class="btn-xs btn-xs-accent" type="submit">Save report settings</button>
       </div>
     </form>
     <form method="POST" style="margin-top:10px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="section" value="report_now">
-      <button class="btn-xs btn-xs-ghost" type="submit">📤 Post a report now</button>
+      <button class="btn-xs btn-xs-ghost" type="submit">Post a report now</button>
       <span class="hint">Uses the saved channel. A "post now" report doesn't affect next week's numbers.</span>
     </form>
   </div>

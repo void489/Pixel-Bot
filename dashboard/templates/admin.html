@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>Pixel Bot · Admin</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 64px; }
@@ -13,9 +14,10 @@
     .admin-top a { color: var(--text-muted); font-size: 13px; font-weight: 600; text-decoration: none; }
     .admin-top a:hover { color: var(--danger); }
     .banner { padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
-    .banner.ok  { background: rgba(61,220,132,.12); border: 1px solid rgba(61,220,132,.35); color: #7ee2a8; }
-    .banner.bad { background: var(--danger-tint); border: 1px solid rgba(255,92,106,.35); color: #fca5a5; }
-    .sec { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 24px; margin-bottom: 24px; }
+    .banner.ok  { background: rgba(61,220,132,.12); border: 1px solid rgba(61,220,132,.35); color: var(--ok); }
+    .banner.bad { background: var(--danger-tint); border: 1px solid rgba(var(--danger-rgb),.35); color: var(--danger); }
+    .sec { position: relative; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 24px; margin-bottom: 24px; }
+    .sec::before { content: ""; position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; background: var(--accent); }
     .sec h2 { margin: 0 0 4px; font-size: 17px; color: var(--text-bright); }
     .sec .sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 16px; }
     .act-grid { display: grid; grid-template-columns: 170px 1fr 190px; gap: 12px; align-items: end; }
@@ -23,12 +25,12 @@
     .act-grid input, .act-grid select, .search input { width: 100%; box-sizing: border-box; }
     .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
     .status-line { font-size: 12.5px; margin-top: 10px; }
-    .status-line.ok { color: #7ee2a8; } .status-line.bad { color: var(--accent-light); }
+    .status-line.ok { color: var(--ok); } .status-line.bad { color: var(--accent-light); }
     .search input { max-width: 340px; margin-bottom: 16px; }
     .server-list { display: flex; flex-direction: column; gap: 10px; }
     .server-row { display: flex; align-items: center; gap: 14px; background: var(--bg-overlay);
                   border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 16px; }
-    .server-row img.icon, .server-row .icon-fallback { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; object-fit: cover; }
+    .server-row img.icon, .server-row .icon-fallback { width: 42px; height: 42px; border-radius: 0; flex-shrink: 0; object-fit: cover; }
     .server-row .icon-fallback { display: flex; align-items: center; justify-content: center;
                                  background: var(--bg-muted); color: var(--text-muted); font-weight: 800; }
     .server-info { flex: 1; min-width: 0; }
@@ -40,8 +42,8 @@
               font-family: inherit; text-decoration: none; display: inline-block; line-height: 1.2;
               background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border-hi); }
     .btn-sm:hover { background: var(--bg-surface); color: var(--text-bright); text-decoration: none; }
-    .btn-sm.danger { background: var(--danger-tint); border-color: rgba(255,92,106,.35); color: #fca5a5; }
-    .btn-sm.danger:hover { background: rgba(255,92,106,.22); }
+    .btn-sm.danger { background: var(--danger-tint); border-color: rgba(var(--danger-rgb),.35); color: var(--danger); }
+    .btn-sm.danger:hover { background: rgba(var(--danger-rgb),.22); }
     .btn-sm:disabled { opacity: .5; cursor: default; }
     .invite-result { font-size: 12px; margin-top: 6px; word-break: break-all; }
     .invite-result.error { color: var(--accent-light); }
@@ -58,19 +60,20 @@
 <body>
 <div class="admin-wrap">
   <div class="admin-top">
-    <h1>🛠️ Admin</h1>
-    <a href="{{ url_for('admin.logout') }}">🚪 Log out</a>
+    <h1>Admin</h1>
+    <a href="{{ url_for('admin.logout') }}">Log out</a>
   </div>
 
-  {% if args.get('activity') == 'queued' %}<div class="banner ok">✅ Saved. The bot applies it within a few seconds.</div>{% endif %}
-  {% if args.get('left') == '1' %}<div class="banner ok">✅ The bot left that server.</div>{% endif %}
+  {% if args.get('activity') == 'queued' %}<div class="banner ok">Saved. The bot applies it within a few seconds.</div>{% endif %}
+  {% if args.get('left') == '1' %}<div class="banner ok">The bot left that server.</div>{% endif %}
   {% set errs = {
       'leave': "Couldn't leave that server - check the logs.",
       'notinserver': "The bot isn't in that server any more.",
       'badvalue': "That activity/status isn't valid.",
+      'badurl': "Streaming needs a https Twitch or YouTube link.",
       'badid': "Bad server id.",
       'csrf': "Your page was out of date - try again." } %}
-  {% if args.get('error') in errs %}<div class="banner bad">⚠️ {{ errs[args.get('error')] }}</div>{% endif %}
+  {% if args.get('error') in errs %}<div class="banner bad">{{ errs[args.get('error')] }}</div>{% endif %}
 
   <div class="sec">
     <h2>Bot activity</h2>
@@ -96,6 +99,11 @@
           </select>
         </div>
       </div>
+      <div id="a-url-wrap" style="margin-top:12px;" hidden>
+        <label for="a-url" style="font-size:12px;font-weight:700;">Stream link</label>
+        <input id="a-url" type="url" name="url" maxlength="300" value="{{ presence.url }}" placeholder="https://twitch.tv/yourchannel" style="width:100%;box-sizing:border-box;">
+        <div class="hint">Twitch or YouTube link. Discord only shows the purple Streaming badge for these.</div>
+      </div>
       <div style="margin-top:14px;"><button type="submit">Save activity</button></div>
     </form>
     {% if presence.last %}
@@ -110,7 +118,7 @@
     <div class="sub">Every server the bot is in. Manage opens that server's dashboard without needing Discord permissions.</div>
 
     {% if guilds_failed %}
-      <div class="banner bad">⚠️ Couldn't get the server list from Discord. Reload in a moment.</div>
+      <div class="banner bad">Couldn't get the server list from Discord. Reload in a moment.</div>
     {% elif guilds %}
     <div class="search"><input type="text" id="server-search" placeholder="Filter by name or ID…" oninput="filterServers()"></div>
     <div class="server-list" id="server-list">
@@ -145,6 +153,11 @@
 </div>
 
 <script>
+(function () {
+  var type = document.getElementById('a-type'), wrap = document.getElementById('a-url-wrap'), url = document.getElementById('a-url');
+  function sync() { var on = type.value === 'streaming'; wrap.hidden = !on; url.required = on && document.getElementById('a-text').value.trim() !== ''; }
+  type.addEventListener('change', sync); document.getElementById('a-text').addEventListener('input', sync); sync();
+})();
 const CSRF = {{ csrf | tojson }};
 
 function filterServers() {
@@ -175,11 +188,11 @@ async function getInvite(guildId, btn) {
       el.appendChild(document.createTextNode('  (24h, single use)'));
     } else {
       el.className = 'invite-result error';
-      el.textContent = '⚠️ ' + (data.error || 'Could not create an invite.');
+      el.textContent = '' + (data.error || 'Could not create an invite.');
     }
   } catch (e) {
     el.className = 'invite-result error';
-    el.textContent = '⚠️ Request failed: ' + e;
+    el.textContent = 'Request failed: ' + e;
   }
   btn.disabled = false;
   btn.textContent = original;

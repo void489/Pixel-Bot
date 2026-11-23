@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <title>Pixel Bot · Admin Login</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .login-wrap { max-width: 400px; margin: 90px auto; padding: 0 20px; }
     .login-wrap h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 26px; color: var(--text-bright); }
     .login-wrap p { color: var(--text-muted); font-size: 13px; margin: 0 0 14px; }
     .err { padding: 10px 14px; border-radius: var(--r-sm); margin-bottom: 14px; font-size: 13px; font-weight: 600;
-           background: var(--danger-tint); border: 1px solid rgba(255,92,106,.35); color: #fca5a5; }
+           background: var(--danger-tint); border: 1px solid rgba(var(--danger-rgb),.35); color: var(--danger); }
     .login-wrap input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
     .login-wrap button { width: 100%; }
   </style>

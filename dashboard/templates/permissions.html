@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Pixel Bot · Command Permissions</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; min-width:0; overflow-y:auto; padding:0 24px; background:var(--bg-base); }
@@ -13,8 +14,8 @@
     .pg-meta { font-size:13px; font-weight:400; color:var(--text-muted); }
     .pg-mixed { background:rgba(254,231,92,0.14); color:#fee75c; }
     .pg-blurb { margin:10px 0 14px; }
-    .pg-group-form { margin:0 0 18px; padding:14px; border:1px solid var(--accent-tint); border-radius:8px; }
-    .pg-locked { background:rgba(88,101,242,0.16); color:#a5b4fc; }
+    .pg-group-form { margin:0 0 18px; padding:14px; border:1px solid var(--accent-tint); border-radius:var(--r-md); }
+    .pg-locked { background:rgba(var(--blurple-rgb),0.16); color:var(--blurple); }
     .lock-row { margin-top:8px; font-size:12px; color:var(--text-muted); }
     .pg-hint { font-size:12px; color:var(--text-muted); margin:6px 0 10px; }
   </style>
@@ -27,10 +28,10 @@
   <div class="t-content">
   <div class="container">
 
-    {% if saved %}<div class="embed success"><strong>✅ Saved.</strong></div>{% endif %}
+    {% if saved %}<div class="embed success"><strong>Saved.</strong></div>{% endif %}
 
     <div class="embed">
-      <h2>⚙️ Custom Command Symbol</h2>
+      <h2>Custom Command Symbol</h2>
       <p>Default is <code>/</code>. You can change it to anything (<code>?</code>, <code>!</code>, etc) for text-based invocation. Slash commands (<code>/</code>) always keep working too.</p>
       <form method="POST" action="{{ url_for('dashboard.set_prefix', guild_id=guild_id) }}">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -41,9 +42,9 @@
     </div>
 
     <div class="embed">
-      <h2>🔐 Command Permissions</h2>
+      <h2>Command Permissions</h2>
       <p>Commands are grouped like the help menus. Until a command is enabled and given roles, <strong>only Administrators</strong> can use it (new commands always start that way).
-      Use a group's <strong>Apply to all</strong> to set every command in it at once, or open the group to set single commands. Tick <strong>🔒 Not affected by group changes</strong> on a command (then Save) to keep it out of the group's Apply: it stays in its group and keeps its own settings.</p>
+      Use a group's <strong>Apply to all</strong> to set every command in it at once, or open the group to set single commands. Tick <strong>Not affected by group changes</strong> on a command (then Save) to keep it out of the group's Apply: it stays in its group and keeps its own settings.</p>
     </div>
 
     {% for g in groups %}
@@ -51,7 +52,7 @@
       <summary>
         <span class="pg-title">{{ g.emoji }} {{ g.label }}</span>
         <span class="pg-meta">{{ g.commands|length }} command(s) · {{ g.enabled_count }} enabled</span>
-        {% if g.locked_count %}<span class="badge pg-locked">🔒 {{ g.locked_count }} not affected</span>{% endif %}
+        {% if g.locked_count %}<span class="badge pg-locked">{{ g.locked_count }} not affected</span>{% endif %}
         {% if not g.commands %}<span class="badge off">EMPTY</span>
         {% elif not g.unlocked_count %}<span class="badge pg-locked">ALL NOT AFFECTED</span>
         {% elif g.mixed %}<span class="badge pg-mixed">MIXED</span>
@@ -78,7 +79,7 @@
           {% endfor %}
         </select>
         <div class="pg-hint">Hold Ctrl/Cmd to select several. Applying replaces each command's roles with this list{% if g.mixed %} (the commands currently differ, so this box starts empty){% endif %}.</div>
-        <button type="submit">Apply to {{ g.unlocked_count }}{% if g.locked_count %} (skips {{ g.locked_count }} 🔒){% endif %}</button>
+        <button type="submit">Apply to {{ g.unlocked_count }}{% if g.locked_count %} (skips {{ g.locked_count }} ){% endif %}</button>
       </form>
       {% else %}
       <p class="pg-hint">Every command here is marked <strong>not affected</strong>, so the whole-group form is hidden. Untick the lock on a command to include it again.</p>
@@ -94,7 +95,7 @@
         </tr>
         {% for cmd in g.commands %}
         <tr>
-          <td><code>/{{ cmd.command }}</code>{% if cmd.group_locked %} <span class="badge pg-locked" title="Group Apply skips this command">🔒</span>{% endif %}</td>
+          <td><code>/{{ cmd.command }}</code>{% if cmd.group_locked %} <span class="badge pg-locked" title="Group Apply skips this command"></span>{% endif %}</td>
           <td>{{ cmd.cog }}</td>
           <td>
             {% if cmd.enabled %}<span class="badge on">ENABLED</span>{% else %}<span class="badge off">ADMIN ONLY</span>{% endif %}
@@ -109,7 +110,7 @@
                 <input type="checkbox" name="enabled" {% if cmd.enabled %}checked{% endif %}> Enabled
               </label>
               <div class="lock-row"><label class="toggle" style="display:inline-flex;" title="Group Apply to all skips this command. It stays in its group.">
-                <input type="checkbox" name="group_locked" {% if cmd.group_locked %}checked{% endif %}> 🔒 Not affected by group changes
+                <input type="checkbox" name="group_locked" {% if cmd.group_locked %}checked{% endif %}> Not affected by group changes
               </label></div>
               <select name="allowed_roles" multiple style="min-height:70px;margin-top:6px;">
                 {% for r in roles %}

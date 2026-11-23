@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Role Panels</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -18,14 +19,14 @@
     .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
     .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
     .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
-    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
     .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
-    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
-    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-info { background:rgba(88,101,242,.12); border:1px solid rgba(88,101,242,.4); color:#a5b4fc; padding:12px 16px; border-radius:var(--r-md); margin-bottom:22px; font-size:12px; line-height:1.6; }
-    .banner-soft { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:10px 14px; border-radius:var(--r-md); margin-top:14px; font-size:12px; line-height:1.6; }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(var(--danger-rgb),.3); }
+    .banner-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-info { background:rgba(var(--blurple-rgb),.12); border:1px solid rgba(var(--blurple-rgb),.4); color:var(--blurple); padding:12px 16px; border-radius:var(--r-md); margin-bottom:22px; font-size:12px; line-height:1.6; }
+    .banner-soft { background:rgba(var(--warn-rgb),.12); border:1px solid rgba(var(--warn-rgb),.4); color:var(--warn); padding:10px 14px; border-radius:var(--r-md); margin-top:14px; font-size:12px; line-height:1.6; }
     .grid2 { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; }
     textarea { width:100%; min-height:80px; }
     .entry { display:grid; grid-template-columns:minmax(150px,1.4fr) minmax(110px,1fr) 90px minmax(120px,1.2fr) 120px 34px; gap:8px; align-items:center; margin-bottom:8px; }
@@ -33,11 +34,11 @@
     .entry-head .entry { margin-bottom:0; }
     .rp-form[data-style="buttons"]  .only-dropdown { visibility:hidden; }
     .rp-form[data-style="dropdown"] .only-buttons  { visibility:hidden; }
-    .chip { display:inline-block; padding:2px 9px; border-radius:99px; font-size:11px; font-weight:700; }
-    .chip-ok   { background:rgba(34,197,94,.15); color:#4ade80; }
+    .chip { display:inline-block; padding:2px 9px; border-radius:var(--r-sm); font-size:11px; font-weight:700; }
+    .chip-ok   { background:rgba(var(--ok-rgb),.15); color:var(--ok); }
     .chip-off  { background:rgba(140,140,149,.18); color:#a1a1aa; }
-    .chip-bad  { background:rgba(239,68,68,.15); color:#f87171; }
-    .chip-tag  { background:rgba(88,101,242,.15); color:#a5b4fc; }
+    .chip-bad  { background:rgba(var(--danger-rgb),.15); color:var(--danger); }
+    .chip-tag  { background:rgba(var(--blurple-rgb),.15); color:var(--blurple); }
     .actions { display:flex; gap:10px; margin-top:20px; flex-wrap:wrap; align-items:center; }
     @media (max-width:900px) { .entry { grid-template-columns:1fr 1fr; } .entry-head { display:none; } }
   </style>
@@ -58,14 +59,14 @@
 <div class="entry">
   <select name="entry_role">{{ role_options(e.role_id) }}</select>
   <input type="text" name="entry_label" value="{{ e.label }}" maxlength="80" placeholder="(role name)">
-  <input type="text" name="entry_emoji" value="{{ e.emoji }}" maxlength="64" placeholder="🎮 or &lt;:name:id&gt;">
+  <input type="text" name="entry_emoji" value="{{ e.emoji }}" maxlength="64" placeholder="or &lt;:name:id&gt;">
   <input class="only-dropdown" type="text" name="entry_desc" value="{{ e.description }}" maxlength="100" placeholder="short description">
   <select class="only-buttons" name="entry_style">
     {% for v, l in [('secondary','Grey'),('primary','Blue'),('success','Green'),('danger','Red')] %}
     <option value="{{ v }}" {% if (e.button_style or 'secondary') == v %}selected{% endif %}>{{ l }}</option>
     {% endfor %}
   </select>
-  <button type="button" class="btn-xs btn-xs-ghost" data-remove-row title="Remove">✕</button>
+  <button type="button" class="btn-xs btn-xs-ghost" data-remove-row title="Remove">Remove</button>
 </div>
 {%- endmacro %}
 
@@ -135,29 +136,29 @@
 
   <div class="actions">
     <button class="btn-xs btn-xs-accent" type="submit" name="action" value="post" style="padding:9px 18px;font-size:13px;">
-      📨 Save &amp; {% if p.message_id and not is_new %}update message{% else %}post{% endif %}
+      Save &amp; {% if p.message_id and not is_new %}update message{% else %}post{% endif %}
     </button>
-    <button class="btn-xs btn-xs-ghost" type="submit" name="action" value="save" style="padding:9px 18px;font-size:13px;">💾 Save only</button>
+    <button class="btn-xs btn-xs-ghost" type="submit" name="action" value="save" style="padding:9px 18px;font-size:13px;">Save only</button>
     {% if not is_new %}
     <button class="btn-xs btn-xs-danger" type="submit" name="action" value="delete" style="margin-left:auto;padding:9px 18px;font-size:13px;"
-            onclick="return confirm('Delete this panel and its message in Discord?');">🗑 Delete</button>
+            onclick="return confirm('Delete this panel and its message in Discord?');">Delete</button>
     {% endif %}
   </div>
 </form>
 {%- endmacro %}
 
 <div class="t-content">
-  <div class="page-title">🎭 Role Panels</div>
+  <div class="page-title">Role Panels</div>
   <p class="page-sub">Self-assign roles with <b>buttons</b> or a <b>dropdown menu</b>. Set them up here - there are no commands. (Emoji reaction roles still work with <code>/reactionrole</code>.)</p>
 
-  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
-  {% if posting %}<div class="banner-ok">📨 Saved. The bot is posting the panel - refresh in a few seconds to see the result below.</div>{% endif %}
-  {% if deleted %}<div class="banner-ok">🗑 Panel deleted.</div>{% endif %}
+  {% if saved %}<div class="banner-ok">Saved.</div>{% endif %}
+  {% if posting %}<div class="banner-ok">Saved. The bot is posting the panel - refresh in a few seconds to see the result below.</div>{% endif %}
+  {% if deleted %}<div class="banner-ok">Panel deleted.</div>{% endif %}
   {% if error %}
-  <div class="banner-error">❌
+  <div class="banner-error">
     {% if error == 'no_roles' %}Add at least one role before posting.
     {% elif error == 'no_channel' %}Pick a channel to post the panel in.
-    {% elif error == 'bad_emoji' %}One of the emojis isn't valid. Use a normal emoji (🎮) or a custom one like &lt;:name:123456789012345678&gt;.
+    {% elif error == 'bad_emoji' %}One of the emojis isn't valid. Use a normal emoji () or a custom one like &lt;:name:123456789012345678&gt;.
     {% elif error == 'too_many' %}A panel can have at most 25 roles.
     {% elif error == 'missing' %}That panel no longer exists.
     {% else %}Something in the form was invalid.{% endif %}
@@ -171,14 +172,14 @@
   </div>
 
   <details class="t-section" {% if not panels %}open{% endif %}>
-    <summary>➕ New panel <span class="chev">▶</span></summary>
+    <summary>New panel <span class="chev">▶</span></summary>
     <div class="t-body">{{ panel_form(blank, true) }}</div>
   </details>
 
   {% for p in panels %}
   <details class="t-section" {% if open_id == p._id|string %}open{% endif %}>
     <summary>
-      {{ '🔘' if p.style == 'buttons' else '🔽' }} {{ p.name }}
+      {{ '' if p.style == 'buttons' else '' }} {{ p.name }}
       <span class="chip chip-tag">{{ 'Buttons' if p.style == 'buttons' else 'Dropdown' }}</span>
       <span class="chip chip-tag">{{ 'One only' if p.mode == 'unique' else 'Multiple' }}</span>
       <span class="chip chip-tag">{{ p.entries|length }} role{{ '' if p.entries|length == 1 else 's' }}</span>
@@ -188,8 +189,8 @@
       <span class="chev">▶</span>
     </summary>
     <div class="t-body">
-      {% if p.post_error %}<div class="banner-error" style="margin-top:14px;">❌ Last post failed: {{ p.post_error }}</div>{% endif %}
-      {% if p.post_warning %}<div class="banner-soft">⚠️ {{ p.post_warning }}</div>{% endif %}
+      {% if p.post_error %}<div class="banner-error" style="margin-top:14px;">Last post failed: {{ p.post_error }}</div>{% endif %}
+      {% if p.post_warning %}<div class="banner-soft">{{ p.post_warning }}</div>{% endif %}
       {% if p.message_id and p.posted_channel_id %}
       <div class="hint" style="margin-top:12px;">
         Live message:

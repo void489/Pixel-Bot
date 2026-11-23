@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Join Ad</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -39,22 +40,22 @@
     .check input { width:17px; height:17px; accent-color:var(--accent); flex:none; }
 
     .btn-xs { padding:6px 12px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
-    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
     .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
     .btn-xs-ghost:hover { background:var(--bg-overlay); }
-    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(var(--danger-rgb),.3); }
     .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
     .btn-xs[disabled] { opacity:.5; cursor:default; }
 
-    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-warn { background:rgba(234,179,8,.10); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:12px 16px; border-radius:var(--r-md); margin-bottom:16px; font-size:12.5px; line-height:1.6; }
+    .banner-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(var(--warn-rgb),.10); border:1px solid rgba(var(--warn-rgb),.4); color:var(--warn); padding:12px 16px; border-radius:var(--r-md); margin-bottom:16px; font-size:12.5px; line-height:1.6; }
 
-    .sbadge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
-    .sbadge-success   { background:rgba(34,197,94,.15);  color:#4ade80; }
-    .sbadge-secondary { background:rgba(90,96,112,.2);   color:#9da3af; }
-    .sbadge-danger    { background:rgba(239,68,68,.15);  color:#f87171; }
+    .sbadge { display:inline-block; padding:2px 8px; border-radius:var(--r-md); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    .sbadge-success   { background:rgba(var(--ok-rgb),.15);  color:var(--ok); }
+    .sbadge-secondary { background:rgba(var(--ink-rgb),.12);   color:var(--text-muted); }
+    .sbadge-danger    { background:rgba(var(--danger-rgb),.15);  color:var(--danger); }
 
     /* ad tabs */
     .tabs { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; align-items:center; }
@@ -62,13 +63,13 @@
     .tab:hover { border-color:var(--border-hi); }
     .tab.active { border-color:var(--accent); background:var(--accent-tint); color:var(--text-bright); }
     .dot { width:8px; height:8px; border-radius:50%; background:#5a6070; flex:none; }
-    .dot.active { background:#4ade80; } .dot.finished { background:#f87171; }
+    .dot.active { background:var(--ok); } .dot.finished { background:var(--danger); }
 
     .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:10px; }
     .stat { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:10px 12px; }
     .stat b { display:block; font-size:20px; color:var(--text-bright); }
     .stat span { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; }
-    .bar { height:7px; background:var(--bg-muted); border-radius:99px; overflow:hidden; margin:6px 0 4px; }
+    .bar { height:7px; background:var(--bg-muted); border-radius:var(--r-sm); overflow:hidden; margin:6px 0 4px; }
     .bar > i { display:block; height:100%; background:var(--accent); }
     .fail-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
     .fail-table td { padding:6px 8px 6px 0; border-top:1px solid var(--border); color:var(--text-main); vertical-align:top; }
@@ -78,23 +79,23 @@
     .btn-row input.blabel { flex:0 0 38%; }
 
     /* discord-like preview */
-    .dc { background:#313338; border-radius:8px; padding:16px; color:#dbdee1; font-family:'gg sans','Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.4; word-break:break-word; }
+    .dc { background:#313338; border-radius:var(--r-md); padding:16px; color:#dbdee1; font-family:'gg sans','Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:15px; line-height:1.4; word-break:break-word; }
     .dc a { color:#00a8fc; text-decoration:none; } .dc a:hover { text-decoration:underline; }
     .dc .who { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
-    .dc .av { width:36px; height:36px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; flex:none; }
+    .dc .av { width:36px; height:36px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--on-accent); flex:none; }
     .dc .nm { font-weight:600; color:#fff; } .dc .bot { background:#5865f2; color:#fff; font-size:10px; font-weight:600; padding:1px 5px; border-radius:3px; margin-left:6px; }
     .dc h1 { font-size:1.5em; margin:8px 0 2px; color:#fff; } .dc h2 { font-size:1.25em; margin:8px 0 2px; color:#fff; } .dc h3 { font-size:1.1em; margin:6px 0 2px; color:#fff; }
     .dc .q { border-left:4px solid #4e5058; padding-left:10px; margin:1px 0; }
-    .dc .sm { font-size:12px; color:#949ba4; }
+    .dc .sm { font-size:12px; color:var(--text-muted); }
     .dc .ts { background:#4e5058; border-radius:3px; padding:0 3px; }
-    .dc .embed { display:flex; max-width:432px; background:#2b2d31; border-left:4px solid #5865f2; border-radius:4px; padding:10px 14px 12px 12px; margin-top:6px; gap:12px; }
+    .dc .embed { display:flex; max-width:432px; background:#2b2d31; border-left:4px solid #5865f2; border-radius:var(--r-md); padding:10px 14px 12px 12px; margin-top:6px; gap:12px; }
     .dc .embed .etitle { font-weight:700; color:#fff; margin-bottom:4px; }
     .dc .embed .edesc { font-size:14px; }
-    .dc .embed .efoot { font-size:12px; color:#949ba4; margin-top:8px; }
-    .dc .embed img.eimg { width:100%; border-radius:4px; margin-top:10px; display:block; }
-    .dc .embed img.ethumb { width:64px; height:64px; border-radius:4px; object-fit:cover; flex:none; }
+    .dc .embed .efoot { font-size:12px; color:var(--text-muted); margin-top:8px; }
+    .dc .embed img.eimg { width:100%; border-radius:var(--r-md); margin-top:10px; display:block; }
+    .dc .embed img.ethumb { width:64px; height:64px; border-radius:var(--r-md); object-fit:cover; flex:none; }
     .dc .btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
-    .dc .btns span { background:#4e5058; color:#fff; font-size:14px; font-weight:500; padding:6px 14px; border-radius:4px; }
+    .dc .btns span { background:#4e5058; color:#fff; font-size:14px; font-weight:500; padding:6px 14px; border-radius:var(--r-md); }
     .test-msg { font-size:12px; margin-top:8px; }
     .ph-list { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px; color:var(--text-muted); margin-top:6px; }
     .ph-list code { color:var(--accent-light); }
@@ -110,14 +111,14 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">📣 Join Ad</div>
+  <div class="page-title">Join Ad</div>
   <p class="page-sub">DM new members an ad when they join. Everything here is set from the dashboard - there are no commands for it.</p>
 
-  {% if saved %}<div class="banner-ok">✅ Saved. Changes apply to the next member who joins.</div>{% endif %}
+  {% if saved %}<div class="banner-ok">Saved. Changes apply to the next member who joins.</div>{% endif %}
   {% if error %}<div class="banner-error">Couldn't save - the page sent something unreadable. Reload and try again.</div>{% endif %}
 
   <div class="banner-warn">
-    ⚠️ <strong>Discord can restrict bots that mass-DM.</strong> Many members have DMs closed and some will report ads as spam.
+    <strong>Discord can restrict bots that mass-DM.</strong> Many members have DMs closed and some will report ads as spam.
     The queue, daily cap and "skip young accounts" settings below exist to keep this safe - lower the daily cap rather than raising it.
   </div>
 
@@ -128,7 +129,7 @@
     <!-- ============ campaign settings ============ -->
     <div class="t-section">
       <div class="t-section-head">
-        <h2>⚙️ Settings (apply to every ad)</h2>
+        <h2>Settings (apply to every ad)</h2>
         <label class="check"><input type="checkbox" data-g="enabled"> Join Ad is ON</label>
       </div>
 
@@ -199,14 +200,14 @@
     <!-- ============ ads ============ -->
     <div class="t-section">
       <div class="t-section-head">
-        <h2>🪧 Ads</h2>
+        <h2>Ads</h2>
         <span class="tip">Each join gets <strong>one</strong> enabled ad, picked at random (higher weight = shown more often).</span>
       </div>
       <div class="tabs" id="tabs"></div>
       <div id="editor"></div>
     </div>
 
-    <button class="btn-xs btn-xs-accent" type="submit" style="padding:10px 20px;font-size:13px;">💾 Save Settings</button>
+    <button class="btn-xs btn-xs-accent" type="submit" style="padding:10px 20px;font-size:13px;">Save Settings</button>
   </form>
 </div>
 
@@ -352,7 +353,7 @@
       </div>
       ${line ? `<div class="tip">${line}</div>` : ''}${bar}
       ${fails ? `<table class="fail-table"><tr><td colspan="3" class="t-label" style="border:0">Recent failures</td></tr>${fails}</table>` : ''}
-      ${canRestart ? `<div style="margin-top:10px"><button type="button" class="btn-xs btn-xs-ghost" id="restart">🔄 Restart campaign (resets counters &amp; timer)</button></div>` : ''}`;
+      ${canRestart ? `<div style="margin-top:10px"><button type="button" class="btn-xs btn-xs-ghost" id="restart">Restart campaign (resets counters &amp; timer)</button></div>` : ''}`;
   }
 
   function renderEditor() {
@@ -415,8 +416,8 @@
         <div class="dc" id="preview"></div>
         <div class="ph-list">${BOOT.placeholders.map(([k, d]) => `<code>${esc(k)}</code><span>${esc(d)}</span>`).join('')}</div>
         <div class="btn-row" style="margin-top:14px">
-          <button type="button" class="btn-xs btn-xs-accent" id="test">📨 Send me a test DM</button>
-          <button type="button" class="btn-xs btn-xs-danger" id="del">🗑 Delete ad</button>
+          <button type="button" class="btn-xs btn-xs-accent" id="test">Send me a test DM</button>
+          <button type="button" class="btn-xs btn-xs-danger" id="del">Delete ad</button>
         </div>
         <div class="test-msg" id="test-msg"></div>
         <div style="margin-top:22px"><label class="t-label">Results</label>${campaignBox(a)}</div>
@@ -455,7 +456,7 @@
 
   function renderButtons() {
     const a = cur(); const wrap = $('#btns');
-    wrap.innerHTML = a.buttons.map((b, i) => `<div class="btn-row"><input type="text" class="blabel" maxlength="80" placeholder="Label" value="${esc(b.label)}" data-bi="${i}" data-bk="label"><input type="text" placeholder="https://..." value="${esc(b.url)}" data-bi="${i}" data-bk="url"><button type="button" class="btn-xs btn-xs-danger" data-rm="${i}">✕</button></div>`).join('');
+    wrap.innerHTML = a.buttons.map((b, i) => `<div class="btn-row"><input type="text" class="blabel" maxlength="80" placeholder="Label" value="${esc(b.label)}" data-bi="${i}" data-bk="label"><input type="text" placeholder="https://..." value="${esc(b.url)}" data-bi="${i}" data-bk="url"><button type="button" class="btn-xs btn-xs-danger" data-rm="${i}">Remove</button></div>`).join('');
     wrap.querySelectorAll('input').forEach(el => el.oninput = () => { a.buttons[+el.dataset.bi][el.dataset.bk] = el.value; preview(); });
     wrap.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { a.buttons.splice(+b.dataset.rm, 1); renderButtons(); preview(); });
     const add = $('#add-btn'); if (add) add.classList.toggle('hidden', a.buttons.length >= L.max_buttons);
@@ -467,7 +468,7 @@
       const r = await fetch(`/guild/${GUILD}/join-ads/test`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': {{ csrf_token()|tojson }} }, body: JSON.stringify({ ad: cur() }) });
       const j = await r.json().catch(() => ({}));
       out.style.color = j.ok ? '#4ade80' : '#f87171';
-      out.textContent = j.ok ? '✅ Sent - check your DMs.' : (j.error || 'Failed.');
+      out.textContent = j.ok ? 'Sent - check your DMs.' : (j.error || 'Failed.');
     } catch (e) { out.style.color = '#f87171'; out.textContent = 'Couldn\'t reach the dashboard.'; }
     btn.disabled = false;
   }

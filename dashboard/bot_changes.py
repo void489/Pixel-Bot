@@ -1,3 +1,4 @@
+
 """Data for the dashboard's "Bot Changes" page (sidebar -> Bot Changes).
 
 EVERY change made to this bot gets an entry here - whoever makes it (a person or an AI).
@@ -14,6 +15,22 @@ Entry fields:
 """
 
 CHANGES = [
+    {
+        "date": "2026-11-22",
+        "title": "New dashboard look and Streaming status",
+        "tags": ["Dashboard", "Admin"],
+        "summary": "The whole dashboard has a new look (Pixel Lab: square corners, one lime accent, pixel headings) with a light and a dark mode, and the admin page can now set a Streaming activity.",
+        "details": [
+            "Every dashboard page, the public home page, the legal pages and the admin pages share one design system, and phones get a scrolling top menu and card-style tables.",
+            "Light / dark switch button: top of the page on phones, bottom of the left menu on desktop. The choice is remembered in the browser.",
+            "Admin -> Bot activity: new activity type Streaming. It needs a https Twitch or YouTube link (Discord only shows the Streaming badge for those). The status list now calls Invisible \"Offline (invisible)\".",
+            "New logo, favicon, site banner and Discord banner.",
+        ],
+        "files": [
+            "dashboard/static/style.css", "dashboard/static/script.js", "dashboard/static/theme-init.js", "dashboard/static/logo.png",
+            "dashboard/static/favicon.ico", "dashboard/templates/*.html", "dashboard/admin.py", "cogs/admin_tools.py",
+        ],
+    },
     {
         "date": "2026-11-14",
         "title": "Fix: deleted application types stuck in the application queue",
@@ -126,7 +143,7 @@ CHANGES = [
             "Same private view and Accept Report / Reject Report buttons as before.",
             "Only Admins and the report staff role can open items.",
             "With the queue on, decided reports are still logged in the old report channel (if set).",
-            "Off by default: with no queue set, reports post to the report channel as before.",
+            "Off by default: with no queue set, requests post to the request channel as before.",
         ],
         "commands": ["/vouches setreportqueue", "/vouches removereportqueue"],
         "files": ["cogs/vouches.py", "utils/review_queue_core.py", "database/models.py"],

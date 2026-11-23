@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Ticket Ratings</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -23,7 +24,7 @@
     .dist i { display:block; width:14px; background:var(--accent, #5865F2); border-radius:3px 3px 0 0; min-height:2px; opacity:.85; }
     .dist-lbl { display:flex; gap:4px; font-size:10px; color:var(--text-muted); }
     .dist-lbl em { width:14px; text-align:center; font-style:normal; }
-    .low { color:#f87171; } .mid { color:#fbbf24; } .high { color:#4ade80; }
+    .low { color:var(--danger); } .mid { color:var(--warn); } .high { color:var(--ok); }
     .cmt { padding:12px 0; border-bottom:1px solid var(--border); font-size:13px; color:var(--text-bright); }
     .cmt small { color:var(--text-muted); display:block; margin-bottom:4px; }
     /* phones: each table row becomes a small card */
@@ -31,7 +32,7 @@
       .tbl-wrap { overflow-x:visible; }
       table.stack, table.stack tbody { display:block; }
       table.stack thead, table.stack tr:has(th) { display:none; }
-      table.stack tr { display:block; border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:10px; }
+      table.stack tr { display:block; border:1px solid var(--border); border-radius:var(--r-md); padding:8px 14px; margin-bottom:10px; }
       table.stack td { display:flex; justify-content:space-between; align-items:center; gap:12px; border:0; padding:5px 0; white-space:normal; text-align:right; }
       table.stack td::before { content:attr(data-label); color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; text-align:left; }
       table.stack td.num { width:auto; }
@@ -49,7 +50,7 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">⭐ Ticket Ratings</div>
+  <div class="page-title">Ticket Ratings</div>
   <p class="page-sub">When a claimed ticket closes, the opener gets 1–5 buttons in their close DM. The rating counts for the staff member who claimed it. Averages also show on each staff member's taskbook and in <code>/staffprofile</code> (from 3 ratings). Deleting a review removes it from those too.</p>
 
   <div class="range" style="margin-bottom:18px;">
@@ -81,7 +82,7 @@
           <td data-label="Ratings">{{ r.count }}</td>
           <td data-label="Spread (1 → 5)">
             <div>
-            <div class="dist">{% for n in [1,2,3,4,5] %}<i style="height:{{ (r.dist[n] * 100 // r.max_dist) }}%" title="{{ n }}★: {{ r.dist[n] }}"></i>{% endfor %}</div>
+            <div class="dist">{% for n in [1,2,3,4,5] %}<i style="height:{{ (r.dist[n] * 100 // r.max_dist) }}%" title="{{ n }}: {{ r.dist[n] }}"></i>{% endfor %}</div>
             <div class="dist-lbl">{% for n in [1,2,3,4,5] %}<em>{{ r.dist[n] }}</em>{% endfor %}</div>
             </div>
           </td>
@@ -94,7 +95,7 @@
 
   <div class="t-section">
     <h2 style="margin-bottom:8px;">Latest reviews</h2>
-    {% if deleted %}<p class="hint" style="color:#4ade80;margin-bottom:8px;">Review deleted.</p>{% endif %}
+    {% if deleted %}<p class="hint" style="color:var(--ok);margin-bottom:8px;">Review deleted.</p>{% endif %}
     {% if not reviews %}
       <div class="empty">No reviews in this period.</div>
     {% else %}
@@ -105,9 +106,9 @@
           <input type="hidden" name="form_type" value="delete_rating">
           <input type="hidden" name="rating_id" value="{{ c.id }}">
           <input type="hidden" name="days" value="{{ days }}">
-          <button class="btn-xs btn-xs-danger" type="submit">🗑️ Delete</button>
+          <button class="btn-xs btn-xs-danger" type="submit">Delete</button>
         </form>
-        <small>{{ '⭐' * c.rating }} · for <b>{{ c.staff }}</b>{% if c.ticket %} · #{{ c.ticket }}{% endif %}{% if c.when %} · {{ c.when.strftime('%Y-%m-%d %H:%M') }}{% endif %}</small>
+        <small>{{ '' * c.rating }} · for <b>{{ c.staff }}</b>{% if c.ticket %} · #{{ c.ticket }}{% endif %}{% if c.when %} · {{ c.when.strftime('%Y-%m-%d %H:%M') }}{% endif %}</small>
         {% if c.text %}{{ c.text }}{% else %}<span style="color:var(--text-muted)">No comment</span>{% endif %}
       </div>
       {% endfor %}

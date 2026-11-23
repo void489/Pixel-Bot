@@ -29,9 +29,18 @@ MIN_SECRET_LEN = 16
 PRESENCE_TASK = "bot_presence_apply"
 
 ACTIVITY_TYPES = [("playing", "Playing"), ("watching", "Watching"),
-                  ("listening", "Listening to"), ("competing", "Competing in")]
+                  ("listening", "Listening to"), ("competing", "Competing in"),
+                  ("streaming", "Streaming")]
 STATUSES = [("online", "Online"), ("idle", "Idle"),
-            ("dnd", "Do not disturb"), ("invisible", "Invisible")]
+            ("dnd", "Do not disturb"), ("invisible", "Offline (invisible)")]
+# Discord only shows the purple "Streaming" badge for Twitch and YouTube links.
+STREAM_HOSTS = ("twitch.tv", "www.twitch.tv", "youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be")
+
+
+def _valid_stream_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    u = urlparse(url)
+    return u.scheme == "https" and (u.hostname or "").lower() in STREAM_HOSTS and len(url) <= 300
 MAX_ACTIVITY_LEN = 128
 
 _fail_lock = threading.Lock()
@@ -190,6 +199,7 @@ def admin_page():
             "type": doc.get("type") or "playing",
             "text": doc.get("text") or "",
             "status": doc.get("status") or "online",
+            "url": doc.get("url") or "",
             "last": doc.get("last_result"),
         },
         activity_types=ACTIVITY_TYPES,
@@ -206,12 +216,17 @@ def set_activity():
     a_type = request.form.get("type", "playing")
     status = request.form.get("status", "online")
     text = (request.form.get("text") or "").strip()[:MAX_ACTIVITY_LEN]
+    url = (request.form.get("url") or "").strip()
     if a_type not in dict(ACTIVITY_TYPES) or status not in dict(STATUSES):
         return redirect(url_for("admin.admin_page", error="badvalue"))
+    if a_type == "streaming" and text and not _valid_stream_url(url):
+        return redirect(url_for("admin.admin_page", error="badurl"))
+    if a_type != "streaming":
+        url = ""
 
     dashboard_db.get_db().bot_settings.update_one(
         {"_id": "presence"},
-        {"$set": {"type": a_type, "text": text, "status": status,
+        {"$set": {"type": a_type, "text": text, "status": status, "url": url,
                   "updated_at": datetime.now(timezone.utc)},
          "$unset": {"last_result": ""}},
         upsert=True,

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Live Tickets</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -14,8 +15,8 @@
     table.lt th { text-align:left; color:var(--text-muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
     table.lt td { padding:10px; border-bottom:1px solid var(--border); color:var(--text-bright); vertical-align:middle; }
     .dim { color:var(--text-muted); }
-    .pill { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; background:rgba(88,101,242,.15); color:#c7d2fe; }
-    .pill.wait { background:rgba(245,158,11,.15); color:#fbbf24; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:var(--r-sm); font-size:11px; font-weight:700; background:rgba(var(--blurple-rgb),.15); color:var(--blurple); }
+    .pill.wait { background:rgba(245,158,11,.15); color:var(--warn); }
     @media (max-width:640px) { body .t-section { padding:14px; } body .page-title { font-size:22px; } }
     .empty { padding:30px; text-align:center; color:var(--text-muted); font-size:13px; }
   </style>
@@ -28,7 +29,7 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">💬 Live Tickets</div>
+  <div class="page-title">Live Tickets</div>
   <p class="page-sub">Open tickets you can read and answer from here. Turn on <b>Live replies</b> in a panel's settings (Tickets page) to see its tickets.
     Replies are posted by the bot with your name, and don't count for staff points.</p>
 

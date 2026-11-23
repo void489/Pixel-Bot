@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Ticket Manager</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -40,13 +41,13 @@
     .t-card-title { font-weight:600; font-size:14px; color:var(--text-bright); margin-bottom:4px; }
     .t-card-meta  { color:var(--text-muted); font-size:12px; line-height:1.6; }
     .t-card-actions { display:flex; gap:6px; flex-shrink:0; }
-    .tag { display:inline-block; background:var(--accent-tint); border:1px solid rgba(34,197,94,0.3); color:var(--accent-light); font-size:11px; padding:2px 7px; border-radius:99px; margin:2px 2px 0 0; }
+    .tag { display:inline-block; background:var(--accent-tint); border:1px solid rgba(var(--ok-rgb),0.3); color:var(--accent-light); font-size:11px; padding:2px 7px; border-radius:var(--r-sm); margin:2px 2px 0 0; }
 
-    .sbadge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
-    .sbadge-primary   { background:rgba(34,197,94,.2);  color:#86efac; }
-    .sbadge-secondary { background:rgba(90,96,112,.2);   color:#9da3af; }
-    .sbadge-success   { background:rgba(34,197,94,.15);  color:#4ade80; }
-    .sbadge-danger    { background:rgba(239,68,68,.15);  color:#f87171; }
+    .sbadge { display:inline-block; padding:2px 7px; border-radius:var(--r-md); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
+    .sbadge-primary   { background:rgba(var(--ok-rgb),.2);  color:var(--ok); }
+    .sbadge-secondary { background:rgba(var(--ink-rgb),.12);   color:var(--text-muted); }
+    .sbadge-success   { background:rgba(var(--ok-rgb),.15);  color:var(--ok); }
+    .sbadge-danger    { background:rgba(var(--danger-rgb),.15);  color:var(--danger); }
 
     .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
     .t-label:first-child { margin-top:0; }
@@ -60,11 +61,11 @@
     select[multiple] { min-height:96px; background-image:none; padding-right:13px; }
 
     .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
-    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
     .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
     .btn-xs-ghost:hover { background:var(--bg-overlay); }
-    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(var(--danger-rgb),.3); }
     .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
 
     .m-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; align-items:center; justify-content:center; }
@@ -73,9 +74,9 @@
     .m-box h3 { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:18px; }
     .m-footer { margin-top:20px; display:flex; gap:8px; justify-content:flex-end; }
 
-    .banner-warn { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:14px 18px; border-radius:var(--r-md); margin-bottom:22px; font-size:13px; line-height:1.6; }
+    .banner-warn { background:rgba(var(--danger-rgb),.12); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); padding:14px 18px; border-radius:var(--r-md); margin-bottom:22px; font-size:13px; line-height:1.6; }
     .banner-warn code { background:rgba(0,0,0,.3); padding:1px 5px; border-radius:3px; }
-    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
 
     .cat-mode-row { display:flex; gap:14px; margin-bottom:8px; font-size:12px; color:var(--text-muted); }
     .cat-mode-row label { display:flex; align-items:center; gap:5px; cursor:pointer; }
@@ -92,41 +93,41 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">🎫 Ticket Manager</div>
+  <div class="page-title">Ticket Manager</div>
   <p class="page-sub">Build ticket types and post panels to your channels.</p>
 
   {% if error == "thread_channel_required" %}
   <div class="banner-error">
-    <strong>⚠️ Pick a channel for thread tickets.</strong> Thread mode needs a text channel to open the threads in.
+    <strong>Pick a channel for thread tickets.</strong> Thread mode needs a text channel to open the threads in.
   </div>
   {% endif %}
 
   {% if error == "claim_question_required" %}
   <div class="banner-error">
-    <strong>⚠️ Claim tickets need at least one question.</strong> Fill in Question 1 and save again.
+    <strong>Claim tickets need at least one question.</strong> Fill in Question 1 and save again.
   </div>
   {% endif %}
 
   {% if error == "category_required" %}
   <div class="banner-error">
-    <strong>⚠️ Category is required.</strong> Pick an existing category or create a new one.
+    <strong>Category is required.</strong> Pick an existing category or create a new one.
   </div>
   {% endif %}
 
   {% if not channels %}
   <div class="banner-warn">
-    <strong>⚠️ The bot can't see this server's channels.</strong><br>
+    <strong>The bot can't see this server's channels.</strong><br>
     Make sure the bot is actually invited to this guild and has the
     <code>View Channels</code> permission. The dropdowns below will stay empty
     until that's fixed.
   </div>
   {% endif %}
 
-  {% if saved %}<div class="embed success"><strong>✅ Saved.</strong></div>{% endif %}
+  {% if saved %}<div class="embed success"><strong>Saved.</strong></div>{% endif %}
 
   <!-- Server-wide categories (claim / spawner / application tickets) -->
   <div class="t-section" style="margin-bottom:24px;">
-    <div class="t-section-head"><h2>📁 Server-wide Categories</h2></div>
+    <div class="t-section-head"><h2>Server-wide Categories</h2></div>
     <p class="hint" style="margin:-8px 0 12px;font-style:normal;">
       Used by any ticket type that has no category of its own. <b>Claim</b> and <b>Spawner</b> tickets only use it
       until you give them their own category on their cards below; <b>application</b> tickets never use it.
@@ -147,7 +148,7 @@
       <div class="hint">Type a name. If the category exists it's used; if not it's created when needed and removed again when it's empty.
         A spare is only used once the one before it holds 50 channels.</div>
       <div style="margin-top:14px;">
-        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save</button>
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save</button>
       </div>
     </form>
   </div>
@@ -156,7 +157,7 @@
     <!-- Ticket Types list -->
     <div class="t-section">
       <div class="t-section-head">
-        <h2>📋 Ticket Types</h2>
+        <h2>Ticket Types</h2>
         <button class="btn-xs btn-xs-accent" onclick="openTypeForm(null)">+ New Type</button>
       </div>
 
@@ -164,10 +165,10 @@
       <div class="t-card" style="border-style:dashed;">
         <div class="t-card-row">
           <div>
-            <div class="t-card-title">🎁 Claim <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-title">Claim <span class="sbadge sbadge-secondary">built-in</span></div>
             <div class="t-card-meta">
-              📁 {{ claim_view.main_name or "— server-wide category —" }}{% if claim_view.spare_names %} (+{{ claim_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
-              ❓ {{ claim_view.questions|length }} question(s)
+              {{ claim_view.main_name or "— server-wide category —" }}{% if claim_view.spare_names %} (+{{ claim_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              {{ claim_view.questions|length }} question(s)
             </div>
             <div style="margin-top:6px">
               {% for rid in claim_view.allow_role_ids %}
@@ -184,9 +185,9 @@
       <div class="t-card" style="border-style:dashed;">
         <div class="t-card-row">
           <div>
-            <div class="t-card-title">🌀 Spawner <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-title">Spawner <span class="sbadge sbadge-secondary">built-in</span></div>
             <div class="t-card-meta">
-              📁 {{ spawner_view.main_name or "— server-wide category —" }}{% if spawner_view.spare_names %} (+{{ spawner_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              {{ spawner_view.main_name or "— server-wide category —" }}{% if spawner_view.spare_names %} (+{{ spawner_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
               <a href="{{ url_for('dashboard.spawners_page', guild_id=guild_id) }}">Prices &amp; types →</a>
             </div>
             <div style="margin-top:6px">
@@ -209,19 +210,19 @@
         <div class="t-card-row">
           <div>
             <div class="t-card-title">
-              {{ t.emoji or "🎫" }} {{ t.name }}
+              {{ t.emoji or "" }} {{ t.name }}
               <span class="sbadge sbadge-{{ t.button_style or 'primary' }}">{{ t.button_style or 'primary' }}</span>
             </div>
             <div class="t-card-meta">
-              📁 {% if t.category_id and t.category_id.startswith("__new__:") %}
+              {% if t.category_id and t.category_id.startswith("__new__:") %}
                      <em>{{ t.category_id[8:] }} (will be created when the first ticket opens)</em>
                    {% else %}
                      {{ cat.name if cat else "— no category —" }}
                    {% endif %}
               {% if t.overflow_category_ids %}(+{{ t.overflow_category_ids|length }} spare){% endif %}&nbsp;|&nbsp;
-              🔔 {{ ping.name if ping else "— no ping —" }}&nbsp;|&nbsp;
-              ❓ {{ (t.questions or [])|length }} question(s)
-              {% if t.allow_blacklisted %}&nbsp;|&nbsp; ✅ blacklisted allowed{% endif %}
+              {{ ping.name if ping else "— no ping —" }}&nbsp;|&nbsp;
+              {{ (t.questions or [])|length }} question(s)
+              {% if t.allow_blacklisted %}&nbsp;|&nbsp; blacklisted allowed{% endif %}
             </div>
             <div style="margin-top:6px">
               {% for rid in (t.allow_role_ids or []) %}
@@ -284,7 +285,7 @@
     <!-- Ticket Type form -->
     <div class="t-section" id="type-form-section">
       <div class="t-section-head">
-        <h2 id="type-form-heading">✏️ New Ticket Type</h2>
+        <h2 id="type-form-heading">New Ticket Type</h2>
       </div>
       <form method="POST" id="type-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -394,7 +395,7 @@
         </div>
 
         <details class="adv ps" style="margin-top:18px;">
-          <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">⚙️ Ticket settings</summary>
+          <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">Ticket settings</summary>
 
           <label class="t-label">Required Roles - members need one of these to open a ticket</label>
           <select name="required_role_ids" id="f-required" multiple size="4">
@@ -475,7 +476,7 @@
           <label class="t-label"><input type="checkbox" name="priority_enabled" id="f-priority"> Priority: add a Priority button and show it in the ticket</label>
           <select name="priority_rename" id="f-priority-rename">
             <option value="off">Don't rename the channel</option>
-            <option value="emoji">Emoji prefix (🔴-name)</option>
+            <option value="emoji">Emoji prefix (-name)</option>
             <option value="prefix">Word prefix (urgent-name)</option>
           </select>
           <div class="hint">When the priority changes, the channel name gets a prefix. Staff can always use <code>/ticket priority</code>. Normal has no prefix. Discord limits channel renames to about 2 per 10 minutes.</div>
@@ -488,7 +489,7 @@
         </details>
 
         <div style="margin-top:18px; display:flex; gap:8px;">
-          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Type</button>
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Type</button>
           <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Clear</button>
         </div>
       </form>
@@ -496,7 +497,7 @@
 
     <!-- Claim settings form (built-in card) -->
     <div class="t-section hidden" id="claim-form-section">
-      <div class="t-section-head"><h2>✏️ Edit Claim Tickets</h2></div>
+      <div class="t-section-head"><h2>Edit Claim Tickets</h2></div>
       <form method="POST" id="claim-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="save_claim_settings">
@@ -546,7 +547,7 @@
         <div class="hint">Up to 5 questions, 45 characters each. Question 1 is required.</div>
 
         <div style="margin-top:18px; display:flex; gap:8px;">
-          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Claim Settings</button>
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Claim Settings</button>
           <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
         </div>
       </form>
@@ -554,7 +555,7 @@
 
     <!-- Spawner ticket settings form (built-in card) -->
     <div class="t-section hidden" id="spawner-form-section">
-      <div class="t-section-head"><h2>✏️ Edit Spawner Tickets</h2></div>
+      <div class="t-section-head"><h2>Edit Spawner Tickets</h2></div>
       <form method="POST" id="spawner-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="save_spawner_settings">
@@ -589,7 +590,7 @@
         </div>
 
         <div style="margin-top:18px; display:flex; gap:8px;">
-          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Spawner Settings</button>
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Spawner Settings</button>
           <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
         </div>
       </form>
@@ -603,7 +604,7 @@
     <!-- Panels list -->
     <div class="t-section">
       <div class="t-section-head">
-        <h2>📌 Panels</h2>
+        <h2>Panels</h2>
         <button class="btn-xs btn-xs-accent" onclick="openPanelForm(null)">+ New Panel</button>
       </div>
 
@@ -616,7 +617,7 @@
               <span class="sbadge sbadge-{{ 'success' if p.display_style == 'dropdown' else 'secondary' }}">{{ 'dropdown' if p.display_style == 'dropdown' else 'buttons' }}</span></div>
             <div style="margin-top:6px">
               {% for t in p.assigned_types %}
-              <span class="tag">{{ t.emoji or "🎫" }} {{ t.name }}</span>
+              <span class="tag">{{ t.emoji or "" }} {{ t.name }}</span>
               {% endfor %}
             </div>
           </div>
@@ -654,7 +655,7 @@
     <!-- Panel form -->
     <div class="t-section">
       <div class="t-section-head">
-        <h2 id="panel-form-heading">✏️ New Panel</h2>
+        <h2 id="panel-form-heading">New Panel</h2>
       </div>
       <form method="POST" id="panel-form">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -693,7 +694,7 @@
         <label class="t-label" id="panel-types-label">Ticket Types on this panel (max 5)</label>
         <select name="panel_type_ids" id="f-panel-types" multiple>
           {% for t in ticket_types %}
-          <option value="{{ t._id }}">{{ t.emoji or "🎫" }} {{ t.name }}</option>
+          <option value="{{ t._id }}">{{ t.emoji or "" }} {{ t.name }}</option>
           {% endfor %}
         </select>
 
@@ -714,7 +715,7 @@
         <div class="hint">Closing uses the normal close, so the transcript is saved and logged as usual. Only tickets opened from this panel are affected.</div>
 
         <div style="margin-top:18px; display:flex; gap:8px;">
-          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">💾 Save Panel</button>
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Panel</button>
           <button class="btn-xs btn-xs-ghost" type="button" onclick="openPanelForm(null)" style="padding:9px 14px;font-size:13px;">Clear</button>
         </div>
       </form>
@@ -722,8 +723,8 @@
   </div>
 
   <div class="t-section" style="margin-top:24px">
-    <div class="t-section-head"><h2>📄 Latest transcripts</h2>
-      <div class="toolbar"><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.transcripts_page', guild_id=guild_id) }}">🔎 Search all transcripts</a></div>
+    <div class="t-section-head"><h2>Latest transcripts</h2>
+      <div class="toolbar"><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.transcripts_page', guild_id=guild_id) }}">Search all transcripts</a></div>
     </div>
     <div class="tbl-scroll"><table class="cards">
       <tr><th>Channel</th><th>Opened By</th><th>Closed By</th><th>Reason</th><th>Date</th><th></th></tr>
@@ -763,7 +764,7 @@
       </p>
       <div class="m-footer">
         <button class="btn-xs btn-xs-ghost" type="button" onclick="closePostModal()" style="padding:9px 14px;font-size:13px;">Cancel</button>
-        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">📤 Save</button>
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save</button>
       </div>
     </form>
   </div>
@@ -780,8 +781,8 @@
     document.getElementById('f-category').value      = match ? match.id : '';
     document.getElementById('f-category-new').value  = match ? '' : name;
     if (!name)       status.textContent = "Type a category name. If it exists, tickets go there; if not, it's created for you.";
-    else if (match)  status.textContent = '✅ "' + match.name + '" already exists - tickets will be placed in it.';
-    else             status.textContent = '➕ "' + name + '" doesn\'t exist yet - it will be created automatically.';
+    else if (match)  status.textContent = '"' + match.name + '" already exists - tickets will be placed in it.';
+    else             status.textContent = '"' + name + '" doesn\'t exist yet - it will be created automatically.';
   }
 
   // Thread mode: the category isn't needed (tickets are threads), the channel is
@@ -842,7 +843,7 @@
 
   function openTypeForm(t) {
     showPane('type');
-    document.getElementById('type-form-heading').textContent = t ? '✏️ Edit Ticket Type' : '✏️ New Ticket Type';
+    document.getElementById('type-form-heading').textContent = t ? 'Edit Ticket Type' : 'New Ticket Type';
     document.getElementById('f-type-id').value  = t ? t._id : '';
     document.getElementById('f-name').value     = t ? t.name : '';
     document.getElementById('f-emoji').value    = t ? (t.emoji || '') : '';
@@ -914,7 +915,7 @@
   }
 
   function openPanelForm(p) {
-    document.getElementById('panel-form-heading').textContent = p ? '✏️ Edit Panel' : '✏️ New Panel';
+    document.getElementById('panel-form-heading').textContent = p ? 'Edit Panel' : 'New Panel';
     document.getElementById('f-panel-id').value    = p ? p._id : '';
     document.getElementById('f-panel-name').value  = p ? p.name : '';
     document.getElementById('f-panel-title').value = p ? (p.title || '') : '';

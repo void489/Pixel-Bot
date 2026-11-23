@@ -47,7 +47,7 @@
   {% for key, label, endpoint in items %}
   <a class="nav-item{% if active_nav == key %} active{% endif %}" href="{{ url_for(endpoint, guild_id=guild_id) }}">{{ label }}</a>
   {% endfor %}
-  <a class="nav-item logout" href="{{ url_for('dashboard.logout') }}">🚪 Log Out</a>
+  <a class="nav-item logout" href="{{ url_for('dashboard.logout') }}">Log Out</a>
   <div class="legal-links">
     <a href="{{ url_for('dashboard.privacy') }}" target="_blank" rel="noopener">Privacy Policy</a>
     <span>·</span>

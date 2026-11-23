@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Strikes</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -19,16 +20,16 @@
     .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
     .empty { color:var(--text-muted); font-size:13px; font-style:italic; padding:6px 2px; }
 
-    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-error { background:rgba(239,68,68,.15); border:1px solid #ef4444; color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:10px 14px; border-radius:var(--r-md); margin:10px 0; font-size:12px; line-height:1.6; }
+    .banner-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(var(--warn-rgb),.12); border:1px solid rgba(var(--warn-rgb),.4); color:var(--warn); padding:10px 14px; border-radius:var(--r-md); margin:10px 0; font-size:12px; line-height:1.6; }
 
     .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
-    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
     .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
     .btn-xs-ghost:hover { background:var(--bg-overlay); }
-    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(239,68,68,.3); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(var(--danger-rgb),.3); }
     .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
 
     .opts { display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
@@ -44,7 +45,7 @@
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th, td { padding:10px 10px; text-align:left; border-bottom:1px solid var(--border); vertical-align:top; }
     th { color:var(--text-muted); font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:.06em; }
-    .count-pill { display:inline-block; min-width:26px; text-align:center; font-weight:800; color:#fca5a5; background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.35); border-radius:99px; padding:2px 9px; }
+    .count-pill { display:inline-block; min-width:26px; text-align:center; font-weight:800; color:var(--danger); background:rgba(var(--danger-rgb),.15); border:1px solid rgba(var(--danger-rgb),.35); border-radius:var(--r-sm); padding:2px 9px; }
     details > summary { cursor:pointer; color:var(--text-muted); font-size:12px; }
     .strike-line { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px dashed var(--border); font-size:12px; color:var(--text-main); }
     .strike-line:last-child { border-bottom:none; }
@@ -61,12 +62,12 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">⚠️ Strikes</div>
+  <div class="page-title">Strikes</div>
   <p class="page-sub">Staff strikes are given with <code>/strike add</code> and counted per <strong>Change type</strong>, so a builder strike never counts against someone's staff record.
     Set what happens at each limit, choose when strikes reset, and delete or reset strikes below. Rules only run when a <strong>new</strong> strike is added, never when you edit them here.</p>
 
-  {% if saved %}<div class="banner-ok">✅ Saved.</div>{% endif %}
-  {% if cleared %}<div class="banner-ok">🧹 Done.</div>{% endif %}
+  {% if saved %}<div class="banner-ok">Saved.</div>{% endif %}
+  {% if cleared %}<div class="banner-ok">Done.</div>{% endif %}
   {% if error == 'type_missing' %}<div class="banner-error">That type no longer exists.</div>{% endif %}
   {% if error == 'rule_invalid' %}<div class="banner-error">A rule needs a strike count from 1 to {{ max_at }} and a number of ranks between 1 and the number of ranks above the base rung on that ladder.</div>{% endif %}
   {% if error == 'rules_full' %}<div class="banner-error">A type can have up to {{ max_rules }} rules. Remove one to add another.</div>{% endif %}
@@ -81,7 +82,7 @@
   {% for c in cards %}
   <div class="t-section" id="t-{{ c.id }}">
     <div class="type-head">
-      <div class="type-name">📶 {{ c.name }}</div>
+      <div class="type-name">{{ c.name }}</div>
       {% if c.total %}
       <form method="POST" style="margin:0;" onsubmit="return confirm('Reset ALL strikes in &quot;{{ c.name }}&quot; for everyone?');">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -116,14 +117,14 @@
         <span>DM the member when a strike expires</span>
       </label>
       {% if c.expiring %}
-      <div class="banner-warn">⚠️ {{ c.expiring }} existing strike{{ '' if c.expiring == 1 else 's' }} in this type {{ 'is' if c.expiring == 1 else 'are' }} already older than {{ c.cfg.expire_days }} day{{ '' if c.cfg.expire_days == 1 else 's' }} and will be removed on the next sweep.</div>
+      <div class="banner-warn">{{ c.expiring }} existing strike{{ '' if c.expiring == 1 else 's' }} in this type {{ 'is' if c.expiring == 1 else 'are' }} already older than {{ c.cfg.expire_days }} day{{ '' if c.cfg.expire_days == 1 else 's' }} and will be removed on the next sweep.</div>
       {% endif %}
       <button class="btn-xs btn-xs-accent" type="submit" style="margin-top:12px;">Save</button>
     </form>
 
     <div class="sub-head">Limits</div>
     {% if c.rungs < 2 %}
-    <div class="banner-warn">⚠️ This ladder has fewer than 2 roles, so demotion rules can't run. Add roles on the <a href="{{ url_for('dashboard.changes_page', guild_id=guild_id) }}">Changes</a> page first.</div>
+    <div class="banner-warn">This ladder has fewer than 2 roles, so demotion rules can't run. Add roles on the <a href="{{ url_for('dashboard.changes_page', guild_id=guild_id) }}">Changes</a> page first.</div>
     {% endif %}
     {% for r in c.cfg.rules %}
     <div class="rule-row">
@@ -202,7 +203,7 @@
   {% endfor %}
 
   <div class="t-section">
-    <div class="type-head"><div class="type-name">🧾 Recent deletions, resets &amp; expiries</div></div>
+    <div class="type-head"><div class="type-name">Recent deletions, resets &amp; expiries</div></div>
     <div class="hint" style="margin:0 0 12px;">Strikes that are deleted or reset (here or with <code>/strike remove</code>) are gone for good, so this is the only trail.</div>
     {% if audit %}
     <div class="scroll-x">

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Submission {{ submission._id }}</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -15,10 +16,10 @@
     .qa-q { color:var(--text-muted); font-size:12px; margin-bottom:6px; }
     .qa-a { color:var(--text-bright); font-size:14px; white-space:pre-wrap; }
     .qa-t { color:var(--text-muted); font-size:11px; margin-top:6px; font-style:italic; }
-    .chip { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
-    .chip-pending  { background:rgba(234,179,8,.15);  color:#facc15; }
-    .chip-accepted { background:rgba(34,197,94,.15);  color:#4ade80; }
-    .chip-denied   { background:rgba(239,68,68,.15);  color:#f87171; }
+    .chip { display:inline-block; padding:2px 8px; border-radius:var(--r-sm); font-size:11px; font-weight:700; }
+    .chip-pending  { background:rgba(var(--warn-rgb),.15);  color:var(--warn); }
+    .chip-accepted { background:rgba(var(--ok-rgb),.15);  color:var(--ok); }
+    .chip-denied   { background:rgba(var(--danger-rgb),.15);  color:var(--danger); }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
@@ -29,7 +30,7 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">📥 Submission <code>{{ submission._id }}</code></div>
+  <div class="page-title">Submission <code>{{ submission._id }}</code></div>
   <p class="page-sub">{{ app.name or 'Application' }} — applicant <code>{{ submission.applicant_id }}</code></p>
 
   <div class="t-section">
@@ -54,7 +55,7 @@
       <div class="qa-q">Q{{ loop.index }}. {{ qa.question }}</div>
       <div class="qa-a">{{ qa.answer }}</div>
       {% if qa.duration_seconds is not none %}
-      <div class="qa-t">⏱ {{ qa.duration_seconds }}s</div>
+      <div class="qa-t">{{ qa.duration_seconds }}s</div>
       {% endif %}
     </div>
     {% endfor %}

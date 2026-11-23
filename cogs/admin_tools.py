@@ -25,6 +25,7 @@ _TYPES = {
     "watching": discord.ActivityType.watching,
     "listening": discord.ActivityType.listening,
     "competing": discord.ActivityType.competing,
+    "streaming": discord.ActivityType.streaming,
 }
 _STATUSES = {
     "online": discord.Status.online,
@@ -57,7 +58,14 @@ async def apply_presence(bot: commands.Bot) -> tuple:
     activity = None
     if text:
         kind = _TYPES.get(doc.get("type"), discord.ActivityType.playing)
-        activity = discord.Activity(type=kind, name=fill_placeholders(text, bot)[:128])
+        name = fill_placeholders(text, bot)[:128]
+        url = (doc.get("url") or "").strip()
+        if kind == discord.ActivityType.streaming and url:
+            activity = discord.Streaming(name=name, url=url)
+        elif kind == discord.ActivityType.streaming:
+            activity = discord.Activity(type=discord.ActivityType.playing, name=name)  # no link saved: show as Playing
+        else:
+            activity = discord.Activity(type=kind, name=name)
 
     try:
         await bot.change_presence(status=status, activity=activity)

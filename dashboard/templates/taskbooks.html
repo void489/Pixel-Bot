@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pixel Bot · Taskbooks</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
@@ -15,16 +16,16 @@
     .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
     .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; line-height:1.5; }
     .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
-    .btn-xs-accent  { background:var(--accent); color:#fff; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
     .btn-xs-accent:hover { background:var(--accent-mid); }
-    .btn-xs-danger  { background:rgba(239,68,68,.15); color:#fca5a5; }
-    .btn-xs-danger:hover { background:rgba(239,68,68,.3); }
-    .btn-xs-warn    { background:rgba(234,179,8,.15); color:#fde68a; }
-    .btn-xs-warn:hover { background:rgba(234,179,8,.3); }
+    .btn-xs-danger  { background:rgba(var(--danger-rgb),.15); color:var(--danger); }
+    .btn-xs-danger:hover { background:rgba(var(--danger-rgb),.3); }
+    .btn-xs-warn    { background:rgba(var(--warn-rgb),.15); color:var(--warn); }
+    .btn-xs-warn:hover { background:rgba(var(--warn-rgb),.3); }
     .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
-    .banner-ok { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.4); color:#86efac; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-warn { background:rgba(234,179,8,.12); border:1px solid rgba(234,179,8,.4); color:#fde68a; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
-    .banner-error { background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.4); color:#fca5a5; padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-ok { background:rgba(var(--ok-rgb),.12); border:1px solid rgba(var(--ok-rgb),.4); color:var(--ok); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-warn { background:rgba(var(--warn-rgb),.12); border:1px solid rgba(var(--warn-rgb),.4); color:var(--warn); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+    .banner-error { background:rgba(var(--danger-rgb),.12); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
     .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:0 22px; }
     .add-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     .add-row select { flex:1; min-width:220px; }
@@ -40,7 +41,7 @@
       .tbl-wrap { overflow-x:visible; }
       table.stack, table.stack tbody { display:block; }
       table.stack thead, table.stack tr:has(th) { display:none; }
-      table.stack tr { display:block; border:1px solid var(--border); border-radius:10px; padding:8px 14px; margin-bottom:10px; }
+      table.stack tr { display:block; border:1px solid var(--border); border-radius:var(--r-md); padding:8px 14px; margin-bottom:10px; }
       table.stack td { display:flex; justify-content:space-between; align-items:center; gap:12px; border:0; padding:5px 0; white-space:normal; text-align:right; }
       table.stack td::before { content:attr(data-label); color:var(--text-muted); font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; text-align:left; }
       table.stack td.num { width:auto; }
@@ -57,24 +58,24 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">📒 Taskbooks</div>
+  <div class="page-title">Taskbooks</div>
   <p class="page-sub">A private thread per staff member with a live embed: tickets handled, renamed, closed, blacklists, sponsored amount and average ticket rating.
     Admins manage them with <code>/taskbook reset</code>, <code>/taskbook add</code> and <code>/taskbook remove</code>.</p>
 
-  {% if saved %}<div class="banner-ok">✅ Settings saved. The bot picks them up within about 30 seconds.</div>{% endif %}
-  {% if creating %}<div class="banner-ok">⏳ Creating the thread - refresh in a few seconds to see it in the list.</div>{% endif %}
-  {% if queued %}<div class="banner-ok">⏳ Working on it - reload this page in a few seconds to see the result.</div>{% endif %}
-  {% if task_result %}<div class="banner-ok">✅ {{ task_result }}</div>{% endif %}
-  {% if deleted %}<div class="banner-ok">🗑️ Taskbook deleted. Its thread is being removed.</div>{% endif %}
+  {% if saved %}<div class="banner-ok">Settings saved. The bot picks them up within about 30 seconds.</div>{% endif %}
+  {% if creating %}<div class="banner-ok">Creating the thread - refresh in a few seconds to see it in the list.</div>{% endif %}
+  {% if queued %}<div class="banner-ok">Working on it - reload this page in a few seconds to see the result.</div>{% endif %}
+  {% if task_result %}<div class="banner-ok">{{ task_result }}</div>{% endif %}
+  {% if deleted %}<div class="banner-ok">Taskbook deleted. Its thread is being removed.</div>{% endif %}
   {% if error == 'no_channel' %}<div class="banner-warn">Choose and save a taskbook channel first.</div>
   {% elif error == 'no_user' %}<div class="banner-warn">Pick a staff member first.</div>
   {% elif error == 'sync_setup' %}<div class="banner-warn">Pick a taskbook channel and staff role(s) and save first.</div>
   {% elif error == 'sync_members' %}<div class="banner-warn">Couldn't load the server's member list, so nothing was checked. Try again in a moment.</div>
   {% elif error == 'exists' %}<div class="banner-warn">That person already has a taskbook.</div>{% endif %}
-  {% for e in errors %}<div class="banner-error">❌ Couldn't create a taskbook: {{ e }}</div>{% endfor %}
+  {% for e in errors %}<div class="banner-error">Couldn't create a taskbook: {{ e }}</div>{% endfor %}
 
   <div class="t-section">
-    <div class="t-section-head"><h2>⚙️ Settings</h2></div>
+    <div class="t-section-head"><h2>Settings</h2></div>
     <form method="POST">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="form_type" value="save_settings">
@@ -115,18 +116,18 @@
 
   <div class="t-section">
     <div class="t-section-head">
-      <h2>🔁 Sync with staff roles</h2>
+      <h2>Sync with staff roles</h2>
       <form method="POST" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="sync_preview">
-        <button class="btn-xs btn-xs-accent" type="submit">🔍 Check what would change</button>
+        <button class="btn-xs btn-xs-accent" type="submit">Check what would change</button>
       </form>
     </div>
     <p class="hint" style="margin:-6px 0 12px;">Opens taskbooks for staff who don't have one, deletes the taskbook (stats and thread) of people who no longer have a staff role, left, or hold a manager role (the roles allowed in threads never get a taskbook), and recreates threads that are missing. You see exactly what will happen first - nothing changes until you confirm.</p>
     {% if sync_preview %}
       {% set nc = sync_preview.create|length %}{% set nd = sync_preview.delete|length %}{% set nr = sync_preview.repair|length %}
       {% if not (nc or nd or nr) %}
-        <div class="banner-ok">✅ Everything is in sync - nothing to do.</div>
+        <div class="banner-ok">Everything is in sync - nothing to do.</div>
       {% else %}
       <div class="banner-warn">Will create <b>{{ nc }}</b> · delete <b>{{ nd }}</b> · recreate <b>{{ nr }}</b> missing thread{{ '' if nr == 1 else 's' }}.</div>
       {% if nc %}<label class="t-label">Will be created</label><div class="hint" style="font-style:normal;">{{ sync_preview.create|join(', ') }}</div>{% endif %}
@@ -144,7 +145,7 @@
         </table></div>
         {% endif %}
         <div style="margin-top:14px;">
-          <button class="btn-xs btn-xs-danger" type="submit">✅ Confirm sync</button>
+          <button class="btn-xs btn-xs-danger" type="submit">Confirm sync</button>
           <a href="{{ url_for('dashboard.taskbooks_page', guild_id=guild_id) }}" class="btn-xs btn-xs-warn" style="text-decoration:none;">Cancel</a>
         </div>
       </form>
@@ -153,7 +154,7 @@
   </div>
 
   <div class="t-section">
-    <div class="t-section-head"><h2>➕ Add taskbook</h2></div>
+    <div class="t-section-head"><h2>Add taskbook</h2></div>
     {% if not cfg.staff_role_ids %}
       <div class="empty">Select and save a staff team role above first.</div>
     {% elif not candidates %}
@@ -173,22 +174,22 @@
 
   <div class="t-section">
     <div class="t-section-head">
-      <h2>📋 Taskbooks ({{ books|length }})</h2>
+      <h2>Taskbooks ({{ books|length }})</h2>
       <div class="toolbar">
         <form method="POST" style="display:inline">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="form_type" value="refresh_taskbooks">
-          <button class="btn-xs btn-xs-accent" type="submit" title="Redraw every embed without changing any numbers">🔄 Refresh taskbooks</button>
+          <button class="btn-xs btn-xs-accent" type="submit" title="Redraw every embed without changing any numbers">Refresh taskbooks</button>
         </form>
         <form method="POST" style="display:inline" onsubmit="return confirm('Count {{ uncounted }} old accepted blacklist(s) into the taskbooks?')">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="form_type" value="import_blacklists">
-          <button class="btn-xs btn-xs-accent" type="submit" title="Counts accepted /blacklist add requests from before the counter existed">📥 Import old blacklists ({{ uncounted }})</button>
+          <button class="btn-xs btn-xs-accent" type="submit" title="Counts accepted /blacklist add requests from before the counter existed">Import old blacklists ({{ uncounted }})</button>
         </form>
         <form method="POST" style="display:inline" onsubmit="return confirm('Reset ALL {{ books|length }} taskbooks to zero?{% if uncounted %} You still have {{ uncounted }} old blacklist(s) not imported - import them FIRST or they will be added again later.{% endif %}')">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="form_type" value="reset_all_taskbooks">
-          <button class="btn-xs btn-xs-warn" type="submit">♻️ Reset all taskbooks</button>
+          <button class="btn-xs btn-xs-warn" type="submit">Reset all taskbooks</button>
         </form>
       </div>
     </div>
@@ -218,13 +219,13 @@
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="form_type" value="reset_taskbook">
               <input type="hidden" name="number" value="{{ b.number }}">
-              <button class="btn-xs btn-xs-warn" type="submit">♻️ Reset</button>
+              <button class="btn-xs btn-xs-warn" type="submit">Reset</button>
             </form>
             <form method="POST" style="display:inline" onsubmit="return confirm('Delete taskbook #{{ b.number }}? Its thread will be deleted.')">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="form_type" value="delete_taskbook">
               <input type="hidden" name="number" value="{{ b.number }}">
-              <button class="btn-xs btn-xs-danger" type="submit">🗑️ Delete</button>
+              <button class="btn-xs btn-xs-danger" type="submit">Delete</button>
             </form>
           </td>
         </tr>
