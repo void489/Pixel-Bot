@@ -49,7 +49,7 @@
 </ul>
 
 <h2>7. Your choices</h2>
-<p>You can ask us to tell you what we hold about you, or to correct or delete it, by emailing <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> with your Discord username and user ID. We aim to reply within 30 days. Some records, such as moderation history, may be kept where there is a legitimate reason, such as keeping a community safe. You can also stop using the dashboard and revoke its access at any time in Discord under <em>Settings → Authorized Apps</em>, and you can ask a server's admins to remove the bot.</p>
+<p>You can ask us to tell you what we hold about you, or to correct or delete it, by emailing {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% elif support_url %}<a href="{{ support_url }}">our support server</a>{% else %}the bot owner{% endif %} with your Discord username and user ID. We aim to reply within 30 days. Some records, such as moderation history, may be kept where there is a legitimate reason, such as keeping a community safe. You can also stop using the dashboard and revoke its access at any time in Discord under <em>Settings → Authorized Apps</em>, and you can ask a server's admins to remove the bot.</p>
 
 <h2>8. Security</h2>
 <p>We take reasonable steps to protect the data we hold, including keeping bot tokens and database credentials private and requiring a Discord login with permission to manage a server before its settings can be seen. No online service is perfectly secure, so we cannot promise absolute security.</p>
@@ -61,5 +61,5 @@
 <p>We may update this policy from time to time. The "last updated" date at the top shows when it last changed. If you keep using the bot after a change, you accept the new version.</p>
 
 <h2>11. Contact</h2>
-<p>Questions or requests about this policy: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+<p>Questions or requests about this policy: {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% elif support_url %}<a href="{{ support_url }}">our support server</a>{% else %}the bot owner{% endif %}.</p>
 {% endblock %}

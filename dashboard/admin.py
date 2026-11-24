@@ -1,5 +1,7 @@
-"""/admin - owner-only page: set the bot's activity, see every server the bot is in,
-open any server's dashboard, make the bot leave, or get an invite.
+"""/admin - owner-only page with two tabs.
+  Main:    the bot's activity, and the public support server link + contact email.
+  Servers: every server the bot is in - open any server's dashboard, make the bot leave,
+           or get an invite.
 
 Switched off unless ALL of these are set in the environment (Railway variables):
     ADMIN_USERNAME, ADMIN_PASSWORD, DASHBOARD_SECRET_KEY (a real, fixed secret)
@@ -19,6 +21,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
 from config import settings
 from dashboard import botguilds
 from dashboard import db as dashboard_db
+from utils.site_settings import valid_email, valid_support_url
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -188,13 +191,19 @@ def logout():
 @admin_bp.route("/", strict_slashes=False)
 @require_admin()
 def admin_page():
-    guilds = botguilds.get_bot_guilds(force=True)
-    listed = sorted(guilds or [], key=lambda g: (g.get("name") or "").lower())
+    tab = "servers" if request.args.get("tab") == "servers" else "main"
+    guilds = None
+    listed = []
+    if tab == "servers":        # only ask Discord for the server list when it is shown
+        guilds = botguilds.get_bot_guilds(force=True)
+        listed = sorted(guilds or [], key=lambda g: (g.get("name") or "").lower())
     doc = dashboard_db.get_db().bot_settings.find_one({"_id": "presence"}) or {}
     return render_template(
         "admin.html",
+        tab=tab,
+        site=dashboard_db.get_site_settings(),
         guilds=listed,
-        guilds_failed=guilds is None,
+        guilds_failed=tab == "servers" and guilds is None,
         presence={
             "type": doc.get("type") or "playing",
             "text": doc.get("text") or "",
@@ -235,16 +244,29 @@ def set_activity():
     return redirect(url_for("admin.admin_page", activity="queued"))
 
 
+@admin_bp.route("/links", methods=["POST"])
+@require_admin()
+def set_links():
+    support_url = (request.form.get("support_url") or "").strip()
+    email = (request.form.get("contact_email") or "").strip()
+    if not valid_support_url(support_url):
+        return redirect(url_for("admin.admin_page", error="badsupport"))
+    if not valid_email(email):
+        return redirect(url_for("admin.admin_page", error="bademail"))
+    dashboard_db.save_site_settings(support_url, email)
+    return redirect(url_for("admin.admin_page", links="saved"))
+
+
 @admin_bp.route("/servers/<guild_id>/leave", methods=["POST"])
 @require_admin()
 def leave_server(guild_id):
     if not guild_id.isdigit():
-        return redirect(url_for("admin.admin_page", error="badid"))
+        return redirect(url_for("admin.admin_page", tab="servers", error="badid"))
     ok, msg = botguilds.leave_guild(guild_id)
     if ok:
-        return redirect(url_for("admin.admin_page", left="1"))
+        return redirect(url_for("admin.admin_page", tab="servers", left="1"))
     print(f"[admin] leave {guild_id} failed: {msg}")
-    return redirect(url_for("admin.admin_page", error="leave"))
+    return redirect(url_for("admin.admin_page", tab="servers", error="leave"))
 
 
 @admin_bp.route("/servers/<guild_id>/invite", methods=["POST"])

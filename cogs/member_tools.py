@@ -43,7 +43,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from config import constants, settings
+from config import constants
 from database import models
 from database.mongo import levels_col
 from utils import leveling_core
@@ -282,9 +282,10 @@ class MemberTools(commands.Cog):
         embed.add_field(name="Versions",
                         value=f"Python {platform.python_version()}\ndiscord.py {discord.__version__}")
         view = None
-        if settings.SUPPORT_URL.startswith(("http://", "https://")):
+        support_url = (await models.get_site_settings())["support_url"]
+        if support_url:
             view = discord.ui.View()
-            view.add_item(discord.ui.Button(label="Support", url=settings.SUPPORT_URL))
+            view.add_item(discord.ui.Button(label="Support", url=support_url))
         await ctx.send(embed=embed, view=view)
 
     # ======================================================================

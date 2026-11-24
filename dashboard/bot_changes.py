@@ -17,6 +17,24 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Admin page tabs, and support link + contact email moved to the admin page",
+        "tags": ["Admin", "Dashboard", "Members"],
+        "summary": "/admin now has two tabs: Main (bot activity and the new Links & contact section) and Servers (the server list). The support server link and contact email are no longer hardcoded: they are set on the admin page.",
+        "details": [
+            "Servers tab: the same list, filter, Manage, Get Invite and Leave as before. Discord is only asked for the server list when this tab is open, so Main loads faster.",
+            "Links & contact (Main tab): Support server link (must be https) and Contact email. Leave one empty to hide it. Both apply within seconds.",
+            "The Support link shows in /botinfo, the dashboard sidebar and footer, and the Setup Guide. The email shows on the public Privacy Policy and Terms pages; with no email they point to the support link instead.",
+            "The old SUPPORT_URL and CONTACT_EMAIL environment variables and their built-in defaults are gone. Until you set them on the admin page, the Support link and the email are hidden.",
+            "Stored in Mongo bot_settings (_id = site). New file utils/site_settings.py holds the checks.",
+        ],
+        "files": [
+            "dashboard/admin.py", "dashboard/templates/admin.html", "dashboard/db.py", "dashboard/routes.py",
+            "dashboard/templates/privacy.html", "dashboard/templates/terms.html", "cogs/member_tools.py",
+            "database/models.py", "utils/site_settings.py", "config/settings.py", ".env.example", "README.md",
+        ],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Dashboard menu reordered",
         "tags": ["Dashboard"],
         "summary": "The left menu is grouped by topic instead of one long mixed list. Setup Guide is first and Bot Changes second. No page was added, removed or renamed.",

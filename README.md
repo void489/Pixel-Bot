@@ -73,7 +73,7 @@ page (admin-only until enabled) and in `/help`, `/staffhelp` or `/admin help` ac
   `/suggestions approve|deny` (`cogs/staff_tools.py`).
 - **Admin**: `/nuke`, `/lockdown`, `/unlockdown`, `/suggestions setchannel`, `/birthday setchannel`.
 - Suggestions and birthdays need their channel set once with the two `setchannel` commands.
-  `/botinfo` shows a Support button if `SUPPORT_URL` is set in the environment.
+  `/botinfo` shows a Support button if a support server link is set on the `/admin` page (Main tab).
 
 ## Auto-mod, invite tracker, tempban, stat channels, reaction role modes
 All are `@command_check()` commands: they show on the dashboard's **Command Permissions** page
@@ -156,8 +156,8 @@ Links to both are in the footer of the dashboard home page and admin login, and 
 sidebar on every server page. Paste the two URLs into the Discord Developer Portal (your application
 -> General Information -> Terms of Service URL / Privacy Policy URL).
 
-- The contact email shown on both pages is `CONTACT_EMAIL` (env var, defaults to the owner's email in
-  `config/settings.py`). No phone number is shown.
+- The contact email shown on both pages is set on the `/admin` page (Main tab, stored in Mongo
+  `bot_settings`). Until one is set, the pages point to the support server link instead. No phone number is shown.
 - "Last updated" is the `LEGAL_UPDATED` string next to the routes in `dashboard/routes.py` - change it
   whenever you edit the wording.
 - If you add a feature that stores new kinds of data or uses a new third-party service, add it to

@@ -43,13 +43,7 @@ def dashboard_base_url() -> str:
 # standard invite is built from DISCORD_CLIENT_ID).
 BOT_INVITE_URL = (os.getenv("BOT_INVITE_URL") or "").strip()
 
-# Support server link (shown by /botinfo and on the dashboard). Override with SUPPORT_URL.
-SUPPORT_URL = (os.getenv("SUPPORT_URL") or "https://discord.gg/Z27SPJFECD").strip()
-
 # Admin page (/admin). Both must be set or the admin page stays switched off.
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME") or ""
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or ""
-
-# Contact address shown on the public Privacy Policy and Terms of Service pages.
-CONTACT_EMAIL = (os.getenv("CONTACT_EMAIL") or "xvoidx53@gmail.com").strip()
 

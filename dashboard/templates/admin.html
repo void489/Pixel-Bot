@@ -47,9 +47,17 @@
     .btn-sm:disabled { opacity: .5; cursor: default; }
     .invite-result { font-size: 12px; margin-top: 6px; word-break: break-all; }
     .invite-result.error { color: var(--accent-light); }
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 18px; margin-bottom: -1px; font-size: 13.5px; font-weight: 700; color: var(--text-muted);
+           text-decoration: none; border-bottom: 2px solid transparent; }
+    .tab:hover { color: var(--text-bright); text-decoration: none; }
+    .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); }
+    .links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .links-grid label { display: block; font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+    .links-grid input { width: 100%; box-sizing: border-box; }
     .empty { color: var(--text-muted); font-size: 13.5px; padding: 26px 0; text-align: center; }
     @media (max-width: 760px) {
-      .act-grid { grid-template-columns: 1fr; }
+      .act-grid, .links-grid { grid-template-columns: 1fr; }
       .server-row { flex-wrap: wrap; }
       .server-actions { width: 100%; justify-content: flex-start; }
     }
@@ -65,6 +73,7 @@
   </div>
 
   {% if args.get('activity') == 'queued' %}<div class="banner ok">Saved. The bot applies it within a few seconds.</div>{% endif %}
+  {% if args.get('links') == 'saved' %}<div class="banner ok">Saved. The support link and contact email apply right away.</div>{% endif %}
   {% if args.get('left') == '1' %}<div class="banner ok">The bot left that server.</div>{% endif %}
   {% set errs = {
       'leave': "Couldn't leave that server - check the logs.",
@@ -72,9 +81,17 @@
       'badvalue': "That activity/status isn't valid.",
       'badurl': "Streaming needs a https Twitch or YouTube link.",
       'badid': "Bad server id.",
+      'badsupport': "The support server link must be a https link (or empty).",
+      'bademail': "That email address doesn't look right (or leave it empty).",
       'csrf': "Your page was out of date - try again." } %}
   {% if args.get('error') in errs %}<div class="banner bad">{{ errs[args.get('error')] }}</div>{% endif %}
 
+  <div class="tabs">
+    <a class="tab{{ ' active' if tab == 'main' }}" href="{{ url_for('admin.admin_page') }}">Main</a>
+    <a class="tab{{ ' active' if tab == 'servers' }}" href="{{ url_for('admin.admin_page', tab='servers') }}">Servers</a>
+  </div>
+
+  {% if tab == 'main' %}
   <div class="sec">
     <h2>Bot activity</h2>
     <div class="sub">What shows under the bot's name. Leave the text empty to remove the activity.<br>
@@ -114,6 +131,27 @@
   </div>
 
   <div class="sec">
+    <h2>Links &amp; contact</h2>
+    <div class="sub">Shown to everyone. Leave a field empty to hide it. Nothing here is saved in the code.</div>
+    <form method="POST" action="{{ url_for('admin.set_links') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="links-grid">
+        <div>
+          <label for="l-support">Support server link</label>
+          <input id="l-support" type="url" name="support_url" maxlength="200" value="{{ site.support_url }}" placeholder="https://discord.gg/yourserver">
+          <div class="hint">Shown as a Support button in /botinfo and as a Support link on the dashboard. Must start with https://.</div>
+        </div>
+        <div>
+          <label for="l-email">Contact email</label>
+          <input id="l-email" type="email" name="contact_email" maxlength="120" value="{{ site.contact_email }}" placeholder="you@example.com">
+          <div class="hint">Shown on the public Privacy Policy and Terms of Service pages. If empty, those pages point to the support link instead.</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;"><button type="submit">Save links</button></div>
+    </form>
+  </div>
+  {% else %}
+  <div class="sec">
     <h2>Servers ({{ guilds|length }})</h2>
     <div class="sub">Every server the bot is in. Manage opens that server's dashboard without needing Discord permissions.</div>
 
@@ -150,11 +188,14 @@
       <div class="empty">The bot isn't in any servers right now.</div>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 
 <script>
 (function () {
-  var type = document.getElementById('a-type'), wrap = document.getElementById('a-url-wrap'), url = document.getElementById('a-url');
+  var type = document.getElementById('a-type');
+  if (!type) return;          // Servers tab: no activity form
+  var wrap = document.getElementById('a-url-wrap'), url = document.getElementById('a-url');
   function sync() { var on = type.value === 'streaming'; wrap.hidden = !on; url.required = on && document.getElementById('a-text').value.trim() !== ''; }
   type.addEventListener('change', sync); document.getElementById('a-text').addEventListener('input', sync); sync();
 })();

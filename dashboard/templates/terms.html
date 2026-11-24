@@ -48,5 +48,5 @@
 <p>We may update these terms from time to time. The "last updated" date above shows when they last changed. Continuing to use the bot after a change means you accept the new terms.</p>
 
 <h2>10. Contact</h2>
-<p>Questions about these terms: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+<p>Questions about these terms: {% if contact_email %}<a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% elif support_url %}<a href="{{ support_url }}">our support server</a>{% else %}the bot owner{% endif %}.</p>
 {% endblock %}

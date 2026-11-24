@@ -219,8 +219,11 @@ def register_routes(app, discord_session):
     app.jinja_env.filters["discord_md"] = render_markdown
     app.jinja_env.filters["short_num"] = format_short
     app.jinja_env.filters["dur"] = ticket_analytics.duration_label
-    from config import settings as _settings
-    app.jinja_env.globals["support_url"] = _settings.SUPPORT_URL
+
+    @app.context_processor
+    def _site_links():
+        # support server link set on the /admin page (empty = hidden everywhere)
+        return {"support_url": dashboard_db.get_site_settings()["support_url"]}
 
     @bp.route("/")
     def index():
@@ -258,14 +261,14 @@ def register_routes(app, discord_session):
 
     @bp.route("/privacy")
     def privacy():
-        from config import settings
-        return render_template("privacy.html", contact_email=settings.CONTACT_EMAIL,
+        return render_template("privacy.html",
+                               contact_email=dashboard_db.get_site_settings()["contact_email"],
                                updated=LEGAL_UPDATED)
 
     @bp.route("/terms")
     def terms():
-        from config import settings
-        return render_template("terms.html", contact_email=settings.CONTACT_EMAIL,
+        return render_template("terms.html",
+                               contact_email=dashboard_db.get_site_settings()["contact_email"],
                                updated=LEGAL_UPDATED)
 
     # Setup guide: a public copy (/setup) for people deciding whether to add the bot, and a

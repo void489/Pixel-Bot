@@ -2307,6 +2307,13 @@ async def get_welcome_config(guild_id: int) -> dict:
     return cfg
 
 
+async def get_site_settings() -> dict:
+    """{"support_url", "contact_email"} set on the /admin page ("" = not set)."""
+    from utils.site_settings import normalize_site
+    from database.mongo import bot_settings_col
+    return normalize_site(await bot_settings_col().find_one({"_id": "site"}))
+
+
 async def get_leave_config(guild_id: int) -> dict:
     """Same shape as get_welcome_config (without autorole_ids), from guild_settings["leave"]."""
     from utils.welcome import normalize_welcome

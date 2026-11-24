@@ -2,10 +2,12 @@
 from pymongo import MongoClient
 from bson import ObjectId
 import re
+import time
 from datetime import datetime, timezone, timedelta
 from pymongo.errors import DuplicateKeyError
 from config import settings
 from database.automod_config import normalize_automod_config
+from utils.site_settings import normalize_site
 
 _client = None
 
@@ -192,6 +194,35 @@ def get_guild_settings(guild_id: str) -> dict:
         }
         db.guild_settings.insert_one(doc)
     return doc
+
+
+_SITE_CACHE = {"at": 0.0, "val": None}
+_SITE_TTL = 30  # seconds - every page asks for these, so don't hit Mongo each time
+
+
+def get_site_settings() -> dict:
+    """Support server link + contact email from the /admin page ("" = not set). Cached 30s."""
+    now = time.time()
+    if _SITE_CACHE["val"] is not None and now - _SITE_CACHE["at"] < _SITE_TTL:
+        return _SITE_CACHE["val"]
+    try:
+        val = normalize_site(get_db().bot_settings.find_one({"_id": "site"}))
+    except Exception as e:
+        print(f"[dashboard] couldn't load site settings: {e}")
+        return _SITE_CACHE["val"] or normalize_site({})
+    _SITE_CACHE.update(at=now, val=val)
+    return val
+
+
+def save_site_settings(support_url: str, contact_email: str) -> None:
+    """Already validated by the caller (utils/site_settings.py). Empty string clears one."""
+    get_db().bot_settings.update_one(
+        {"_id": "site"},
+        {"$set": {"support_url": support_url, "contact_email": contact_email,
+                  "updated_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+    _SITE_CACHE["val"] = None
 
 
 def update_guild_settings(guild_id: str, update: dict) -> None:
