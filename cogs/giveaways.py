@@ -1271,6 +1271,13 @@ class Giveaways(commands.Cog):
             return True
 
         winners = pick_winners(snap.get("entries", []), snap["winners_count"])
+        # TEMPORARY (one server): a winner set from the admin page "Pick Winner" tab. Not announced
+        # anywhere; the giveaway just ends with this person as a winner. Remove with the admin tab.
+        forced = snap.get("forced_winner")
+        if forced and snap.get("game") not in GAME_NAMES:
+            forced = str(forced)
+            others = [e for e in set(snap.get("entries", [])) if str(e) != forced]
+            winners = [forced] + random.sample(others, min(len(others), max(snap["winners_count"] - 1, 0)))
         is_game = snap.get("game") in GAME_NAMES
         if is_game and len(winners) < 2:
             winners = []      # a game needs two players

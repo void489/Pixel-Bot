@@ -191,9 +191,24 @@ def logout():
 @admin_bp.route("/", strict_slashes=False)
 @require_admin()
 def admin_page():
-    tab = "servers" if request.args.get("tab") == "servers" else "main"
+    tab = request.args.get("tab")
+    tab = tab if tab in ("servers", "pickwinner") else "main"
     guilds = None
     listed = []
+    pick_servers, pick_gws, pick_guild = [], [], ""
+    if tab == "pickwinner":     # servers that have a running giveaway, then that server's giveaways
+        col = dashboard_db.get_db().giveaways
+        ids = [str(x) for x in col.distinct("guild_id", _pickable_filter())]
+        names = {str(g.get("id")): g.get("name") for g in (botguilds.get_bot_guilds() or [])}
+        pick_servers = sorted(({"id": i, "name": names.get(i) or i} for i in ids),
+                              key=lambda s: str(s["name"]).lower())
+        pick_guild = (request.args.get("guild") or "").strip()
+        if pick_guild in ids:
+            pick_gws = list(col.find(_pickable_filter({"guild_id": pick_guild})).sort("end_time", 1))
+            for g in pick_gws:
+                g["entry_count"] = len(set(g.get("entries") or []))
+        else:
+            pick_guild = ""
     if tab == "servers":        # only ask Discord for the server list when it is shown
         guilds = botguilds.get_bot_guilds(force=True)
         listed = sorted(guilds or [], key=lambda g: (g.get("name") or "").lower())
@@ -211,6 +226,7 @@ def admin_page():
             "url": doc.get("url") or "",
             "last": doc.get("last_result"),
         },
+        pick_servers=pick_servers, pick_gws=pick_gws, pick_guild=pick_guild,
         activity_types=ACTIVITY_TYPES,
         statuses=STATUSES,
         max_len=MAX_ACTIVITY_LEN,
@@ -255,6 +271,47 @@ def set_links():
         return redirect(url_for("admin.admin_page", error="bademail"))
     dashboard_db.save_site_settings(support_url, email)
     return redirect(url_for("admin.admin_page", links="saved"))
+
+
+# ---- TEMPORARY: "Pick Winner" tab (one server asked for it). Deliberately NOT written to the audit
+# log, so the server's staff can't see it. Sets `forced_winner` on a running giveaway; the bot uses it
+# when the giveaway ends (see cogs/giveaways.py). Remove this block, the tab in admin.html and the
+# `forced_winner` lines in cogs/giveaways.py when it is no longer needed.
+PICK_SKIP_KINDS = ("fastestfinger", "guessflag", "guesslanguage")
+
+
+def _pickable_filter(extra=None):
+    q = {"ended": False, "game": None, "kind": {"$nin": list(PICK_SKIP_KINDS)}}
+    q.update(extra or {})
+    return q
+
+
+@admin_bp.route("/pickwinner/set", methods=["POST"])
+@require_admin()
+def pickwinner_set():
+    gid = (request.form.get("guild_id") or "").strip()
+    mid = (request.form.get("message_id") or "").strip()
+    uid = (request.form.get("user_id") or "").strip()
+    if not (gid.isdigit() and mid.isdigit()):
+        return redirect(url_for("admin.admin_page", tab="pickwinner", error="badid"))
+    if not (uid.isdigit() and 15 <= len(uid) <= 25):
+        return redirect(url_for("admin.admin_page", tab="pickwinner", guild=gid, error="baduser"))
+    res = dashboard_db.get_db().giveaways.update_one(
+        _pickable_filter({"guild_id": gid, "message_id": mid}), {"$set": {"forced_winner": uid}})
+    return redirect(url_for("admin.admin_page", tab="pickwinner", guild=gid,
+                            pick="set" if res.matched_count else "gone"))
+
+
+@admin_bp.route("/pickwinner/clear", methods=["POST"])
+@require_admin()
+def pickwinner_clear():
+    gid = (request.form.get("guild_id") or "").strip()
+    mid = (request.form.get("message_id") or "").strip()
+    if not (gid.isdigit() and mid.isdigit()):
+        return redirect(url_for("admin.admin_page", tab="pickwinner", error="badid"))
+    dashboard_db.get_db().giveaways.update_one(
+        {"guild_id": gid, "message_id": mid, "ended": False}, {"$unset": {"forced_winner": ""}})
+    return redirect(url_for("admin.admin_page", tab="pickwinner", guild=gid, pick="cleared"))
 
 
 @admin_bp.route("/servers/<guild_id>/leave", methods=["POST"])
