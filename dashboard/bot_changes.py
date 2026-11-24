@@ -17,6 +17,17 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Dashboard menu reordered",
+        "tags": ["Dashboard"],
+        "summary": "The left menu is grouped by topic instead of one long mixed list. Setup Guide is first and Bot Changes second. No page was added, removed or renamed.",
+        "details": [
+            "Order: Setup Guide, Bot Changes, then server settings (Config & Logs, Command Permissions, Bot Profile, Security, Auto-Mod, Moderation, Blacklist Requests, Audit Log).",
+            "Then Join & Leave, Join Ad, Announcements; all the ticket pages together; Applications and Submissions; community pages (Vouches, Spawners, Role Panels, Leveling); and the staff pages last.",
+        ],
+        "files": ["dashboard/templates/_sidebar.html"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Join & Leave tab and Ping on Join (ghost ping)",
         "tags": ["Dashboard", "Members"],
         "summary": "The Welcome & Auto Role tab is now called Join & Leave, since it holds Welcome, Leaves, Ping on Join and Auto Role. New Ping on Join section: pick channels, and when someone joins the bot pings them in each one and deletes the message right away.",
