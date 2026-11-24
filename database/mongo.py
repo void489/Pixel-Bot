@@ -25,6 +25,10 @@ def guild_settings_col():
     return get_db()["guild_settings"]
 
 
+def welcome_backgrounds_col():
+    return get_db()["welcome_backgrounds"]
+
+
 def command_permissions_col():
     return get_db()["command_permissions"]
 

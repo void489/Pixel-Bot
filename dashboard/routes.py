@@ -31,7 +31,10 @@ from utils.spawner_math import format_short, parse_price, parse_amount
 from config.command_groups import GROUP_ORDER, GROUP_INFO, group_for
 from utils import leveling_core as lv
 from utils.welcome import (
-    DEFAULT_WELCOME_MESSAGE, MAX_WELCOME_LEN, PLACEHOLDERS, role_is_dangerous,
+    BG_MAX_UPLOAD, BG_UPLOAD_FORMATS, DEFAULT_WELCOME_MESSAGE,
+    EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, IMAGE_TEXT_MAX, MAX_WELCOME_LEN,
+    PLACEHOLDERS, WELCOME_TYPES, clean_hex_color, clean_welcome_type, normalize_welcome,
+    role_is_dangerous,
 )
 from utils import join_ads as ja
 from database.automod_config import (
@@ -1005,11 +1008,29 @@ def register_routes(app, discord_session):
         )
         roles = get_guild_roles(gid)
 
+        bg_col = dashboard_db.get_db().welcome_backgrounds
+
+        def _text(name, limit, *, strip=True):
+            raw = (request.form.get(name) or "").replace("\r\n", "\n").replace("\r", "\n")
+            return (raw.strip() if strip else raw)[:limit]
+
         if request.method == "POST":
             update = {}
 
-            message = (request.form.get("message") or "").replace("\r\n", "\n").replace("\r", "\n")
-            update["welcome.message"] = message.strip()[:MAX_WELCOME_LEN]
+            # Welcome type: exactly one is active. Unknown / missing = normal.
+            update["welcome.type"] = clean_welcome_type(request.form.get("type"))
+
+            update["welcome.message"] = _text("message", MAX_WELCOME_LEN)
+            # The fields of the other types are always saved too, so switching type in the
+            # dashboard never loses what was typed for the others. (Only written when the
+            # form sent them.)
+            if "embed_title" in request.form:
+                update["welcome.embed.title"] = _text("embed_title", EMBED_TITLE_MAX)
+                update["welcome.embed.description"] = _text("embed_description", EMBED_DESC_MAX)
+                update["welcome.embed.footer"] = _text("embed_footer", EMBED_FOOTER_MAX)
+                update["welcome.embed.color"] = clean_hex_color(request.form.get("embed_color"))
+            if "image_text" in request.form:
+                update["welcome.image.text"] = _text("image_text", IMAGE_TEXT_MAX)
 
             # If Discord's channel/role lists couldn't be fetched, leave that part
             # of the saved config alone rather than wiping it.
@@ -1029,11 +1050,39 @@ def register_routes(app, discord_session):
                 update["autorole.role_ids"] = chosen
 
             dashboard_db.update_guild_settings(guild_id, update)
-            return redirect(url_for("dashboard.welcome_page", guild_id=guild_id, saved=1))
+
+            # Image background: remove it (back to the default) or upload a new one. A bad
+            # upload never blocks the other settings above - they are already saved.
+            bg_error = None
+            f = request.files.get("bg_file")
+            if request.form.get("bg_remove") == "on":
+                bg_col.delete_one({"_id": str(guild_id)})
+            elif f and f.filename:
+                raw = f.read(BG_MAX_UPLOAD + 1)
+                if len(raw) > BG_MAX_UPLOAD:
+                    bg_error = "big"
+                else:
+                    try:
+                        from utils.welcome_image import process_upload
+                        from datetime import datetime, timezone
+                        data = process_upload(raw, BG_UPLOAD_FORMATS)
+                        bg_col.update_one(
+                            {"_id": str(guild_id)},
+                            {"$set": {"data": data, "mime": "image/jpeg",
+                                      "hash": hashlib.sha1(data).hexdigest()[:12],
+                                      "updated_at": datetime.now(timezone.utc)}},
+                            upsert=True)
+                    except ValueError as e:
+                        bg_error = str(e) if str(e) in ("format", "big") else "bad"
+                    except Exception:
+                        bg_error = "bad"
+            return redirect(url_for("dashboard.welcome_page", guild_id=guild_id,
+                                    saved=1, bgerror=bg_error))
 
         settings_doc = dashboard_db.get_guild_settings(guild_id)
-        welcome = settings_doc.get("welcome") or {}
+        cfg = normalize_welcome(settings_doc.get("welcome"))
         autorole = settings_doc.get("autorole") or {}
+        bg_doc = bg_col.find_one({"_id": str(guild_id)}, {"hash": 1, "updated_at": 1}) or {}
         role_rows = [
             {
                 "id": str(r["id"]),
@@ -1048,13 +1097,39 @@ def register_routes(app, discord_session):
             guild_id=guild_id,
             channels=channels,
             roles=role_rows,
-            channel_id=str(welcome.get("channel_id") or ""),
-            message=welcome.get("message") or DEFAULT_WELCOME_MESSAGE,
+            channel_id=str(cfg["channel_id"] or ""),
+            welcome_type=cfg["type"],
+            welcome_types=WELCOME_TYPES,
+            message=cfg["message"] or DEFAULT_WELCOME_MESSAGE,
+            embed=cfg["embed"],
+            image_text=cfg["image_text"],
+            bg_custom=bool(bg_doc),
+            bg_hash=bg_doc.get("hash") or "default",
+            bg_error=request.args.get("bgerror"),
+            bg_max_mb=BG_MAX_UPLOAD // (1024 * 1024),
             autorole_ids=[str(r) for r in (autorole.get("role_ids") or [])],
             placeholders=PLACEHOLDERS,
             message_max=MAX_WELCOME_LEN,
+            embed_title_max=EMBED_TITLE_MAX,
+            embed_desc_max=EMBED_DESC_MAX,
+            embed_footer_max=EMBED_FOOTER_MAX,
+            image_text_max=IMAGE_TEXT_MAX,
             saved=request.args.get("saved"),
         )
+
+    @bp.route("/guild/<guild_id>/welcome/preview.png")
+    def welcome_image_preview(guild_id):
+        """The real welcome banner (sample avatar + name) on the server's saved background."""
+        if not _is_authed(discord_session):
+            return redirect(url_for("dashboard.login"))
+        _require_guild_access(discord_session, guild_id)
+        from utils.welcome_image import render_welcome_image, sample_avatar
+        doc = dashboard_db.get_db().welcome_backgrounds.find_one({"_id": str(guild_id)}) or {}
+        bg = doc.get("data")
+        png = render_welcome_image("NewMember", sample_avatar(), bytes(bg) if bg else None)
+        resp = Response(png, mimetype="image/png")
+        resp.headers["Cache-Control"] = "private, max-age=3600"     # URL carries the background's hash
+        return resp
 
     # -----------------------------------------------------------------
     # Join Ad (DM new members an ad - dashboard only, no commands)

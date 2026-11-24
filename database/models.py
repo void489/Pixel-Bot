@@ -2295,14 +2295,22 @@ async def count_honeypot_kicks(guild_id: int) -> int:
 # ---------------------------------------------------------------------------
 
 async def get_welcome_config(guild_id: int) -> dict:
+    """channel_id, message (normal type), type ("normal" | "embed" | "image"; missing =
+    normal), embed {title, description, footer, color}, image_text, autorole_ids."""
+    from utils.welcome import normalize_welcome
     settings = await get_guild_settings(guild_id)
-    welcome = settings.get("welcome") or {}
     autorole = settings.get("autorole") or {}
-    return {
-        "channel_id": welcome.get("channel_id"),
-        "message": welcome.get("message") or "",
-        "autorole_ids": autorole.get("role_ids") or [],
-    }
+    cfg = normalize_welcome(settings.get("welcome"))
+    cfg["autorole_ids"] = autorole.get("role_ids") or []
+    return cfg
+
+
+async def get_welcome_background(guild_id: int):
+    """Bytes of the server's uploaded welcome-image background, or None (= use default)."""
+    from database.mongo import welcome_backgrounds_col
+    doc = await welcome_backgrounds_col().find_one({"_id": str(guild_id)})
+    data = (doc or {}).get("data")
+    return bytes(data) if data else None
 
 
 # ---------------------------------------------------------------------------

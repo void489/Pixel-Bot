@@ -16,6 +16,24 @@ Entry fields:
 
 CHANGES = [
     {
+        "date": "2026-11-24",
+        "title": "Welcome message types: Normal, Embed and Image",
+        "tags": ["Dashboard", "Members"],
+        "summary": "A server now picks one of three welcome styles in Welcome & Auto Role: plain text (as before), an embed with the member's avatar, or a generated welcome image.",
+        "details": [
+            "Normal: unchanged. Servers saved before this change keep Normal automatically.",
+            "Embed: the new member is pinged above a card with an editable title, description, footer and colour bar. Same placeholders as before ({membercount} is the member number). Their avatar is the picture on the right. In the title and footer {user} shows their name, because mentions can't render there.",
+            "Image: a text line (the member is always pinged) plus a wide banner drawn by the bot with the member's round avatar, WELCOME and their name.",
+            "Image background: the default is built in. A server can upload its own (PNG, JPEG or WebP, up to 5 MB); the bot crops and resizes it to 1000x400. A missing or broken file falls back to the default, and a failed image falls back to the text line, so a join never errors.",
+            "Only the new member can be pinged. The settings of the types you are not using are kept when you switch.",
+            "The page has a live preview for each type.",
+        ],
+        "files": [
+            "cogs/welcome.py", "utils/welcome.py", "utils/welcome_image.py", "assets/welcome/default_bg.png",
+            "database/models.py", "database/mongo.py", "dashboard/routes.py", "dashboard/templates/welcome.html",
+        ],
+    },
+    {
         "date": "2026-11-22",
         "title": "New dashboard look and Streaming status",
         "tags": ["Dashboard", "Admin"],

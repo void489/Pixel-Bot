@@ -75,9 +75,44 @@
   
     .preview { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:12px 14px; font-size:13px; color:var(--text-main); white-space:pre-wrap; word-break:break-word; min-height:44px; }
     .ph-list { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; font-size:12px; color:var(--text-muted); margin-top:6px; }
-    .ph-list code { color:var(--accent-light); }
+    .ph-list code { color:var(--accent-text); }
     select.roles-select { min-height:220px; }
     select.roles-select option:disabled { color:var(--text-muted); }
+
+    [hidden] { display:none !important; }
+    /* welcome types */
+    .type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px; }
+    .type-opt { display:flex !important; align-items:flex-start; gap:10px; padding:12px 14px; background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; margin:0; }
+    .type-opt:hover { border-color:var(--border-hi); }
+    .type-opt:has(input:checked) { border-color:var(--accent-text); background:var(--accent-tint); }
+    .type-opt:has(input:focus-visible) { outline:2px solid var(--accent-text); outline-offset:2px; }
+    .type-opt input { margin-top:2px; }
+    .type-opt strong { display:block; color:var(--text-bright); font-size:14px; font-weight:700; }
+    .type-opt small { display:block; color:var(--text-muted); font-size:12px; font-weight:400; line-height:1.4; margin-top:2px; }
+    .wp-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; margin-top:18px; align-items:start; }
+    .wp-grid > div { min-width:0; }
+    .wp-grid .t-label:first-child { margin-top:0; }
+    .t-section .t-label { margin-top:14px; }
+    .ph-all { margin-top:14px; padding-top:14px; border-top:1px solid var(--border); }
+    .field-row { display:flex; gap:8px; align-items:center; }
+    .field-row input[type=color] { flex:none; }
+
+    /* mock of a Discord message (preview only) */
+    .dc-msg { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; font-size:13px; color:var(--text-main); min-height:44px; }
+    .dc-line { white-space:pre-wrap; word-break:break-word; margin-bottom:8px; }
+    .dc-ping { display:inline-block; background:var(--accent-tint); color:var(--accent-text); padding:0 4px; border-radius:var(--r-sm); font-weight:600; }
+    .dc-embed { display:flex; gap:14px; justify-content:space-between; background:var(--bg-surface); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:var(--r-sm); padding:12px 14px; max-width:480px; }
+    .dc-embed-main { min-width:0; flex:1; }
+    .dc-etitle { font-weight:700; color:var(--text-bright); font-size:14px; word-break:break-word; margin-bottom:4px; }
+    .dc-edesc  { white-space:pre-wrap; word-break:break-word; color:var(--text-main); }
+    .dc-efoot  { margin-top:10px; font-size:11px; color:var(--text-muted); word-break:break-word; }
+    .dc-thumb  { width:64px; height:64px; flex:none; background:var(--bg-muted); border:1px solid var(--border); display:grid; place-content:center; font-family:var(--font-display); font-size:22px; color:var(--text-muted); }
+    .dc-img    { display:block; width:100%; max-width:520px; height:auto; border:1px solid var(--border); background:var(--bg-base); }
+    .dc-local  { display:block; width:100%; max-width:520px; aspect-ratio:5 / 2; object-fit:cover; border:1px solid var(--border); background:var(--bg-base); }
+    .bg-state  { font-size:13px; color:var(--text-main); margin-bottom:8px; }
+    input[type=file] { width:100%; font-size:13px; color:var(--text-main); }
+    @media(max-width:1180px){ .wp-grid{ grid-template-columns:1fr; } }
+    @media(max-width:700px){ .type-grid{ grid-template-columns:1fr; } .dc-embed{ flex-direction:column-reverse; } }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
@@ -92,47 +127,131 @@
   <p class="page-sub">Greet new members and give them roles automatically. Everything here is set from the dashboard - there are no commands for it.</p>
 
   {% if saved %}<div class="banner-ok">Saved. It applies to the next member who joins.</div>{% endif %}
+  {% if bg_error %}<div class="banner-error">The background was not changed:
+    {% if bg_error == 'format' %}only PNG, JPEG and WebP images work.
+    {% elif bg_error == 'big' %}the file is too big (max {{ bg_max_mb }} MB, and no more than 25 megapixels).
+    {% else %}that file could not be read as an image.{% endif %}
+    Everything else was saved.</div>{% endif %}
 
-  <form method="POST">
+  <form method="POST" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="grid2">
-      <div class="t-section">
-        <div class="t-section-head"><h2>Welcome Message</h2></div>
+    <div class="t-section">
+      <div class="t-section-head"><h2>Welcome Message</h2></div>
 
-        <label class="t-label">Channel</label>
-        <select name="channel_id">
-          <option value="">Disabled (don't send a welcome message)</option>
-          {% for c in channels %}
-          <option value="{{ c.id }}" {% if c.id|string == channel_id %}selected{% endif %}>#{{ c.name }}</option>
-          {% endfor %}
-        </select>
+      <label class="t-label" for="f-channel">Channel</label>
+      <select name="channel_id" id="f-channel">
+        <option value="">Disabled (don't send a welcome message)</option>
+        {% for c in channels %}
+        <option value="{{ c.id }}" {% if c.id|string == channel_id %}selected{% endif %}>#{{ c.name }}</option>
+        {% endfor %}
+      </select>
 
-        <label class="t-label">Message</label>
-        <textarea name="message" id="f-message" class="notes-area" maxlength="{{ message_max }}" oninput="update()">{{ message }}</textarea>
-        <div class="char-count"><span id="msg-count">0</span> / {{ message_max }}</div>
-        <div class="hint">Normal Discord formatting works: <code>**bold**</code>, <code>*italic*</code>, <code>-# small text</code>. Only the new member can be pinged.</div>
+      <label class="t-label" id="type-label">Type</label>
+      <div class="type-grid" role="radiogroup" aria-labelledby="type-label">
+        {% for key, title, desc in [
+          ('normal', 'Normal', 'Plain text message.'),
+          ('embed',  'Embed',  'Ping above a card with the member\'s avatar on the right.'),
+          ('image',  'Image',  'Ping, a text line and a banner with the member\'s avatar and name.') ] %}
+        <label class="type-opt">
+          <input type="radio" name="type" value="{{ key }}" {% if welcome_type == key %}checked{% endif %}>
+          <span><strong>{{ title }}</strong><small>{{ desc }}</small></span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="hint">The server uses one type at a time. You can switch whenever you like; what you typed for the other types is kept.</div>
 
+      <div class="ph-all">
+        <div class="hint" style="margin-top:0;font-style:normal;">Placeholders (work in every type). Only the new member can be pinged.</div>
         <div class="ph-list">
           {% for key, desc in placeholders %}<code>{{ key }}</code><span>{{ desc }}</span>{% endfor %}
         </div>
-
-        <label class="t-label">Preview (sample values)</label>
-        <div class="preview" id="preview"></div>
       </div>
 
-      <div class="t-section">
-        <div class="t-section-head"><h2>Auto Role</h2></div>
-
-        <label class="t-label">Roles given to every new member</label>
-        <select name="autorole_ids" class="roles-select" multiple>
-          {% for r in roles %}
-          <option value="{{ r.id }}" {% if r.id in autorole_ids %}selected{% endif %}
-                  {% if r.managed or r.dangerous %}disabled{% endif %}>{{ r.name }}{% if r.managed %} (bot/integration role){% elif r.dangerous %} (admin/moderation permissions){% endif %}</option>
-          {% endfor %}
-        </select>
-        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to turn auto role off.</div>
-        <div class="hint">Each role must be <strong>below the bot's highest role</strong> in Server Settings → Roles. Bots that join don't get auto roles, and roles with admin or moderation permissions can't be given out automatically.</div>
+      <!-- NORMAL -->
+      <div class="wp-grid" id="panel-normal" {% if welcome_type != 'normal' %}hidden{% endif %}>
+        <div>
+          <label class="t-label" for="f-message">Message</label>
+          <textarea name="message" id="f-message" class="notes-area" maxlength="{{ message_max }}">{{ message }}</textarea>
+          <div class="char-count"><span id="msg-count">0</span> / {{ message_max }}</div>
+          <div class="hint">Normal Discord formatting works: <code>**bold**</code>, <code>*italic*</code>, <code>-# small text</code>.</div>
+        </div>
+        <div>
+          <label class="t-label">Preview (sample values)</label>
+          <div class="preview" id="pv-normal"></div>
+        </div>
       </div>
+
+      <!-- EMBED -->
+      <div class="wp-grid" id="panel-embed" {% if welcome_type != 'embed' %}hidden{% endif %}>
+        <div>
+          <label class="t-label" for="f-etitle">Title</label>
+          <input type="text" name="embed_title" id="f-etitle" maxlength="{{ embed_title_max }}" value="{{ embed.title }}">
+          <label class="t-label" for="f-edesc">Description</label>
+          <textarea name="embed_description" id="f-edesc" maxlength="{{ embed_desc_max }}">{{ embed.description }}</textarea>
+          <label class="t-label" for="f-efoot">Footer</label>
+          <input type="text" name="embed_footer" id="f-efoot" maxlength="{{ embed_footer_max }}" value="{{ embed.footer }}">
+          <label class="t-label" for="f-ecolor-hex">Colour bar</label>
+          <div class="field-row">
+            <input type="color" id="f-ecolor" value="{{ embed.color|lower }}" aria-label="Pick the colour bar">
+            <input type="text" name="embed_color" id="f-ecolor-hex" value="{{ embed.color }}" maxlength="7" pattern="#?[0-9A-Fa-f]{6}" placeholder="#C6F432" aria-label="Colour bar as hex">
+          </div>
+          <div class="hint">The member is pinged above the card. The title and footer can't show mentions, so <code>{user}</code> there becomes their name. The member's avatar is always the picture on the right.</div>
+        </div>
+        <div>
+          <label class="t-label">Preview (sample values)</label>
+          <div class="dc-msg">
+            <div class="dc-line"><span class="dc-ping">@NewMember</span></div>
+            <div class="dc-embed" id="pv-embed">
+              <div class="dc-embed-main">
+                <div class="dc-etitle" id="pv-etitle"></div>
+                <div class="dc-edesc" id="pv-edesc"></div>
+                <div class="dc-efoot" id="pv-efoot"></div>
+              </div>
+              <div class="dc-thumb" aria-hidden="true">N</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMAGE -->
+      <div class="wp-grid" id="panel-image" {% if welcome_type != 'image' %}hidden{% endif %}>
+        <div>
+          <label class="t-label" for="f-itext">Text line</label>
+          <input type="text" name="image_text" id="f-itext" maxlength="{{ image_text_max }}" value="{{ image_text }}">
+          <div class="hint">Shown above the image. The new member is always pinged, even if <code>{user}</code> is not in the line.</div>
+
+          <label class="t-label" for="f-bg">Background</label>
+          <div class="bg-state">{% if bg_custom %}Using your uploaded background.{% else %}Using the default background.{% endif %}</div>
+          <input type="file" name="bg_file" id="f-bg" accept="image/png,image/jpeg,image/webp">
+          {% if bg_custom %}
+          <label class="toggle" style="margin-top:10px;"><input type="checkbox" name="bg_remove"> Remove my background (use the default)</label>
+          {% endif %}
+          <div class="hint">PNG, JPEG or WebP, up to {{ bg_max_mb }} MB. It is cropped to fit (wide, 5:2) and resized by the bot, so any size works. If the file is ever missing or broken, the default is used.</div>
+        </div>
+        <div>
+          <label class="t-label">Preview (sample name)</label>
+          <div class="dc-msg">
+            <div class="dc-line" id="pv-itext"></div>
+            <img class="dc-img" id="pv-img" src="{{ url_for('dashboard.welcome_image_preview', guild_id=guild_id, v=bg_hash) }}" alt="Preview of the welcome image">
+            <img class="dc-local" id="pv-local" alt="Your chosen background, cropped" hidden>
+          </div>
+          <div class="hint" id="pv-img-note">This image shows the saved settings. Pick a file to see how it will be cropped.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="t-section">
+      <div class="t-section-head"><h2>Auto Role</h2></div>
+
+      <label class="t-label" for="f-roles">Roles given to every new member</label>
+      <select name="autorole_ids" id="f-roles" class="roles-select" multiple>
+        {% for r in roles %}
+        <option value="{{ r.id }}" {% if r.id in autorole_ids %}selected{% endif %}
+                {% if r.managed or r.dangerous %}disabled{% endif %}>{{ r.name }}{% if r.managed %} (bot/integration role){% elif r.dangerous %} (admin/moderation permissions){% endif %}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to turn auto role off.</div>
+      <div class="hint">Each role must be <strong>below the bot's highest role</strong> in Server Settings → Roles. Bots that join don't get auto roles, and roles with admin or moderation permissions can't be given out automatically.</div>
     </div>
 
     <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Settings</button>
@@ -141,13 +260,61 @@
 
 <script>
   const SAMPLE = { user: '@NewMember', username: 'NewMember', server: 'Your Server', membercount: '128' };
-  function update() {
-    const box = document.getElementById('f-message');
-    document.getElementById('msg-count').textContent = box.value.length;
-    const text = box.value.replace(/\{(username|user|server|membercount)\}/g, (_, k) => SAMPLE[k]);
-    // textContent (not innerHTML) so nothing typed here is ever treated as markup
-    document.getElementById('preview').textContent = text || ' ';
+  const $ = id => document.getElementById(id);
+  // everything below writes with textContent / .value only, so nothing typed is ever treated as markup
+  function fill(text, asMention) {
+    return text.replace(/\{(username|user|server|membercount)\}/g,
+      (_, k) => (k === 'user' && !asMention) ? SAMPLE.username : SAMPLE[k]);
   }
+  function currentType() {
+    const r = document.querySelector('input[name=type]:checked');
+    return r ? r.value : 'normal';
+  }
+  function showType() {
+    const t = currentType();
+    ['normal', 'embed', 'image'].forEach(k => { $('panel-' + k).hidden = (k !== t); });
+  }
+  function update() {
+    const box = $('f-message');
+    $('msg-count').textContent = box.value.length;
+    $('pv-normal').textContent = fill(box.value, true) || ' ';
+
+    $('pv-etitle').textContent = fill($('f-etitle').value, false);
+    $('pv-edesc').textContent = fill($('f-edesc').value, true);
+    $('pv-efoot').textContent = fill($('f-efoot').value, false);
+    $('pv-etitle').hidden = !$('f-etitle').value.trim();
+    $('pv-edesc').hidden = !$('f-edesc').value.trim();
+    $('pv-efoot').hidden = !$('f-efoot').value.trim();
+    const hex = $('f-ecolor-hex').value.trim();
+    if (/^#?[0-9a-fA-F]{6}$/.test(hex)) {
+      $('pv-embed').style.borderLeftColor = hex[0] === '#' ? hex : '#' + hex;
+    }
+
+    let line = fill($('f-itext').value, true);
+    if (line.indexOf(SAMPLE.user) === -1) line = SAMPLE.user + '\n' + line;   // the joiner is always pinged
+    $('pv-itext').textContent = line.trim();
+  }
+  document.querySelectorAll('input[name=type]').forEach(r => r.addEventListener('change', showType));
+  ['f-message', 'f-etitle', 'f-edesc', 'f-efoot', 'f-ecolor-hex', 'f-itext'].forEach(id => $(id).addEventListener('input', update));
+  $('f-ecolor').addEventListener('input', e => { $('f-ecolor-hex').value = e.target.value.toUpperCase(); update(); });
+  $('f-ecolor-hex').addEventListener('input', e => {
+    const v = e.target.value.trim();
+    if (/^#?[0-9a-fA-F]{6}$/.test(v)) $('f-ecolor').value = (v[0] === '#' ? v : '#' + v).toLowerCase();
+  });
+
+  // show the picked background (cropped like the bot will) before saving
+  let localUrl = null;
+  $('f-bg').addEventListener('change', e => {
+    if (localUrl) { URL.revokeObjectURL(localUrl); localUrl = null; }
+    const f = e.target.files && e.target.files[0];
+    const img = $('pv-local');
+    if (!f || !f.type.startsWith('image/')) { img.hidden = true; $('pv-img').hidden = false; return; }
+    localUrl = URL.createObjectURL(f);
+    img.src = localUrl; img.hidden = false; $('pv-img').hidden = true;
+    $('pv-img-note').textContent = 'This is your chosen file, cropped to fit. Save to apply it - the banner is then drawn on top of it.';
+  });
+
+  showType();
   update();
 </script>
 </body>
