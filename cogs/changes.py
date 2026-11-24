@@ -68,7 +68,7 @@ def _role_label(guild: discord.Guild, entry) -> str:
 async def post_staff_change(guild: discord.Guild, member: discord.Member, kind: str,
                             old_label: str, new_label: str, reason: str = None,
                             footer: str = None, channel_id=None) -> str:
-    """Post the card in the type's channel.
+    """Post the card in the type's channel, with the member pinged above it (no DMs).
 
     Returns "" on success, otherwise a short human reason it wasn't posted
     (so the caller can tell the person running the command)."""
@@ -105,7 +105,9 @@ async def post_staff_change(guild: discord.Guild, member: discord.Member, kind: 
         file = None
 
     try:
-        kwargs = {"embed": embed, "allowed_mentions": discord.AllowedMentions.none()}
+        # the ping lives in the message text, above the card (embeds never ping); only this member
+        kwargs = {"content": member.mention, "embed": embed,
+                  "allowed_mentions": discord.AllowedMentions(users=[member], roles=False, everyone=False)}
         if file is not None:
             kwargs["file"] = file
         await channel.send(**kwargs)

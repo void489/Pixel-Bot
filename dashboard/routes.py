@@ -2329,7 +2329,6 @@ def register_routes(app, discord_session):
                 cfg["reset_on_demotion"] = request.form.get("reset_on_demotion") == "on"
                 old_days = cfg.get("expire_days", 0)
                 cfg["expire_days"] = sc.clean_expire_days(request.form.get("expire_days"))
-                cfg["expire_dm"] = request.form.get("expire_dm") == "on"
                 dashboard_db.save_strike_type_config(guild_id, ctype["id"], cfg)
                 if cfg["expire_days"] != old_days:
                     dashboard_db.log_audit(

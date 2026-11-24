@@ -2,7 +2,7 @@
 """Data for the dashboard's "Bot Changes" page (sidebar -> Bot Changes).
 
 EVERY change made to this bot gets an entry here - whoever makes it (a person or an AI).
-Newest first: add the new entry at the TOP of CHANGES. See AGENTS.md for the rules.
+Newest first: add the new entry at the TOP of CHANGES. See CLAUDE.md for the rules.
 
 Entry fields:
     date      "YYYY-MM-DD"
@@ -15,6 +15,25 @@ Entry fields:
 """
 
 CHANGES = [
+    {
+        "date": "2026-11-24",
+        "title": "Promotions, demotions and strikes ping the member (no DMs)",
+        "tags": ["Staff", "Dashboard"],
+        "summary": "Promotion, demotion and strike cards now ping the member in the type's channel, above the embed. Nobody is DMed for these any more.",
+        "details": [
+            "The ping is the message text above the card, so it really notifies. Only that one member can be pinged, never @everyone or roles.",
+            "Covers /promote, /demote, accepted applications, staff automation, demotions from the strike rules, /strike add, activity-check strikes, and the \"strike removed\" card.",
+            "Strike DMs are gone (the strike, strike-removed and activity-check DMs), so \"couldn't DM them\" warnings no longer appear.",
+            "Strikes tab: the \"DM the member when a strike expires\" option is removed. Expired strikes are still deleted automatically and shown as \"expired\".",
+            "If a type has no channel set on the Changes page, nothing is announced (so nobody is pinged), as before.",
+            "A strike that triggers a demotion posts two cards, so the member is pinged on each.",
+        ],
+        "commands": ["/strike add", "/strike remove", "/promote", "/demote"],
+        "files": [
+            "cogs/changes.py", "cogs/staff_strikes.py", "cogs/staff_activity.py", "utils/strikes_core.py",
+            "dashboard/routes.py", "dashboard/templates/strikes.html", "README.md",
+        ],
+    },
     {
         "date": "2026-11-24",
         "title": "Admin page tabs, and support link + contact email moved to the admin page",

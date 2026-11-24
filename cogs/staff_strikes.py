@@ -14,7 +14,7 @@ Everything else is on the dashboard's Strikes tab, per type:
     - rules: "at N strikes -> demote X rank(s)" (the highest rule reached wins)
     - tick: reset strikes on promotion / tick: reset strikes on demotion
     - delete a strike, reset one member, reset a whole type
-    - "strikes expire after N days" (0 = never) with an optional DM; a sweep every 3 hours
+    - "strikes expire after N days" (0 = never); a sweep every 3 hours
       removes expired strikes and records them as "expired" in the strike audit. Expiry only
       lowers the count for future limits, it never undoes a demotion that already happened.
 
@@ -68,37 +68,12 @@ async def post_strike_card(guild: discord.Guild, user: discord.abc.User, ctype: 
     embed.set_thumbnail(url=user.display_avatar.url)
     embed.set_footer(text=f"{ctype['name']} · Strike #{number} · By {issuer.name}")
     try:
-        await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        # ping above the card (no DMs); only this member can be pinged
+        await channel.send(user.mention, embed=embed,
+                           allowed_mentions=discord.AllowedMentions(users=[user], roles=False, everyone=False))
     except (discord.Forbidden, discord.HTTPException):
         return "I couldn't post in this type's channel (missing permissions?)."
     return ""
-
-
-def until_demotion_text(rules, count: int) -> str:
-    """'2 more strikes until you are demoted 1 rank' / '' when no rule is ahead."""
-    ahead = sc.next_rule(rules, count)
-    if not ahead:
-        return ""
-    left = ahead["at"] - count
-    return (f"**{left}** more strike{'' if left == 1 else 's'} until you are demoted "
-            f"{sc.rank_word(ahead['demote'])}")
-
-
-def strike_dm_embed(guild: discord.Guild, ctype: dict, reason: str, number: int, count: int,
-                    demoted: bool, rules, title: str, description: str) -> discord.Embed:
-    dm = base_embed(title=title, description=description, color=constants.COLOR_ERROR)
-    dm.add_field(name="Reason", value=reason or "No reason given.", inline=False)
-    if demoted:
-        dm.add_field(name="Result",
-                     value=f"You reached the strike limit, so your **{ctype['name']}** "
-                           "rank was lowered and your strikes were reset.", inline=False)
-    else:
-        dm.add_field(name="Active strikes", value=f"**{count}**")
-        left = until_demotion_text(rules, count)
-        if left:
-            dm.add_field(name="Until demotion", value=left, inline=False)
-    dm.set_footer(text=f"{guild.name} · {ctype['name']} · Strike #{number}")
-    return dm
 
 
 async def _apply_rule(guild: discord.Guild, member: Optional[discord.Member],
@@ -152,17 +127,15 @@ class StrikeResult:
     demoted: bool
     rule_msg: str
     card_note: str
-    dm_ok: bool
     next_text: str        # "Next rule: ..." for the staff reply ("" if none / demoted)
 
 
 async def give_strike(guild: discord.Guild, user: discord.abc.User, ctype: dict, types: list,
-                      reason: str, issuer: discord.abc.User, *,
-                      dm_title: str = None, dm_description: str = None) -> StrikeResult:
+                      reason: str, issuer: discord.abc.User) -> StrikeResult:
     """The one strike routine: used by /strike add and by failed activity checks.
 
-    Records the strike, posts the card, runs the threshold rule (demotion + reset) and
-    DMs the member how many strikes they have and how many are left until demotion."""
+    Records the strike, posts the card (the member is pinged above it) and runs the
+    threshold rule (demotion + reset). Nobody is ever DMed."""
     doc = await models.add_strike(
         guild.id, ctype["id"], ctype["name"], user.id, reason, issuer.id, issuer.name)
     count = await models.count_strikes(guild.id, ctype["id"], user.id)
@@ -176,21 +149,13 @@ async def give_strike(guild: discord.Guild, user: discord.abc.User, ctype: dict,
         rule_msg, demoted = await _apply_rule(guild, gm, ctype, types, rule, count)
 
     shown = 0 if demoted else count
-    dm_ok = True
-    try:
-        await user.send(embed=strike_dm_embed(
-            guild, ctype, reason, doc["number"], shown, demoted, scfg["rules"],
-            dm_title or f"⚠️ You received a strike in {guild.name}",
-            dm_description or f"You were given a strike in **{ctype['name']}**."))
-    except (discord.Forbidden, discord.HTTPException):
-        dm_ok = False
 
     next_text = ""
     if not rule_msg and not demoted:
         ahead = sc.next_rule(scfg["rules"], count)
         if ahead:
             next_text = f"Next rule: {sc.describe_rule(ahead)}."
-    return StrikeResult(doc["number"], count, shown, demoted, rule_msg, card_note, dm_ok, next_text)
+    return StrikeResult(doc["number"], count, shown, demoted, rule_msg, card_note, next_text)
 
 
 async def post_strike_removed_card(guild: discord.Guild, user: discord.abc.User, ctype: dict,
@@ -213,7 +178,8 @@ async def post_strike_removed_card(guild: discord.Guild, user: discord.abc.User,
     embed.set_thumbnail(url=user.display_avatar.url)
     embed.set_footer(text=f"{ctype['name']} · Strike #{number} · By {remover.name}")
     try:
-        await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        await channel.send(user.mention, embed=embed,
+                           allowed_mentions=discord.AllowedMentions(users=[user], roles=False, everyone=False))
     except (discord.Forbidden, discord.HTTPException):
         return "I couldn't post in this type's channel (missing permissions?)."
     return ""
@@ -267,30 +233,14 @@ class StaffStrikes(commands.Cog):
             old = await staff_strikes_col().find(
                 {"guild_id": str(guild.id), "type_id": str(type_id),
                  "created_at": {"$lt": cutoff}}).to_list(None)
-            per_user = {}
             for d in old:
                 # delete by _id so a strike removed by hand a moment ago isn't counted twice
                 res = await staff_strikes_col().delete_one({"_id": d["_id"]})
                 if not res.deleted_count:
                     continue
-                per_user.setdefault(d["user_id"], []).append(d)
                 await models.add_strike_audit(
                     guild.id, "expired", type_id, d.get("type_name") or "?", d["user_id"],
                     "Auto expiry", f"Strike #{d.get('number')} expired after {days} day(s)")
-            if not cfg["expire_dm"]:
-                continue
-            for uid, gone in per_user.items():
-                member = guild.get_member(int(uid))
-                if member is None:
-                    continue
-                left = await models.count_strikes(guild.id, type_id, int(uid))
-                name = gone[0].get("type_name") or "staff"
-                try:
-                    await member.send(embed=info_embed(
-                        f"{len(gone)} of your **{name}** strike(s) in **{guild.name}** expired "
-                        f"(strikes last {days} days). You now have **{left}** active."))
-                except discord.HTTPException:
-                    pass                # DMs closed; the audit trail still has it
 
     # ------------------------------------------------------------------
     # helpers
@@ -354,8 +304,6 @@ class StaffStrikes(commands.Cog):
             msg += f"\n{r.next_text}"
         if r.card_note:
             msg += f"\n⚠️ {r.card_note}"
-        if not r.dm_ok:
-            msg += "\n⚠️ Couldn't DM them (their DMs are closed or they share no server with me)."
         await _reply(ctx, success_embed(msg), delete_after=15)
 
     @strike.command(name="remove", description="Delete one strike by its number")
@@ -378,7 +326,7 @@ class StaffStrikes(commands.Cog):
         msg = (f"Deleted strike `#{doc['number']}` (<@{uid}>, **{doc.get('type_name', '?')}**). "
                f"They have **{left}** active strike{'' if left == 1 else 's'} left in that type.")
 
-        # Same treatment as /strike add: card in the type's channel + DM to the member.
+        # Same treatment as /strike add: card in the type's channel with the member pinged.
         cfg = await models.get_changes_config(ctx.guild.id)
         ctype = core.find_type(cfg["types"], doc["type_id"])
         user = ctx.guild.get_member(uid)
@@ -388,9 +336,9 @@ class StaffStrikes(commands.Cog):
             except discord.HTTPException:
                 user = None
         if ctype is None:
-            msg += "\n⚠️ That type no longer exists, so nothing was announced and they weren't DMed."
+            msg += "\n⚠️ That type no longer exists, so nothing was announced."
         elif user is None:
-            msg += "\n⚠️ I couldn't find that user, so nothing was announced and they weren't DMed."
+            msg += "\n⚠️ I couldn't find that user, so nothing was announced."
         else:
             scfg = await models.get_strike_type_config(ctx.guild.id, ctype["id"])
             ahead = sc.next_rule(scfg["rules"], left)
@@ -400,20 +348,6 @@ class StaffStrikes(commands.Cog):
                 ctx.guild, user, ctype, left, doc["number"], reason, ctx.author)
             if note:
                 msg += f"\n⚠️ {note}"
-            try:
-                dm = base_embed(
-                    title=f"✅ A strike was removed in {ctx.guild.name}",
-                    description=f"Strike `#{doc['number']}` in **{ctype['name']}** was removed.",
-                    color=constants.COLOR_SUCCESS)
-                dm.add_field(name="Reason", value=reason or "No reason given.", inline=False)
-                dm.add_field(name="Active strikes", value=f"**{left}**")
-                until = until_demotion_text(scfg["rules"], left)
-                if until:
-                    dm.add_field(name="Until demotion", value=until, inline=False)
-                dm.set_footer(text=f"{ctx.guild.name} · {ctype['name']} · Strike #{doc['number']}")
-                await user.send(embed=dm)
-            except (discord.Forbidden, discord.HTTPException):
-                msg += "\n⚠️ Couldn't DM them (their DMs are closed or they share no server with me)."
         await _reply(ctx, success_embed(msg), delete_after=15)
 
     @strike.command(name="list", description="Show a member's strikes")

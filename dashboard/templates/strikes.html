@@ -112,10 +112,6 @@
       <div class="t-label" style="margin-top:14px;">Strikes expire after (days)</div>
       <input type="number" name="expire_days" min="0" max="{{ max_expire }}" value="{{ c.cfg.expire_days or 0 }}" style="width:110px;">
       <div class="hint">0 = strikes never expire. Expired strikes are removed automatically (checked every 3 hours) and shown below as "expired". A demotion that already happened is never undone.</div>
-      <label class="switch-row" style="margin-top:10px;">
-        <input type="checkbox" name="expire_dm" {% if c.cfg.expire_dm %}checked{% endif %}>
-        <span>DM the member when a strike expires</span>
-      </label>
       {% if c.expiring %}
       <div class="banner-warn">{{ c.expiring }} existing strike{{ '' if c.expiring == 1 else 's' }} in this type {{ 'is' if c.expiring == 1 else 'are' }} already older than {{ c.cfg.expire_days }} day{{ '' if c.cfg.expire_days == 1 else 's' }} and will be removed on the next sweep.</div>
       {% endif %}

@@ -222,14 +222,14 @@ class StaffActivity(commands.Cog):
     # ── Strike everyone who missed the check (one strike per check) ────────
     async def _strike_missing(self, guild: discord.Guild, check: dict, name: str,
                               missing: set) -> str:
-        """Give each missing member one strike in the check's type and DM them.
+        """Give each missing member one strike in the check's type (they are pinged on the card).
         Returns a short summary line for the results embed. Never raises."""
         try:
             cfg = await models.get_changes_config(guild.id)
             ctype = core.find_type(cfg["types"], check["strike_type_id"])
             if ctype is None:
                 return "⚠️ The strike type no longer exists, so nobody was struck."
-            struck, no_dm, gone = 0, 0, 0
+            struck, gone = 0, 0
             for uid in sorted(missing):
                 member = guild.get_member(uid)
                 if member is None:
@@ -240,19 +240,12 @@ class StaffActivity(commands.Cog):
                 try:
                     r = await give_strike(
                         guild, member, ctype, cfg["types"],
-                        sc.clean_reason(f"Missed activity check: {name}"), self.bot.user,
-                        dm_title=f"⚠️ You were struck in {guild.name}",
-                        dm_description=(f"You didn't react to the **{name}** activity check in "
-                                        f"time, so you received a strike in **{ctype['name']}**."))
+                        sc.clean_reason(f"Missed activity check: {name}"), self.bot.user)
                 except Exception as e:
                     print(f"[staff_activity] strike failed for {uid}: {e}")
                     continue
                 struck += 1
-                if not r.dm_ok:
-                    no_dm += 1
             line = f"Struck **{struck}** member(s) in **{ctype['name']}**."
-            if no_dm:
-                line += f" {no_dm} couldn't be DMed."
             if gone:
                 line += f" {gone} left the server."
             return line

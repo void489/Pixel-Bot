@@ -127,8 +127,8 @@ to `config/command_groups.py` and `ADMIN_CATEGORIES` in `cogs/help.py`.
 Changes page (staff, builder, ...), so a strike only counts inside its own type and the card is
 posted in that type's announce channel.
 
-- `/strike add <member> <type> [reason]` - give a strike (red card in the type's channel + a DM to the
-  member; closed DMs are fine). Works on members on LOA and on people who already left.
+- `/strike add <member> <type> [reason]` - give a strike (red card in the type's channel with the
+  member pinged above it; nobody is DMed). Works on members on LOA and on people who already left.
 - `/strike remove <number> [reason]` - delete one strike by its number.
 - `/strike list <member> [type]` - a member's strikes, grouped by type. `/staffprofile` also shows
   their strike counts.

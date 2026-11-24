@@ -6,8 +6,7 @@ strike settings, stored in guild_settings under "strikes.types.<type_id>":
     {"rules": [{"at": 3, "demote": 1}, {"at": 5, "demote": 2}],
      "reset_on_promotion": False,
      "reset_on_demotion": False,
-     "expire_days": 0,          # strikes older than this many days are removed (0 = never)
-     "expire_dm": False}        # DM the member when one of their strikes expires
+     "expire_days": 0}          # strikes older than this many days are removed (0 = never)
 
 A rule reads "when a member reaches `at` active strikes in this type, demote them
 `demote` rank(s)". Rules only run when a NEW strike is added, never when settings change.
@@ -57,7 +56,6 @@ def normalize_type_config(raw) -> dict:
         "reset_on_promotion": bool(raw.get("reset_on_promotion", False)),
         "reset_on_demotion": bool(raw.get("reset_on_demotion", False)),
         "expire_days": clean_expire_days(raw.get("expire_days")),
-        "expire_dm": bool(raw.get("expire_dm", False)),
     }
 
 
