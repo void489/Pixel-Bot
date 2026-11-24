@@ -94,6 +94,14 @@ def _normalize_ticket_panel(data: dict) -> dict:
         out["auto_close_warn_hours"] = cfg["warn_hours"]
         out["auto_close_grace_hours"] = cfg["grace_hours"]
         out["auto_close_claimed"] = cfg["claimed"]
+    # Look of the posted message (style + optional picture): only written when the form
+    # sent it, so rebuilding a panel (like "Post panel") never wipes it.
+    if "panel_style" in data:
+        from utils import panel_style as ps
+        style = ps.clean_style(data.get("panel_style"))
+        out["panel_style"] = style
+        out["image_url"] = str(data.get("image_url") or "")
+        out["image_position"] = ps.clean_position(style, data.get("image_position"))
     return out
 
 
@@ -526,6 +534,27 @@ def upsert_ticket_panel(guild_id: str, data: dict, panel_id: str = None) -> str:
 
 def delete_ticket_panel(panel_id: str) -> None:
     get_db().ticket_panels.delete_one({"_id": ObjectId(panel_id)})
+    get_db().ticket_panel_images.delete_one({"_id": str(panel_id)})
+
+
+def save_panel_image(panel_id: str, data: bytes, ext: str, mime: str) -> None:
+    import hashlib
+    from datetime import datetime, timezone
+    get_db().ticket_panel_images.update_one({"_id": str(panel_id)}, {"$set": {
+        "data": data, "ext": ext, "mime": mime, "hash": hashlib.sha1(data).hexdigest(),
+        "updated_at": datetime.now(timezone.utc)}}, upsert=True)
+
+
+def delete_panel_image(panel_id: str) -> None:
+    get_db().ticket_panel_images.delete_one({"_id": str(panel_id)})
+
+
+def panel_image_ids(guild_panel_ids: list) -> set:
+    """Which of these panels have an uploaded picture."""
+    ids = [str(i) for i in guild_panel_ids]
+    if not ids:
+        return set()
+    return {d["_id"] for d in get_db().ticket_panel_images.find({"_id": {"$in": ids}}, {"_id": 1})}
 
 
 # ---------------------------------------------------------------------------

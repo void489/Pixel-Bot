@@ -3,7 +3,9 @@ import discord
 from discord.ext import commands
 
 from database import models
-from cogs.tickets import TicketPanelView, TicketControlView, TicketPriorityView
+from cogs.tickets import (
+    TicketPanelView, TicketPanelBoxView, TicketControlView, TicketPriorityView, box_supported,
+)
 
 
 class Events(commands.Cog):
@@ -23,11 +25,18 @@ class Events(commands.Cog):
                         if tt:
                             ticket_types.append(tt)
                     if ticket_types:
-                        self.bot.add_view(TicketPanelView(
-                            panel["name"], ticket_types,
-                            "dropdown" if panel.get("display_style") == "dropdown" else "buttons",
-                            panel.get("placeholder"), str(panel["_id"]),
-                        ))
+                        display = "dropdown" if panel.get("display_style") == "dropdown" else "buttons"
+                        if panel.get("posted_style") == "box" and box_supported():
+                            # the posted message is a one-box panel: re-attach that kind of view
+                            self.bot.add_view(TicketPanelBoxView(
+                                panel, ticket_types, None, display,
+                                panel.get("placeholder"), str(panel["_id"]),
+                            ))
+                        else:
+                            self.bot.add_view(TicketPanelView(
+                                panel["name"], ticket_types, display,
+                                panel.get("placeholder"), str(panel["_id"]),
+                            ))
         except Exception as e:
             print(f"Failed to re-register ticket panel views: {e}")
 

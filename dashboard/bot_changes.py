@@ -17,6 +17,23 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Ticket panels: panel style and an optional picture",
+        "tags": ["Dashboard", "Members"],
+        "summary": "Each ticket panel can now be posted as an embed (buttons under it) or as one box with everything inside, and can have a picture.",
+        "details": [
+            "Dashboard -> Ticket Types & Panels -> panel form: new Panel style, Picture and Picture position settings, with a preview.",
+            "Embed style: picture on the right (small) or at the bottom (big). One-box style (Discord Components V2): picture up, down or right (small). Left is not possible in either style.",
+            "The picture is a https link or an uploaded file (PNG, JPG, WEBP, GIF, up to 4 MB). An uploaded file is used instead of the link.",
+            "Old panels stay as they are (embed, no picture). A changed style or picture applies when the panel is posted again.",
+            "If the one-box style can't be built, or Discord rejects the picture, the panel is still posted (as an embed / without the picture) and staff are told why.",
+        ],
+        "files": [
+            "utils/panel_style.py", "cogs/tickets.py", "cogs/events.py", "database/models.py", "database/mongo.py",
+            "dashboard/routes.py", "dashboard/db.py", "dashboard/templates/tickets.html",
+        ],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Promotions, demotions and strikes ping the member (no DMs)",
         "tags": ["Staff", "Dashboard"],
         "summary": "Promotion, demotion and strike cards now ping the member in the type's channel, above the embed. Nobody is DMed for these any more.",

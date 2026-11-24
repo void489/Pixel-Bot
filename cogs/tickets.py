@@ -19,6 +19,7 @@ Panel buttons open a modal with the type's questions. Every ticket also gets a
 Close Ticket button which opens a reason modal. Blank reason -> "No Further Action Required".
 """
 import asyncio
+import io
 import json
 import mimetypes
 import re
@@ -38,6 +39,7 @@ from utils import ticket_container as tcont
 from utils import ticket_core
 from utils import ticket_stats
 from utils import ticket_settings as ts
+from utils import panel_style
 from config import constants
 from config.settings import dashboard_base_url
 
@@ -1063,6 +1065,134 @@ class TicketPanelView(discord.ui.View):
                 self.add_item(OpenTicketButton(tt, panel_name))
 
 
+# ---------------------------------------------------------------------------
+# Panel look: "embed" (buttons under it) or "box" (everything inside one box)
+# ---------------------------------------------------------------------------
+
+_BOX_PARTS = ("LayoutView", "Container", "TextDisplay", "Section", "Thumbnail", "MediaGallery",
+              "Separator", "ActionRow")
+
+
+def box_supported() -> bool:
+    """The one-box style needs Discord's Components V2 classes (discord.py 2.6+)."""
+    return all(hasattr(discord.ui, n) for n in _BOX_PARTS)
+
+
+class TicketPanelBoxView(getattr(discord.ui, "LayoutView", discord.ui.View)):
+    """A panel as one container: [picture up] text [picture right / down], then the buttons
+    or dropdown. Uses the same buttons / dropdown (same custom ids) as the embed style, so
+    clicks and restarts behave exactly the same."""
+
+    def __init__(self, panel: dict, ticket_types: list, image_url: str = None,
+                 display_style: str = "buttons", placeholder: str = None, panel_id: str = None):
+        super().__init__(timeout=None)
+        ui = discord.ui
+        pos = panel_style.panel_look(panel)["image_position"]
+        default_text = ("Choose an option from the menu below to open a ticket."
+                        if display_style == "dropdown" else "Click a button below to open a ticket.")
+        title = (panel.get("title") or "🎫 Support").strip()
+        text = f"## {title}\n{panel.get('description') or default_text}"[:3900]
+
+        children = []
+        if image_url and pos == "up":
+            children.append(self._gallery(image_url))
+        if image_url and pos == "right":
+            children.append(ui.Section(ui.TextDisplay(text), accessory=ui.Thumbnail(image_url)))
+        else:
+            children.append(ui.TextDisplay(text))
+        if image_url and pos == "down":
+            children.append(self._gallery(image_url))
+        children.append(ui.Separator())
+        row = ui.ActionRow()
+        if display_style == "dropdown":
+            row.add_item(TicketPanelSelect(ticket_types, panel["name"], panel_id, placeholder))
+        else:
+            for tt in ticket_types[:MAX_PANEL_BUTTONS]:
+                row.add_item(OpenTicketButton(tt, panel["name"]))
+        children.append(row)
+        self.add_item(ui.Container(*children, accent_colour=discord.Colour(panel.get("color") or 0x5865F2)))
+
+    @staticmethod
+    def _gallery(url: str):
+        gallery = discord.ui.MediaGallery()
+        gallery.add_item(media=url)
+        return gallery
+
+
+async def _panel_picture(panel: dict):
+    """(url for the message, discord.File or None). An uploaded picture wins over the link;
+    it is attached to the message and referenced as attachment://."""
+    uploaded = await models.get_ticket_panel_image(str(panel["_id"]))
+    if uploaded:
+        data, ext = uploaded
+        name = f"panel.{ext}"
+        return f"attachment://{name}", discord.File(io.BytesIO(data), filename=name)
+    return (panel_style.panel_look(panel)["image_url"] or None), None
+
+
+def _panel_embed(panel: dict, display_style: str, image_url: str, position: str) -> discord.Embed:
+    default_text = ("Choose an option from the menu below to open a ticket."
+                    if display_style == "dropdown" else "Click a button below to open a ticket.")
+    embed = discord.Embed(
+        title=panel.get("title") or "\U0001F3AB Support",
+        description=panel.get("description") or default_text,
+        color=panel.get("color") or 0x5865F2,
+    )
+    if image_url:
+        if position == "bottom" or position == "down":
+            embed.set_image(url=image_url)
+        else:                                   # right (and anything an embed can't do)
+            embed.set_thumbnail(url=image_url)
+    return embed
+
+
+async def post_panel(channel, panel: dict, ticket_types: list):
+    """Post a panel in its saved look. Returns (message, posted_style, note).
+
+    Never fails because of the look: if the box style can't be built or Discord rejects the
+    picture, the panel is still posted (as an embed, or without the picture) and `note`
+    tells staff what happened."""
+    look = panel_style.panel_look(panel)
+    dropdown = panel.get("display_style") == "dropdown"
+    display = "dropdown" if dropdown else "buttons"
+    note = ""
+
+    if look["style"] == "box":
+        if box_supported():
+            image_url, file = await _panel_picture(panel)
+            try:
+                view = TicketPanelBoxView(panel, ticket_types, image_url, display,
+                                          panel.get("placeholder"), str(panel["_id"]))
+                kwargs = {"view": view}
+                if file:
+                    kwargs["files"] = [file]
+                return await channel.send(**kwargs), "box", ""
+            except discord.Forbidden:
+                raise
+            except Exception as e:
+                print(f"[panel] box style failed for {panel.get('name')!r}: {type(e).__name__}: {e}")
+                note = "The one-box style failed, so it was posted as an embed instead."
+        else:
+            note = "The one-box style needs a newer discord.py, so it was posted as an embed instead."
+
+    image_url, file = await _panel_picture(panel)
+    embed = _panel_embed(panel, display, image_url, look["image_position"])
+    view = TicketPanelView(panel["name"], ticket_types, display, panel.get("placeholder"), str(panel["_id"]))
+    try:
+        kwargs = {"embed": embed, "view": view}
+        if file:
+            kwargs["files"] = [file]
+        return await channel.send(**kwargs), "embed", note
+    except discord.HTTPException as e:
+        if e.status != 400 or not image_url:
+            raise
+        # Discord didn't accept the picture (bad link): post without it
+        embed = _panel_embed(panel, display, None, look["image_position"])
+        view = TicketPanelView(panel["name"], ticket_types, display, panel.get("placeholder"), str(panel["_id"]))
+        msg = await channel.send(embed=embed, view=view)
+        return msg, "embed", (note + " Discord rejected the picture, so it was posted without it.").strip()
+
+
 async def _set_priority(channel, guild: discord.Guild, ticket_doc: dict, level: str) -> list:
     """Save a ticket's priority, update the Priority field of its welcome embed and (if the
     panel asks for it) put a priority prefix / emoji in the channel name.
@@ -1515,16 +1645,7 @@ class PanelPickerSelect(discord.ui.Select):
             )
 
         style = "dropdown" if panel.get("display_style") == "dropdown" else "buttons"
-        default_text = ("Choose an option from the menu below to open a ticket."
-                        if style == "dropdown" else "Click a button below to open a ticket.")
-        embed = discord.Embed(
-            title=panel.get("title") or "🎫 Support",
-            description=panel.get("description") or default_text,
-            color=panel.get("color") or 0x5865F2,
-        )
-        view = TicketPanelView(panel["name"], ticket_types, style,
-                               panel.get("placeholder"), str(panel["_id"]))
-        message = await interaction.channel.send(embed=embed, view=view)
+        message, posted_style, note = await post_panel(interaction.channel, panel, ticket_types)
         await models.save_ticket_panel(
             interaction.guild.id, panel["name"], message.id, interaction.channel.id,
             [str(tt["_id"]) for tt in ticket_types],
@@ -1534,9 +1655,10 @@ class PanelPickerSelect(discord.ui.Select):
             color_hex=panel.get("color_hex"),
             display_style=style,
             placeholder=panel.get("placeholder") or "",
+            posted_style=posted_style,
         )
         await interaction.response.send_message(
-            embed=success_embed(f"Panel **{panel['name']}** posted."),
+            embed=success_embed(f"Panel **{panel['name']}** posted." + (f"\n{note}" if note else "")),
             ephemeral=True,
         )
 

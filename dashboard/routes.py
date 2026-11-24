@@ -496,9 +496,32 @@ def register_routes(app, discord_session):
                     "auto_close_grace_hours": request.form.get("auto_close_grace_hours", "24"),
                     "auto_close_claimed": request.form.get("auto_close_claimed", "longer"),
                 }
-                dashboard_db.upsert_ticket_panel(
+                # How the posted message looks: style + optional picture (a link or an upload).
+                from utils import panel_style as _ps
+                try:
+                    image_url = _ps.clean_image_url(request.form.get("panel_image_url"))
+                except ValueError:
+                    return redirect(url_for("dashboard.tickets_page", guild_id=guild_id, error="panel_img_url"))
+                new_image = None
+                upload = request.files.get("panel_image_file")
+                if upload and upload.filename:
+                    raw = upload.read(_ps.IMAGE_MAX_UPLOAD + 1)
+                    if len(raw) > _ps.IMAGE_MAX_UPLOAD:
+                        return redirect(url_for("dashboard.tickets_page", guild_id=guild_id, error="panel_img_big"))
+                    try:
+                        new_image = _ps.process_image(raw)
+                    except ValueError:
+                        return redirect(url_for("dashboard.tickets_page", guild_id=guild_id, error="panel_img_bad"))
+                data["panel_style"] = request.form.get("panel_style")
+                data["image_url"] = image_url
+                data["image_position"] = request.form.get("panel_image_position")
+                saved_panel_id = dashboard_db.upsert_ticket_panel(
                     guild_id, data, request.form.get("panel_id") or None
                 )
+                if new_image:
+                    dashboard_db.save_panel_image(saved_panel_id, *new_image)
+                elif request.form.get("remove_panel_image") == "on":
+                    dashboard_db.delete_panel_image(saved_panel_id)
 
             elif form_type == "delete_panel":
                 dashboard_db.delete_ticket_panel(request.form.get("panel_id"))
@@ -531,7 +554,11 @@ def register_routes(app, discord_session):
         panels = dashboard_db.get_ticket_panels(guild_id)
 
         types_by_id = {str(t["_id"]): t for t in ticket_types}
+        from utils import panel_style as _ps
+        uploaded_ids = dashboard_db.panel_image_ids([str(p["_id"]) for p in panels])
         for p in panels:
+            p["has_upload"] = str(p["_id"]) in uploaded_ids
+            p.update({k: v for k, v in _ps.panel_look(p).items() if k != "image_url"})
             p["assigned_types"] = [
                 types_by_id[tid] for tid in p.get("ticket_type_ids", [])
                 if tid in types_by_id
@@ -572,6 +599,8 @@ def register_routes(app, discord_session):
             settings=settings_doc,
             ticket_types=ticket_types,
             panels=panels,
+            panel_styles=_ps.PANEL_STYLES,
+            image_positions=_ps.IMAGE_POSITIONS,
             channels=get_text_channels(int(guild_id)),
             categories=get_categories(int(guild_id)),
             roles=get_guild_roles(int(guild_id)),

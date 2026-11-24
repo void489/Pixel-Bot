@@ -45,6 +45,11 @@ def ticket_panels_col():
     return get_db()["ticket_panels"]
 
 
+def ticket_panel_images_col():
+    """One doc per panel (_id = panel id): the picture uploaded for the panel message."""
+    return get_db()["ticket_panel_images"]
+
+
 def transcripts_col():
     return get_db()["transcripts"]
 

@@ -83,6 +83,16 @@
 
     .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
     .hidden { display:none !important; }
+    /* panel look preview (Discord-like mock; the real message is made by the bot) */
+    .look-prev { background:#313338; border-radius:4px; padding:14px; margin-top:6px; color:#dbdee1; font-size:13px; line-height:1.4; }
+    .lp-embed { display:flex; gap:12px; background:#2b2d31; border-left:4px solid #5865f2; border-radius:4px; padding:10px 12px; max-width:440px; }
+    .lp-box { background:#2b2d31; border:1px solid #3f4147; border-left:4px solid #5865f2; border-radius:8px; padding:12px; max-width:440px; }
+    .lp-body { flex:1; min-width:0; } .lp-t { font-weight:700; color:#f2f3f5; overflow-wrap:anywhere; } .lp-d { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .lp-img-r { width:64px; height:64px; flex:none; border-radius:4px; image-rendering:pixelated; background:#1e1f22; }
+    .lp-img-wide { display:block; width:100%; height:70px; object-fit:contain; background:#1e1f22; border-radius:4px; image-rendering:pixelated; margin:8px 0; }
+    .lp-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .lp-btns span { background:#4e5058; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; }
+    .lp-btns span:first-child { background:#5865f2; } .lp-sep { height:1px; background:#3f4147; margin:10px 0 2px; }
+    .lp-sel { margin-top:8px; background:#1e1f22; border-radius:4px; padding:8px 10px; color:#b5bac1; font-size:12px; }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
@@ -124,6 +134,10 @@
   {% endif %}
 
   {% if saved %}<div class="embed success"><strong>Saved.</strong></div>{% endif %}
+  {% set perr = request.args.get('error') %}
+  {% if perr == 'panel_img_url' %}<div class="banner-error">The picture link must start with https:// and have no spaces. The panel was not saved.</div>{% endif %}
+  {% if perr == 'panel_img_big' %}<div class="banner-error">That picture is too big. The limit is 4 MB. The panel was not saved.</div>{% endif %}
+  {% if perr == 'panel_img_bad' %}<div class="banner-error">That file is not a usable picture. Use PNG, JPG, WEBP or GIF. The panel was not saved.</div>{% endif %}
 
   <!-- Server-wide categories (claim / spawner / application tickets) -->
   <div class="t-section" style="margin-bottom:24px;">
@@ -634,6 +648,10 @@
                 "auto_close_warn_hours": p.auto_close_warn_hours|default(0, true),
                 "auto_close_grace_hours": p.auto_close_grace_hours|default(24, true),
                 "auto_close_claimed": p.auto_close_claimed|default("longer", true),
+                "panel_style": p.panel_style|default("embed", true),
+                "image_url": p.image_url|default("", true),
+                "image_position": p.image_position|default("", true),
+                "has_upload": p.has_upload|default(false, true),
                 "ticket_type_ids": (p.ticket_type_ids or [])|map("string")|list
               } | tojson }})'>Edit</button>
             <button class="btn-xs btn-xs-accent"
@@ -657,7 +675,7 @@
       <div class="t-section-head">
         <h2 id="panel-form-heading">New Panel</h2>
       </div>
-      <form method="POST" id="panel-form">
+      <form method="POST" id="panel-form" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="form_type" value="save_panel">
         <input type="hidden" name="panel_id" id="f-panel-id">
@@ -678,6 +696,25 @@
           <input type="text" name="panel_color" id="f-panel-color" value="#5865f2" maxlength="7"
                  oninput="try{document.getElementById('f-panel-color-pick').value=this.value}catch(e){}">
         </div>
+
+        <label class="t-label" for="f-panel-style">Panel style</label>
+        <select name="panel_style" id="f-panel-style" onchange="syncLook()">
+          {% for key, label in panel_styles %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        <div class="hint" id="look-hint"></div>
+
+        <label class="t-label" for="f-panel-img-url">Picture (optional)</label>
+        <input type="url" name="panel_image_url" id="f-panel-img-url" maxlength="500" placeholder="https://example.com/picture.png" oninput="syncLook()">
+        <div class="hint">Paste a link, or upload a file below (PNG, JPG, WEBP or GIF, up to 4 MB). An uploaded file is used instead of the link.</div>
+        <input type="file" name="panel_image_file" id="f-panel-img-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="syncLook()">
+        <label class="toggle" id="f-panel-img-rm-wrap" style="display:none;margin-top:6px;"><input type="checkbox" name="remove_panel_image" id="f-panel-img-rm"> Remove the uploaded picture</label>
+
+        <label class="t-label" for="f-panel-img-pos">Picture position</label>
+        <select name="panel_image_position" id="f-panel-img-pos" onchange="syncLook()"></select>
+
+        <label class="t-label">Preview (approximate)</label>
+        <div class="look-prev" id="look-prev" aria-live="polite"></div>
+        <div class="hint">Changing the style or picture only affects panels you post again. Old posted messages stay as they are.</div>
 
         <label class="t-label">Display as</label>
         <select name="panel_display_style" id="f-panel-display" onchange="syncPanelStyle()">
@@ -928,11 +965,70 @@
     document.getElementById('f-ac-warn').value    = p ? (p.auto_close_warn_hours || 0) : 0;
     document.getElementById('f-ac-grace').value   = p ? (p.auto_close_grace_hours || 24) : 24;
     document.getElementById('f-ac-claimed').value = p ? (p.auto_close_claimed || 'longer') : 'longer';
+    document.getElementById('f-panel-style').value   = p ? (p.panel_style || 'embed') : 'embed';
+    document.getElementById('f-panel-img-url').value = p ? (p.image_url || '') : '';
+    document.getElementById('f-panel-img-file').value = '';
+    document.getElementById('f-panel-img-rm').checked = false;
+    document.getElementById('f-panel-img-rm-wrap').style.display = (p && p.has_upload) ? 'inline-flex' : 'none';
+    syncLook(p ? p.image_position : '');
     syncPanelStyle();
     const ids = p ? (p.ticket_type_ids || []).map(String) : [];
     const sel = document.getElementById('f-panel-types');
     for (let o of sel.options) o.selected = ids.includes(o.value);
   }
+
+  // ---- panel look: style, picture position (only the positions that style can do), preview
+  const IMAGE_POSITIONS = {{ image_positions|tojson }};
+  const LOOK_HINTS = {
+    embed: 'The buttons or dropdown sit in a row under the embed. The picture can go on the right (small) or at the bottom (big). Left and up are not possible in an embed.',
+    box: 'Everything (text, picture, buttons or dropdown) is inside one box. This is not an embed, so the colour becomes the side bar of the box. The picture can go up, down or right (small). Left is not possible.'
+  };
+  function syncLook(wantedPos) {
+    const style = document.getElementById('f-panel-style').value;
+    const posSel = document.getElementById('f-panel-img-pos');
+    const keep = wantedPos || posSel.value;
+    posSel.textContent = '';
+    (IMAGE_POSITIONS[style] || []).forEach(([key, label]) => {
+      const o = document.createElement('option'); o.value = key; o.textContent = label; posSel.appendChild(o);
+    });
+    if ([...posSel.options].some(o => o.value === keep)) posSel.value = keep;
+    document.getElementById('look-hint').textContent = LOOK_HINTS[style];
+    drawLook();
+  }
+  function drawLook() {
+    const style = document.getElementById('f-panel-style').value, pos = document.getElementById('f-panel-img-pos').value;
+    const hasImg = !!document.getElementById('f-panel-img-url').value.trim() || document.getElementById('f-panel-img-file').files.length > 0
+                   || (document.getElementById('f-panel-img-rm-wrap').style.display !== 'none' && !document.getElementById('f-panel-img-rm').checked);
+    const dd = document.getElementById('f-panel-display').value === 'dropdown';
+    const color = document.getElementById('f-panel-color').value || '#5865f2';
+    const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+    const sample = {{ url_for('static', filename='logo.png')|tojson }};
+    const img = (cls) => { const i = mk('img', cls); i.src = sample; i.alt = ''; return i; };
+    const body = mk('div', 'lp-body');
+    body.appendChild(mk('div', 'lp-t', document.getElementById('f-panel-title').value || 'Panel title'));
+    body.appendChild(mk('div', 'lp-d', document.getElementById('f-panel-desc').value || 'Panel text'));
+    const comps = dd ? mk('div', 'lp-sel', 'Select a ticket type...') : mk('div', 'lp-btns');
+    if (!dd) ['Support', 'Purchase', 'Report'].forEach(n => comps.appendChild(mk('span', '', n)));
+    const wrap = mk('div'); const box = mk('div', style === 'box' ? 'lp-box' : 'lp-embed');
+    box.style.borderLeftColor = color;
+    if (style === 'box') {
+      if (hasImg && pos === 'up') box.appendChild(img('lp-img-wide'));
+      if (hasImg && pos === 'right') { const row = mk('div'); row.style.display = 'flex'; row.style.gap = '12px'; row.appendChild(body); row.appendChild(img('lp-img-r')); box.appendChild(row); }
+      else box.appendChild(body);
+      if (hasImg && pos === 'down') box.appendChild(img('lp-img-wide'));
+      box.appendChild(mk('div', 'lp-sep')); box.appendChild(comps); wrap.appendChild(box);
+    } else {
+      body.style.flex = '1';
+      if (hasImg && pos === 'bottom') { const col = mk('div', 'lp-body'); col.appendChild(body); col.appendChild(img('lp-img-wide')); box.style.display = 'block'; box.appendChild(col); }
+      else { box.appendChild(body); if (hasImg) box.appendChild(img('lp-img-r')); }
+      wrap.appendChild(box); wrap.appendChild(comps);
+    }
+    const prev = document.getElementById('look-prev'); prev.textContent = ''; prev.appendChild(wrap);
+  }
+  ['f-panel-title', 'f-panel-desc', 'f-panel-color', 'f-panel-display'].forEach(id => document.getElementById(id).addEventListener('input', drawLook));
+  document.getElementById('f-panel-display').addEventListener('change', drawLook);
+  document.getElementById('f-panel-img-rm').addEventListener('change', drawLook);
+  syncLook();
 
   // dropdowns hold 25 types, buttons only 5
   function syncPanelStyle() {

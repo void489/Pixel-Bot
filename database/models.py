@@ -16,6 +16,7 @@ from database.mongo import (
     ticket_counters_col,
     ticket_types_col,
     ticket_panels_col,
+    ticket_panel_images_col,
     transcripts_col,
     giveaways_col,
     polls_col,
@@ -452,8 +453,10 @@ async def save_ticket_panel(guild_id: int, name: str, message_id: int, channel_i
                             ticket_type_ids: list, title: str = None,
                             description: str = None, color: int = None,
                             color_hex: str = None, display_style: str = None,
-                            placeholder: str = None) -> None:
+                            placeholder: str = None, posted_style: str = None) -> None:
     extra = {}
+    if posted_style is not None:
+        extra["posted_style"] = posted_style   # "embed" or "box": how the message was posted
     if display_style is not None:
         extra["display_style"] = display_style
     if placeholder is not None:
@@ -483,6 +486,14 @@ async def get_ticket_panel(guild_id: int, name: str) -> dict:
 async def get_ticket_panels(guild_id: int) -> list:
     cursor = ticket_panels_col().find({"guild_id": str(guild_id)})
     return [doc async for doc in cursor]
+
+
+async def get_ticket_panel_image(panel_id: str):
+    """(bytes, extension) of the picture uploaded for a panel, or None."""
+    doc = await ticket_panel_images_col().find_one({"_id": str(panel_id)})
+    if doc and doc.get("data"):
+        return bytes(doc["data"]), (doc.get("ext") or "png")
+    return None
 
 
 async def get_ticket_panel_by_message(message_id: int) -> dict:
