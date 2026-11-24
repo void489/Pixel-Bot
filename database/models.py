@@ -2296,12 +2296,14 @@ async def count_honeypot_kicks(guild_id: int) -> int:
 
 async def get_welcome_config(guild_id: int) -> dict:
     """channel_id, message (normal type), type ("normal" | "embed" | "image"; missing =
-    normal), embed {title, description, footer, color}, image_text, autorole_ids."""
+    normal), embed {title, description, footer, color}, image_text, autorole_ids,
+    ghostping_channel_ids (Ping on Join channels)."""
     from utils.welcome import normalize_welcome
     settings = await get_guild_settings(guild_id)
     autorole = settings.get("autorole") or {}
     cfg = normalize_welcome(settings.get("welcome"))
     cfg["autorole_ids"] = autorole.get("role_ids") or []
+    cfg["ghostping_channel_ids"] = (settings.get("ghostping") or {}).get("channel_ids") or []
     return cfg
 
 

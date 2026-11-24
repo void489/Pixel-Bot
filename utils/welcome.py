@@ -3,6 +3,7 @@ import re
 
 DEFAULT_WELCOME_MESSAGE = "Welcome to **{server}**, {user}! You are member #{membercount}."
 MAX_WELCOME_LEN = 2000
+GHOSTPING_MAX_CHANNELS = 10     # Ping on Join: most channels a server can pick
 
 # A server uses exactly ONE welcome type at a time. A missing / unknown value means
 # "normal", so servers saved before types existed keep working unchanged.

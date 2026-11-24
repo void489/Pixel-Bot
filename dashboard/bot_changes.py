@@ -17,6 +17,23 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Join & Leave tab and Ping on Join (ghost ping)",
+        "tags": ["Dashboard", "Members"],
+        "summary": "The Welcome & Auto Role tab is now called Join & Leave, since it holds Welcome, Leaves, Ping on Join and Auto Role. New Ping on Join section: pick channels, and when someone joins the bot pings them in each one and deletes the message right away.",
+        "details": [
+            "New section sits between Leaves and Auto Role. Pick one or more channels (up to 10); leave empty to turn it off.",
+            "On join the bot sends the member's ping in every picked channel and deletes it at once, so they get the notification and the channels stay clean.",
+            "Only the joiner is pinged (never @everyone or roles). Bots that join are skipped. A channel the bot can't use is skipped and the others still run.",
+            "The bot needs View Channel, Send Messages and Manage Messages in each picked channel.",
+            "Servers saved before this change have Ping on Join off. The page address and the Command Permissions page are unchanged.",
+        ],
+        "files": [
+            "cogs/welcome.py", "utils/welcome.py", "database/models.py", "dashboard/routes.py",
+            "dashboard/templates/welcome.html", "dashboard/templates/_sidebar.html",
+        ],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Leaves: a leave message with the same three types",
         "tags": ["Dashboard", "Members"],
         "summary": "Welcome & Auto Role has a new Leaves section under Welcome. It posts when a member leaves and has the same Normal, Embed and Image types as Welcome.",

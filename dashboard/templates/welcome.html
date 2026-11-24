@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pixel Bot · Welcome &amp; Auto Role</title>
+  <title>Pixel Bot · Join &amp; Leave</title>
   <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
@@ -235,14 +235,28 @@
 {% include '_sidebar.html' %}
 
 <div class="t-content">
-  <div class="page-title">Welcome &amp; Auto Role</div>
-  <p class="page-sub">Greet new members and give them roles automatically. Everything here is set from the dashboard - there are no commands for it.</p>
+  <div class="page-title">Join &amp; Leave</div>
+  <p class="page-sub">Welcome and goodbye messages, a ghost ping on join, and auto roles. Everything here is set from the dashboard - there are no commands for it.</p>
 
   {% if saved %}<div class="banner-ok">Saved. It applies to the next member who joins.</div>{% endif %}
   <form method="POST" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {{ section(sections[0]) }}
     {{ section(sections[1]) }}
+
+    <div class="t-section" id="sec-ghostping">
+      <div class="t-section-head"><h2>Ping on Join</h2></div>
+      <input type="hidden" name="ghostping_present" value="1">
+
+      <label class="t-label" for="f-ghost">Channels to ping the new member in</label>
+      <select name="ghostping_channel_ids" id="f-ghost" class="roles-select" multiple>
+        {% for c in channels %}
+        <option value="{{ c.id }}" {% if c.id|string in ghostping_channel_ids %}selected{% endif %}>#{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to turn Ping on Join off.</div>
+      <div class="hint">When someone joins, the bot pings them in each selected channel and deletes the message right away (a ghost ping), so they get the notification and the channel stays clean. Up to {{ ghostping_max }} channels. The bot needs View Channel, Send Messages and Manage Messages in each one. Bots that join are not pinged.</div>
+    </div>
 
     <div class="t-section">
       <div class="t-section-head"><h2>Auto Role</h2></div>

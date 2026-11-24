@@ -1,9 +1,11 @@
 """Welcome message + auto role.
 
-Configured entirely from the dashboard (Welcome & Auto Role tab) - there are no
+Configured entirely from the dashboard (Join & Leave tab) - there are no
 commands. When a member joins:
-  - every auto role is added (humans only), and
-  - the welcome message is posted in the chosen channel (if one is set).
+  - every auto role is added (humans only),
+  - the welcome message is posted in the chosen channel (if one is set), and
+  - Ping on Join: the member is pinged in each chosen channel and the message is
+    deleted right away (a ghost ping).
 
 A server uses ONE welcome type (cfg["type"], missing = normal):
   normal - plain text
@@ -23,8 +25,8 @@ from discord.ext import commands
 from database import models
 from utils.welcome import (
     DEFAULT_EMBED, DEFAULT_LEAVE_EMBED, DEFAULT_LEAVE_MESSAGE, DEFAULT_WELCOME_MESSAGE,
-    EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, IMAGE_TEXT_MAX, MAX_WELCOME_LEN,
-    render_welcome, role_is_dangerous,
+    EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, GHOSTPING_MAX_CHANNELS, IMAGE_TEXT_MAX,
+    MAX_WELCOME_LEN, render_welcome, role_is_dangerous,
 )
 
 
@@ -49,6 +51,30 @@ class Welcome(commands.Cog):
             await self._send_welcome(member, cfg)
         except Exception as e:
             print(f"[welcome] welcome message failed in {member.guild.id}: {e}")
+        try:
+            await self._ghost_ping(member, cfg.get("ghostping_channel_ids") or [])
+        except Exception as e:
+            print(f"[welcome] ping on join failed in {member.guild.id}: {e}")
+
+    async def _ghost_ping(self, member: discord.Member, channel_ids: list):
+        """Ping the joiner in each chosen channel, then delete the message. Only the
+        joiner can be pinged. One bad channel (missing, no permission) never stops the rest."""
+        if not channel_ids:
+            return
+        guild = member.guild
+        mentions = discord.AllowedMentions(users=[member], roles=False, everyone=False)
+
+        async def one(cid):
+            channel = guild.get_channel(int(cid))
+            if not isinstance(channel, discord.TextChannel):
+                return
+            try:
+                msg = await channel.send(member.mention, allowed_mentions=mentions)
+                await msg.delete()
+            except (discord.Forbidden, discord.HTTPException) as e:
+                print(f"[welcome] ping on join failed in channel {cid} of {guild.id}: {e}")
+
+        await asyncio.gather(*(one(c) for c in channel_ids[:GHOSTPING_MAX_CHANNELS]))
 
     async def _give_auto_roles(self, member: discord.Member, role_ids: list):
         if not role_ids:

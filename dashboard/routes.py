@@ -33,7 +33,7 @@ from utils import leveling_core as lv
 from utils.welcome import (
     BG_MAX_UPLOAD, BG_UPLOAD_FORMATS, DEFAULT_LEAVE_MESSAGE, DEFAULT_WELCOME_MESSAGE,
     EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, IMAGE_TEXT_MAX, MAX_WELCOME_LEN,
-    LEAVE_PLACEHOLDERS, PLACEHOLDERS, WELCOME_TYPES, clean_hex_color, clean_welcome_type,
+    GHOSTPING_MAX_CHANNELS, LEAVE_PLACEHOLDERS, PLACEHOLDERS, WELCOME_TYPES, clean_hex_color, clean_welcome_type,
     normalize_welcome, role_is_dangerous,
 )
 from utils import join_ads as ja
@@ -1046,6 +1046,15 @@ def register_routes(app, discord_session):
                     update[f"{kind}.channel_id"] = (
                         wanted if wanted in {str(c["id"]) for c in channels} else None
                     )
+            # Ping on Join channels. Only touched when the form carries the marker (an old
+            # open page without this section must not wipe them) and the channel list loaded.
+            if channels and request.form.get("ghostping_present"):
+                valid = {str(c["id"]) for c in channels}
+                picked = []
+                for cid in request.form.getlist("ghostping_channel_ids"):
+                    if cid in valid and cid not in picked:
+                        picked.append(cid)
+                update["ghostping.channel_ids"] = picked[:GHOSTPING_MAX_CHANNELS]
             # If Discord's role list couldn't be fetched, leave that part of the saved
             # config alone rather than wiping it.
             if roles:
@@ -1093,6 +1102,7 @@ def register_routes(app, discord_session):
         cfg = normalize_welcome(settings_doc.get("welcome"))
         leave_cfg = normalize_welcome(settings_doc.get("leave"), "leave")
         autorole = settings_doc.get("autorole") or {}
+        ghostping = settings_doc.get("ghostping") or {}
         bg_doc = bg_col.find_one({"_id": _bg_id("welcome")}, {"hash": 1, "updated_at": 1}) or {}
         leave_bg_doc = bg_col.find_one({"_id": _bg_id("leave")}, {"hash": 1, "updated_at": 1}) or {}
         role_rows = [
@@ -1127,6 +1137,8 @@ def register_routes(app, discord_session):
             sections=sections,
             bg_max_mb=BG_MAX_UPLOAD // (1024 * 1024),
             autorole_ids=[str(r) for r in (autorole.get("role_ids") or [])],
+            ghostping_channel_ids=[str(c) for c in (ghostping.get("channel_ids") or [])],
+            ghostping_max=GHOSTPING_MAX_CHANNELS,
             message_max=MAX_WELCOME_LEN,
             embed_title_max=EMBED_TITLE_MAX,
             embed_desc_max=EMBED_DESC_MAX,
