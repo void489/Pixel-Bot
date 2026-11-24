@@ -17,6 +17,18 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Applications panel: your own text instead of the Open / Closed list",
+        "tags": ["Dashboard", "Members"],
+        "summary": "The applications panel no longer lists each application with 🟢 Open / 🔴 Closed. It shows only the text you set on the dashboard. A closed application still can't be started: pressing its button (or picking it in the dropdown) tells the person it is closed.",
+        "details": [
+            "Applies to the embed look, the box look and the dropdown (the dropdown options no longer show Open / Closed either).",
+            "If the panel description is empty it says \"Choose an application below.\"",
+            "Nothing changed in how closing works: Open / Closed is still toggled per application on the dashboard.",
+        ],
+        "files": ["cogs/applications.py"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Box look for help, plus look, dropdown and picture options on more panels",
         "tags": ["Dashboard", "Members", "Staff", "Admin"],
         "summary": "/help, /staffhelp and /admin help now show as one box (text and dropdown inside it). The Spawner, Applications and Role panels can each be posted as an embed or as a box, can show a dropdown instead of buttons (Spawner and Applications), and can have a picture.",

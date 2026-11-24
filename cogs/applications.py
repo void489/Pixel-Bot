@@ -84,15 +84,10 @@ def _member_can_decide(member: discord.Member, app: dict) -> bool:
 # ---------------------------------------------------------------------------
 
 def _panel_lines(panel: dict, apps: list) -> list:
-    lines = []
-    if panel.get("description"):
-        lines.append(panel["description"])
-    lines.append("")
-    for app in apps:
-        status = "🟢 Open" if app.get("is_open") else "🔴 Closed"
-        emoji = app.get("emoji") or "📝"
-        lines.append(f"{emoji} **{app.get('name', 'Application')}** • {status}")
-    return lines
+    """Only the panel's own text (set on the dashboard). The applications are not listed and
+    no Open / Closed status is shown: a closed application simply tells the person it is
+    closed when they press its button (see _PanelOpenButton.callback)."""
+    return [panel.get("description") or "Choose an application below."]
 
 
 def _panel_embed(panel: dict, apps: list) -> discord.Embed:
@@ -820,7 +815,6 @@ class _ApplicationSelect(discord.ui.Select):
                 label=(app.get("button_label") or app.get("name") or "Apply")[:100],
                 value=str(app["_id"]),
                 emoji=app.get("emoji") or None,
-                description=("🟢 Open" if app.get("is_open", True) else "🔴 Closed"),
             )
             for app in list(apps)[:MAX_APPS_DROPDOWN]
         ] or [discord.SelectOption(label="Apply", value="none")]
