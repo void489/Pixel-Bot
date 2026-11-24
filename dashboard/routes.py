@@ -685,7 +685,12 @@ def register_routes(app, discord_session):
             abort(403)
         return transcript, can_share
 
-    _TRANSCRIPT_CSP = ("default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; "
+    # The page links the shared style.css (which @imports Google Fonts) and the theme scripts, so
+    # those must be allowed from this site; everything else stays blocked.
+    _TRANSCRIPT_CSP = ("default-src 'none'; "
+                       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                       "font-src https://fonts.gstatic.com; script-src 'self'; "
+                       "img-src 'self' https: data:; "
                        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
     @bp.route("/guild/<guild_id>/transcripts")

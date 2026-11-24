@@ -17,6 +17,17 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Fix: transcript page showed with broken styling",
+        "tags": ["Dashboard", "Fix"],
+        "summary": "Opening a transcript no longer looks broken. The page's security policy was blocking the shared stylesheet, fonts and theme script.",
+        "details": [
+            "Transcript pages (dashboard view and share links) now allow style.css, the Google Fonts it loads, and the theme scripts from this site.",
+            "Everything else stays blocked (no other scripts, no frames, no forms).",
+        ],
+        "files": ["dashboard/routes.py"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Ticket panels: panel style and an optional picture",
         "tags": ["Dashboard", "Members"],
         "summary": "Each ticket panel can now be posted as an embed (buttons under it) or as one box with everything inside, and can have a picture.",
