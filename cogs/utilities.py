@@ -433,6 +433,91 @@ class _BlacklistDecisionView(discord.ui.View):
         self.add_item(deny)
 
 
+async def _blacklist_role_change(guild: discord.Guild, req: dict):
+    cfg = await models.get_blacklist_config(guild.id)
+    role_id = _blacklist_role_id(cfg, req["type"])
+    if not role_id:
+        return f"No {req['type']} blacklist role configured."
+
+    role = guild.get_role(int(role_id))
+    if role is None:
+        return "The configured blacklist role no longer exists."
+
+    member = guild.get_member(int(req["target_id"]))
+    if member is None:
+        return "Target isn't in the server — role not applied."
+
+    action = req["action"]
+    try:
+        if action == "add":
+            if role in member.roles:
+                return None
+            await member.add_roles(role, reason=f"Blacklist request {req['_id']} accepted")
+        else:
+            if role not in member.roles:
+                return None
+            await member.remove_roles(role, reason=f"Unblacklist request {req['_id']} accepted")
+    except discord.Forbidden:
+        return "Missing permission or role hierarchy issue."
+    except discord.HTTPException as e:
+        return f"Discord error: {e}"
+    return None
+
+
+async def _decide_blacklist(guild: discord.Guild, staff, req: dict, status: str):
+    """Claim the request, then (on accept) change the role, bump the counter and tell Taskbook.
+    -> (None, None) if someone else already decided it, else (fresh request, role error or None)."""
+    rid = str(req["_id"])
+    claimed = await models.claim_blacklist_request_decision(rid, staff.id, status)
+    if claimed is None:
+        return None, None
+
+    role_error = None
+    if status == "Accepted":
+        role_error = await _blacklist_role_change(guild, req)
+
+    try:
+        await models.bump_blacklist_counter(
+            guild.id, ("accepted" if status == "Accepted" else "denied"), req["type"]
+        )
+    except Exception as e:
+        print(f"[blacklist] counter bump failed: {e}")
+
+    # Taskbook: +1 blacklists for whoever submitted an accepted /blacklist add
+    if status == "Accepted" and req.get("action") == "add":
+        try:
+            from cogs.taskbook import record_blacklist as tb_blacklist
+            await tb_blacklist(guild, req)
+        except Exception as e:
+            print(f"[blacklist] taskbook hook failed: {e}")
+
+    fresh = await models.get_blacklist_request(rid) or req
+    if role_error:
+        fresh = dict(fresh)
+        fresh["role_error"] = role_error
+    return fresh, role_error
+
+
+async def _update_blacklist_message(guild: discord.Guild, fresh: dict) -> bool:
+    """Grey out the buttons on the request's own channel message and show the decision.
+    False = this request has no message of its own (it came from the queue)."""
+    ch_id = fresh.get("channel_id")
+    msg_id = fresh.get("message_id")
+    if not (ch_id and msg_id):
+        return False
+    channel = guild.get_channel(int(ch_id))
+    if channel:
+        try:
+            msg = await channel.fetch_message(int(msg_id))
+            await msg.edit(
+                embed=build_blacklist_embed(fresh, guild),
+                view=_BlacklistDecisionView(str(fresh["_id"]), disabled=True),
+            )
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            pass
+    return True
+
+
 class _BlacklistDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
                                template=r"blacklist_(?P<action>accept|deny):(?P<id>[0-9a-f]{24})"):
     def __init__(self, action: str, request_id: str):
@@ -488,65 +573,17 @@ class _BlacklistDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         await interaction.response.defer(ephemeral=True)
 
         status = "Accepted" if self.action == "accept" else "Denied"
-        claimed = await models.claim_blacklist_request_decision(
-            self.request_id, interaction.user.id, status
-        )
-        if claimed is None:
+        fresh, role_error = await _decide_blacklist(guild, interaction.user, req, status)
+        if fresh is None:
             return await interaction.followup.send(
                 embed=info_embed("Someone else already decided this request."),
                 ephemeral=True,
             )
 
-        role_error = None
-        if status == "Accepted":
-            role_error = await self._apply_role_change(guild, req)
-
-        try:
-            await models.bump_blacklist_counter(
-                guild.id, ("accepted" if status == "Accepted" else "denied"), req["type"]
-            )
-        except Exception as e:
-            print(f"[blacklist] counter bump failed: {e}")
-
-        # Taskbook: +1 blacklists for whoever submitted an accepted /blacklist add
-        if status == "Accepted" and req.get("action") == "add":
-            try:
-                from cogs.taskbook import record_blacklist as tb_blacklist
-                await tb_blacklist(guild, req)
-            except Exception as e:
-                print(f"[blacklist] taskbook hook failed: {e}")
-
-        fresh = await models.get_blacklist_request(self.request_id) or req
-        if role_error:
-            fresh = dict(fresh)
-            fresh["role_error"] = role_error
-
-        ch_id = fresh.get("channel_id")
-        msg_id = fresh.get("message_id")
-        if ch_id and msg_id:
-            channel = guild.get_channel(int(ch_id))
-            if channel:
-                try:
-                    msg = await channel.fetch_message(int(msg_id))
-                    await msg.edit(
-                        embed=build_blacklist_embed(fresh, guild),
-                        view=_BlacklistDecisionView(self.request_id, disabled=True),
-                    )
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    pass
-
-        if not (ch_id and msg_id):
-            # Came from the blacklist queue (no channel message): leave a decided record.
-            try:
-                log_id = cfg.get("request_channel_id")
-                log_ch = guild.get_channel(int(log_id)) if log_id else None
-                if log_ch is not None:
-                    await log_ch.send(
-                        embed=build_blacklist_embed(fresh, guild),
-                        view=_BlacklistDecisionView(self.request_id, disabled=True),
-                    )
-            except (discord.Forbidden, discord.HTTPException):
-                pass
+        if not await _update_blacklist_message(guild, fresh):
+            # Came from the blacklist queue (no channel message): the decided record goes to
+            # the server log instead of the request channel.
+            await rq.send_log(guild, build_blacklist_embed(fresh, guild))
         await rq.refresh(interaction.client, guild.id, BLACKLIST_QUEUE)
 
         await interaction.followup.send(
@@ -558,34 +595,7 @@ class _BlacklistDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         )
 
     async def _apply_role_change(self, guild: discord.Guild, req: dict):
-        cfg = await models.get_blacklist_config(guild.id)
-        role_id = _blacklist_role_id(cfg, req["type"])
-        if not role_id:
-            return f"No {req['type']} blacklist role configured."
-
-        role = guild.get_role(int(role_id))
-        if role is None:
-            return "The configured blacklist role no longer exists."
-
-        member = guild.get_member(int(req["target_id"]))
-        if member is None:
-            return "Target isn't in the server — role not applied."
-
-        action = req["action"]
-        try:
-            if action == "add":
-                if role in member.roles:
-                    return None
-                await member.add_roles(role, reason=f"Blacklist request {req['_id']} accepted")
-            else:
-                if role not in member.roles:
-                    return None
-                await member.remove_roles(role, reason=f"Unblacklist request {req['_id']} accepted")
-        except discord.Forbidden:
-            return "Missing permission or role hierarchy issue."
-        except discord.HTTPException as e:
-            return f"Discord error: {e}"
-        return None
+        return await _blacklist_role_change(guild, req)
 
 
 # ---------------------------------------------------------------------------
@@ -632,10 +642,40 @@ async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, it
     )
 
 
+def _can_decide_blacklist(cfg: dict, user) -> bool:
+    if not isinstance(user, discord.Member):
+        return False
+    if user.guild_permissions.administrator:
+        return True
+    return bool(cfg["staff_role_id"]) and any(str(r.id) == str(cfg["staff_role_id"]) for r in user.roles)
+
+
+async def _queue_can_bulk(guild: discord.Guild, member) -> bool:
+    return _can_decide_blacklist(await models.get_blacklist_config(guild.id), member)
+
+
+async def _queue_bulk_decide(client, guild: discord.Guild, staff, item_id: str, accept: bool):
+    """Accept All / Deny All for one request. -> (status, note); see QueueSpec.bulk_decide."""
+    req = await models.get_blacklist_request(item_id)
+    if not req or str(req.get("guild_id")) != str(guild.id):
+        return "skipped", "no longer exists"
+    if not _can_decide_blacklist(await models.get_blacklist_config(guild.id), staff):
+        return "skipped", "no permission"
+    if req.get("status") != "Pending":
+        return "skipped", None
+    fresh, role_error = await _decide_blacklist(guild, staff, req, "Accepted" if accept else "Denied")
+    if fresh is None:
+        return "skipped", None
+    await _update_blacklist_message(guild, fresh)    # only edits if it has an original message
+    return "done", role_error
+
+
 BLACKLIST_QUEUE = rq.QueueSpec(
     key="blacklist", select_id="blacklist_queue:select",
     title="Blacklist Queue", emoji="🚫", noun="blacklist requests",
     gather=_queue_gather, open_item=_queue_open,
+    bulk_decide=_queue_bulk_decide, can_bulk=_queue_can_bulk,
+    bulk_note="⚠️ This applies **every** request: roles are added or removed for each target.",
 )
 
 

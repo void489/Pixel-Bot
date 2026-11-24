@@ -6,9 +6,12 @@ There are THREE separate queues, one per type, and each one belongs to its own c
     blacklist     -> cogs/utilities.py      (/blacklist setqueue | removequeue)
     reports       -> cogs/vouches.py        (/vouches setreportqueue | removereportqueue)
 
-A queue is ONE embed + dropdown in a channel. Every pending item of that type is in
-the dropdown. Picking one opens a private (ephemeral) copy of the normal review embed
-with its normal buttons; the existing persistent buttons do the deciding.
+A queue is ONE box (like the ticket panels) in a channel: the pending list, Accept All /
+Deny All buttons, and a dropdown. Every pending item of that type is in the dropdown.
+Picking one opens a private (ephemeral) copy of the normal review embed with its normal
+buttons; the existing persistent buttons do the deciding. Accept All / Deny All ask for a
+confirmation first, then decide every pending item through the cog's `bulk_decide`.
+On a discord.py without Components V2 it falls back to the old embed + dropdown.
 
 This file only holds what the three share. It knows nothing about any cog: each cog
 builds a QueueSpec with its own gather() and open_item() and passes it in.
@@ -22,7 +25,8 @@ import discord
 
 from database import models
 from config import constants
-from utils.embeds import base_embed, success_embed, error_embed, info_embed
+from database.logging_config import get_logging_config
+from utils.embeds import base_embed, success_embed, error_embed, info_embed, warning_embed
 
 MAX_OPTIONS = 25
 
@@ -37,9 +41,27 @@ class QueueSpec:
     gather: Callable[[discord.Guild], Awaitable[list]]
     # async (interaction, guild, item_id) -> sends the private review message
     open_item: Callable[[discord.Interaction, discord.Guild, str], Awaitable[None]]
+    # Accept All / Deny All. async (client, guild, staff_member, item_id, accept: bool)
+    #   -> ("done" | "skipped" | "failed", short note or None). None = no bulk buttons.
+    bulk_decide: Callable = None
+    # optional async (guild, member) -> bool, checked before the confirmation is shown
+    can_bulk: Callable = None
+    # extra warning line shown in the confirmation (what accepting really does)
+    bulk_note: str = ""
 
 
 _locks: dict = {}
+_bulk_running: set = set()      # (queue key, guild id) with an Accept All / Deny All in progress
+
+_BOX_PARTS = ("LayoutView", "Container", "TextDisplay", "Separator", "ActionRow")
+
+
+def box_supported() -> bool:
+    """The one-box style needs Discord's Components V2 classes (discord.py 2.6+)."""
+    return all(hasattr(discord.ui, n) for n in _BOX_PARTS)
+
+
+_LayoutBase = getattr(discord.ui, "LayoutView", discord.ui.View)
 
 
 def _lock(spec: QueueSpec, guild_id) -> asyncio.Lock:
@@ -71,6 +93,22 @@ def age(ts) -> str:
 def display_name(guild: discord.Guild, user_id) -> str:
     member = guild.get_member(int(user_id)) if user_id else None
     return member.display_name if member else str(user_id)
+
+
+# ---------------------------------------------------------------------------
+# Server log channel
+# ---------------------------------------------------------------------------
+
+async def send_log(guild: discord.Guild, embed: discord.Embed) -> None:
+    """Post to the server's log channel (Logs cog setting). Silent if there isn't one."""
+    try:
+        cfg = await get_logging_config(guild.id)
+        cid = cfg.get("log_channel_id")
+        channel = guild.get_channel(int(cid)) if cid else None
+        if isinstance(channel, discord.TextChannel):
+            await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+    except Exception as e:  # noqa: BLE001
+        print(f"[review_queue] log post failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -175,14 +213,163 @@ class _QueueSelect(discord.ui.Select):
 
 
 class QueueView(discord.ui.View):
+    """Old look (embed + dropdown). Only used when Components V2 isn't available."""
     def __init__(self, spec: QueueSpec, items: list = None):
         super().__init__(timeout=None)
         self.add_item(_QueueSelect(spec, items))
 
 
-def persistent_view(spec: QueueSpec) -> QueueView:
-    """For bot.add_view() in cog_load: routes the dropdown by custom_id after a restart."""
-    return QueueView(spec, [{"id": "x", "label": "x", "desc": "x"}])
+def queue_text(spec: QueueSpec, items: list) -> str:
+    if not items:
+        return f"## {spec.emoji} {spec.title}\n✅ No {spec.noun} waiting for review."
+    lines = [f"{k + 1}. {cut(i['label'], 70)} · {i['desc'].split('• ')[-1]}"
+             for k, i in enumerate(items[:10])]
+    if len(items) > 10:
+        lines.append(f"…and {len(items) - 10} more")
+    text = (f"## {spec.emoji} {spec.title} — {len(items)} pending\n"
+            "Pick one from the dropdown to review it. Only you will see it.\n\n"
+            + "\n".join(lines))
+    if len(items) > MAX_OPTIONS:
+        text += f"\n\n-# Dropdown shows the oldest {MAX_OPTIONS}. Decide some to see the rest."
+    return text[:3900]
+
+
+class QueueBoxView(_LayoutBase):
+    """The queue as one box: list, [Accept All] [Deny All], then the dropdown."""
+    def __init__(self, spec: QueueSpec, items: list = None):
+        super().__init__(timeout=None)
+        ui = discord.ui
+        items = items or []
+        children = [ui.TextDisplay(queue_text(spec, items)), ui.Separator()]
+        if spec.bulk_decide:
+            row = ui.ActionRow()
+            row.add_item(_BulkButton(spec, True, disabled=not items))
+            row.add_item(_BulkButton(spec, False, disabled=not items))
+            children.append(row)
+        select_row = ui.ActionRow()
+        select_row.add_item(_QueueSelect(spec, items))
+        children.append(select_row)
+        colour = constants.COLOR_WARNING if items else constants.COLOR_SUCCESS
+        self.add_item(ui.Container(*children, accent_colour=discord.Colour(colour)))
+
+
+def build_view(spec: QueueSpec, items: list):
+    return QueueBoxView(spec, items) if box_supported() else QueueView(spec, items)
+
+
+def persistent_view(spec: QueueSpec):
+    """For bot.add_view() in cog_load: routes the dropdown + buttons by custom_id after a restart."""
+    return build_view(spec, [{"id": "x", "label": "x", "desc": "x"}])
+
+
+# ---------------------------------------------------------------------------
+# Accept All / Deny All
+# ---------------------------------------------------------------------------
+
+class _BulkButton(discord.ui.Button):
+    def __init__(self, spec: QueueSpec, accept: bool, disabled: bool = False):
+        self.spec = spec
+        self.accept = accept
+        super().__init__(
+            label="Accept All" if accept else "Deny All",
+            style=discord.ButtonStyle.success if accept else discord.ButtonStyle.danger,
+            custom_id=f"{spec.key}_queue:{'acceptall' if accept else 'denyall'}",
+            disabled=disabled,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if guild is None:
+            return
+        spec = self.spec
+        if spec.can_bulk is not None and not await spec.can_bulk(guild, interaction.user):
+            return await interaction.response.send_message(
+                embed=error_embed(f"You can't decide {spec.noun} here."), ephemeral=True)
+        items = await spec.gather(guild)
+        if not items:
+            return await interaction.response.send_message(
+                embed=info_embed(f"No {spec.noun} to review."), ephemeral=True)
+        if (spec.key, guild.id) in _bulk_running:
+            return await interaction.response.send_message(
+                embed=info_embed("A bulk action is already running for this queue."), ephemeral=True)
+        verb = "Accept" if self.accept else "Deny"
+        text = f"{verb} **all {len(items)}** pending {spec.noun}?"
+        if self.accept and spec.bulk_note:
+            text += f"\n\n{spec.bulk_note}"
+        text += "\n\nThis can't be undone."
+        await interaction.response.send_message(
+            embed=warning_embed(text, title=f"{verb} All"),
+            view=_BulkConfirm(spec, self.accept, interaction.user.id),
+            ephemeral=True,
+        )
+
+
+class _BulkConfirm(discord.ui.View):
+    def __init__(self, spec: QueueSpec, accept: bool, user_id: int):
+        super().__init__(timeout=60)
+        self.spec = spec
+        self.accept = accept
+        self.user_id = user_id
+
+    @discord.ui.button(label="Yes, do it", style=discord.ButtonStyle.danger)
+    async def yes(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        if interaction.user.id != self.user_id or guild is None:
+            return await interaction.response.send_message(
+                embed=error_embed("This confirmation isn't yours."), ephemeral=True)
+        spec = self.spec
+        key = (spec.key, guild.id)
+        if key in _bulk_running:
+            return await interaction.response.edit_message(
+                embed=info_embed("A bulk action is already running for this queue."), view=None)
+        _bulk_running.add(key)
+        verb = "Accepted" if self.accept else "Denied"
+        counts = {"done": 0, "skipped": 0, "failed": 0}
+        notes: list = []
+        try:
+            await interaction.response.edit_message(
+                embed=info_embed(f"Working on it… {'accepting' if self.accept else 'denying'} "
+                                 f"all pending {spec.noun}."), view=None)
+            for item in await spec.gather(guild):
+                try:
+                    status, note = await spec.bulk_decide(
+                        interaction.client, guild, interaction.user, item["id"], self.accept)
+                except Exception as e:  # noqa: BLE001
+                    print(f"[review_queue:{spec.key}] bulk item {item['id']} failed: {e}")
+                    status, note = "failed", None
+                counts[status if status in counts else "failed"] += 1
+                if note and len(notes) < 6:
+                    notes.append(f"• {cut(item['label'], 60)}: {cut(note, 120)}")
+                await asyncio.sleep(0.4)    # stay well under Discord's rate limits
+        finally:
+            _bulk_running.discard(key)
+
+        await refresh(interaction.client, guild.id, spec)
+
+        summary = f"{verb} **{counts['done']}** {spec.noun}"
+        if counts["skipped"]:
+            summary += f" · skipped {counts['skipped']}"
+        if counts["failed"]:
+            summary += f" · failed {counts['failed']}"
+        summary += "."
+        detail = summary + ("\n\n" + "\n".join(notes) if notes else "")
+        try:
+            await interaction.edit_original_response(
+                embed=success_embed(detail[:4000], title=f"{'Accept' if self.accept else 'Deny'} All done"))
+        except discord.HTTPException:
+            pass
+        await send_log(guild, base_embed(
+            title=f"{spec.emoji} {spec.title} — {'Accept' if self.accept else 'Deny'} All",
+            description=f"{interaction.user.mention} " + summary[0].lower() + summary[1:],
+            color=constants.COLOR_SUCCESS if self.accept else constants.COLOR_ERROR,
+        ))
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.user_id:
+            return await interaction.response.send_message(
+                embed=error_embed("This confirmation isn't yours."), ephemeral=True)
+        await interaction.response.edit_message(embed=info_embed("Cancelled."), view=None)
 
 
 # ---------------------------------------------------------------------------
@@ -204,18 +391,28 @@ async def refresh(bot, guild_id: int, spec: QueueSpec) -> None:
                 return
 
             items = await spec.gather(guild)
-            embed = build_embed(spec, items)
-            view = QueueView(spec, items)
+            box = box_supported()
+            if box:
+                kwargs = {"view": QueueBoxView(spec, items)}
+            else:
+                kwargs = {"embed": build_embed(spec, items), "view": QueueView(spec, items)}
 
             if cfg["message_id"]:
                 try:
                     msg = await channel.fetch_message(int(cfg["message_id"]))
-                    await msg.edit(embed=embed, view=view)
-                    return
+                    if box and not msg.flags.components_v2:
+                        # An old embed message can't be edited into a box: replace it once.
+                        try:
+                            await msg.delete()
+                        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                            pass
+                    else:
+                        await msg.edit(**kwargs)
+                        return
                 except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                     pass  # deleted - post a new one below
 
-            msg = await channel.send(embed=embed, view=view)
+            msg = await channel.send(**kwargs)
             await models.set_review_queue_config(guild.id, spec.key, channel.id, msg.id)
     except Exception as e:  # noqa: BLE001
         print(f"[review_queue:{spec.key}] refresh failed: {e}")

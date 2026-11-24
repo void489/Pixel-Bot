@@ -17,6 +17,20 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Review queues: Accept All / Deny All and a new look",
+        "tags": ["Applications", "Blacklist", "Scam Reports"],
+        "summary": "The application, blacklist and scam report queues are now one box with Accept All and Deny All buttons above the dropdown. Decisions from a queue are logged instead of posted in the channel.",
+        "details": [
+            "Accept All / Deny All asks you to confirm first, then decides every pending item and posts one summary in the log channel.",
+            "Accepting scam reports in bulk flags every reported user as a global scammer, and accepting applications promotes every applicant, so check before confirming.",
+            "Deny All works like the normal Deny button (no reason).",
+            "When you decide an item from a queue, the decided record now goes to the server log channel instead of the report or request channel. No log channel set means nothing is posted.",
+            "Each queue message is replaced with the new look the first time it refreshes.",
+        ],
+        "files": ["utils/review_queue_core.py", "cogs/applications.py", "cogs/utilities.py", "cogs/vouches.py"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Transcripts: [text](link) shows as a clickable word",
         "tags": ["Dashboard", "Fix"],
         "summary": "In a transcript, a link written as [Click here](https://...) now shows as just \"Click here\" (clickable) instead of the whole raw link spilling out.",

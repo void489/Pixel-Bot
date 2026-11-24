@@ -198,6 +198,96 @@ def _member_can_decide(member: discord.Member, cfg: dict) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Decision pieces shared by the buttons and Accept All / Deny All
+# ---------------------------------------------------------------------------
+
+async def _accept_core(guild: discord.Guild, staff, report: dict):
+    """Claim the report, flag the user as a scammer and give the Scammer role.
+    None = someone else already decided it; otherwise the role warning ("" if none)."""
+    claimed = await models.claim_report_decision(report["_id"], staff.id, "Accepted")
+    if claimed is None:
+        return None
+
+    await models.add_scammer(
+        int(report["reported_id"]),
+        source="report",
+        staff_id=staff.id,
+        guild_id=guild.id,
+        report_id=report["_id"],
+        reason=report.get("reason"),
+    )
+
+    role_warning = None
+    cfg = await models.get_vouch_config(guild.id)
+    role_id = cfg.get("scammer_role_id")
+    if not role_id:
+        role_warning = "No Scammer role configured in this server — skipped role assignment."
+    else:
+        role = guild.get_role(int(role_id))
+        member = guild.get_member(int(report["reported_id"]))
+        if role is None:
+            role_warning = "Configured Scammer role no longer exists — skipped role assignment."
+        elif member is None:
+            role_warning = "Could not assign Scammer role — user is not in this server."
+        else:
+            try:
+                await member.add_roles(role, reason=f"Report {report['_id']} accepted by {staff}")
+            except discord.Forbidden:
+                role_warning = "Could not assign Scammer role — missing permissions or role hierarchy."
+            except discord.HTTPException:
+                role_warning = "Could not assign Scammer role — Discord API error."
+    return role_warning or ""
+
+
+async def _report_users(client, guild: discord.Guild, report: dict):
+    """(reported, reporter) or (None, None) if either can't be loaded."""
+    try:
+        reported = guild.get_member(int(report["reported_id"])) or \
+            await client.fetch_user(int(report["reported_id"]))
+        reporter = await client.fetch_user(int(report["reporter_id"]))
+        return reported, reporter
+    except (discord.NotFound, discord.HTTPException):
+        return None, None
+
+
+async def _update_report_message(client, guild: discord.Guild, report: dict, role_warning=None) -> bool:
+    """Grey out the buttons on the report's own channel message and show the decision.
+    False = this report has no message of its own (it came from the queue)."""
+    if not (report.get("channel_id") and report.get("message_id")):
+        return False
+    channel = guild.get_channel(int(report["channel_id"]))
+    if channel is None:
+        return True
+    try:
+        message = await channel.fetch_message(int(report["message_id"]))
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        return True
+    reported, reporter = await _report_users(client, guild, report)
+    if reported is None or reporter is None:
+        return True
+    merged = dict(report)
+    if role_warning:
+        merged["role_warning"] = role_warning
+    try:
+        await message.edit(embed=_report_embed(merged, reported, reporter),
+                           view=_build_report_view(str(report["_id"]), disabled=True))
+    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        pass
+    return True
+
+
+async def _log_report_decision(client, guild: discord.Guild, report: dict, role_warning=None):
+    """A queue decision leaves no message in the report channel; it goes to the server log."""
+    reported, reporter = await _report_users(client, guild, report)
+    if reported is None or reporter is None:
+        return
+    merged = dict(report)
+    if role_warning:
+        merged["role_warning"] = role_warning
+    await rq.send_log(guild, _report_embed(merged, reported, reporter))
+
+
+# ---------------------------------------------------------------------------
 # Persistent staff decision buttons (DynamicItem)
 # ---------------------------------------------------------------------------
 
@@ -255,125 +345,22 @@ class _ReportDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
             await self._handle_reject(interaction, report, guild)
 
     async def _edit_report_message(self, interaction, guild, report, role_warning=None):
-        if not (report.get("channel_id") and report.get("message_id")):
-            # Came from the report queue: no original message. Leave a decided record
-            # in the configured report channel (if any), then refresh the queue.
-            await self._log_queued_decision(interaction, guild, report, role_warning)
-            return
-        channel = guild.get_channel(int(report["channel_id"]))
-        if channel is None:
-            return
-        try:
-            message = await channel.fetch_message(int(report["message_id"]))
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            return
-
-        try:
-            reported = guild.get_member(int(report["reported_id"])) or \
-                await interaction.client.fetch_user(int(report["reported_id"]))
-        except (discord.NotFound, discord.HTTPException):
-            reported = None
-        try:
-            reporter = await interaction.client.fetch_user(int(report["reporter_id"]))
-        except (discord.NotFound, discord.HTTPException):
-            reporter = None
-
-        if reported is None or reporter is None:
-            return
-
-        merged = dict(report)
-        if role_warning:
-            merged["role_warning"] = role_warning
-        embed = _report_embed(merged, reported, reporter)
-
-        disabled_view = discord.ui.View(timeout=None)
-        disabled_view.add_item(discord.ui.Button(
-            label="Accept Report",
-            style=discord.ButtonStyle.danger,
-            custom_id=f"vouch_report_accept:{report['_id']}",
-            disabled=True,
-        ))
-        disabled_view.add_item(discord.ui.Button(
-            label="Reject Report",
-            style=discord.ButtonStyle.secondary,
-            custom_id=f"vouch_report_reject:{report['_id']}",
-            disabled=True,
-        ))
-
-        try:
-            await message.edit(embed=embed, view=disabled_view)
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-            pass
-        await rq.refresh(interaction.client, guild.id, REPORT_QUEUE)
-
-    async def _log_queued_decision(self, interaction, guild, report, role_warning=None):
-        try:
-            cfg = await models.get_vouch_config(guild.id)
-            log_id = cfg.get("report_channel_id")
-            log_ch = guild.get_channel(int(log_id)) if log_id else None
-            if log_ch is not None:
-                try:
-                    reported = guild.get_member(int(report["reported_id"])) or \
-                        await interaction.client.fetch_user(int(report["reported_id"]))
-                    reporter = await interaction.client.fetch_user(int(report["reporter_id"]))
-                except (discord.NotFound, discord.HTTPException):
-                    reported = reporter = None
-                if reported is not None and reporter is not None:
-                    merged = dict(report)
-                    if role_warning:
-                        merged["role_warning"] = role_warning
-                    await log_ch.send(
-                        embed=_report_embed(merged, reported, reporter),
-                        view=_build_report_view(str(report["_id"]), disabled=True),
-                    )
-        except (discord.Forbidden, discord.HTTPException):
-            pass
+        if not await _update_report_message(interaction.client, guild, report, role_warning):
+            # Came from the report queue: no original message. Send the decided record to
+            # the server log instead of the report channel.
+            await _log_report_decision(interaction.client, guild, report, role_warning)
         await rq.refresh(interaction.client, guild.id, REPORT_QUEUE)
 
     async def _handle_accept(self, interaction, report, guild):
-        claimed = await models.claim_report_decision(
-            report["_id"], interaction.user.id, "Accepted"
-        )
-        if claimed is None:
+        role_warning = await _accept_core(guild, interaction.user, report)
+        if role_warning is None:
             return await interaction.followup.send(
                 embed=info_embed("Someone else already decided this report."),
                 ephemeral=True,
             )
 
-        await models.add_scammer(
-            int(report["reported_id"]),
-            source="report",
-            staff_id=interaction.user.id,
-            guild_id=guild.id,
-            report_id=report["_id"],
-            reason=report.get("reason"),
-        )
-
-        role_warning = None
-        cfg = await models.get_vouch_config(guild.id)
-        role_id = cfg.get("scammer_role_id")
-        if not role_id:
-            role_warning = "No Scammer role configured in this server — skipped role assignment."
-        else:
-            role = guild.get_role(int(role_id))
-            member = guild.get_member(int(report["reported_id"]))
-            if role is None:
-                role_warning = "Configured Scammer role no longer exists — skipped role assignment."
-            elif member is None:
-                role_warning = "Could not assign Scammer role — user is not in this server."
-            else:
-                try:
-                    await member.add_roles(
-                        role,
-                        reason=f"Report {report['_id']} accepted by {interaction.user}",
-                    )
-                except discord.Forbidden:
-                    role_warning = "Could not assign Scammer role — missing permissions or role hierarchy."
-                except discord.HTTPException:
-                    role_warning = "Could not assign Scammer role — Discord API error."
-
         report = await models.get_report(report["_id"]) or report
-        await self._edit_report_message(interaction, guild, report, role_warning)
+        await self._edit_report_message(interaction, guild, report, role_warning or None)
 
         await interaction.followup.send(
             embed=success_embed(
@@ -470,10 +457,37 @@ async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, it
     )
 
 
+async def _queue_can_bulk(guild: discord.Guild, member) -> bool:
+    return _member_can_decide(member, await models.get_vouch_config(guild.id))
+
+
+async def _queue_bulk_decide(client, guild: discord.Guild, staff, item_id: str, accept: bool):
+    """Accept All / Deny All for one report. -> (status, note); see QueueSpec.bulk_decide."""
+    report = await models.get_report(item_id)
+    if not report or str(report.get("guild_id")) != str(guild.id):
+        return "skipped", "no longer exists"
+    if not _member_can_decide(staff, await models.get_vouch_config(guild.id)):
+        return "skipped", "no permission"
+    if report.get("status") != "Pending":
+        return "skipped", None
+    role_warning = None
+    if accept:
+        role_warning = await _accept_core(guild, staff, report)
+        if role_warning is None:
+            return "skipped", None
+    elif await models.claim_report_decision(report["_id"], staff.id, "Rejected") is None:
+        return "skipped", None
+    fresh = await models.get_report(report["_id"]) or report
+    await _update_report_message(client, guild, fresh, role_warning or None)
+    return "done", role_warning or None
+
+
 REPORT_QUEUE = rq.QueueSpec(
     key="reports", select_id="report_queue:select",
     title="Scam Report Queue", emoji="📨", noun="scam reports",
     gather=_queue_gather, open_item=_queue_open,
+    bulk_decide=_queue_bulk_decide, can_bulk=_queue_can_bulk,
+    bulk_note="⚠️ This flags **every** reported user as a global scammer and gives them the Scammer role.",
 )
 
 

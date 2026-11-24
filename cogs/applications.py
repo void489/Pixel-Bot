@@ -590,87 +590,14 @@ class _ReviewDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
         )
 
     async def _apply_decision(self, interaction, sub, app, guild, status: str, reason: str):
-        claimed = await models.claim_submission_decision(
-            str(sub["_id"]), interaction.user.id, status, reason
-        )
-        if claimed is None:
+        res = await _decide_application(
+            interaction.client, guild, interaction.user, sub, app, status, reason)
+        if res is None:
             return await interaction.followup.send(
                 embed=info_embed("Someone else already decided this submission."),
                 ephemeral=True,
             )
-
-        # On accept: promote the applicant in the linked Change type (exactly like /promote,
-        # but always onto rung 1+). Role failures go in the warning spot (reviewer + DM);
-        # `review_notes` (LOA, type gone...) are for the reviewer only. A failure here never
-        # breaks the accept flow.
-        role_warnings = []
-        review_notes = []
-        if status == "Accepted":
-            applicant = guild.get_member(int(sub["applicant_id"]))
-            try:
-                from cogs.changes import promote_application
-                role_warnings, review_notes = await promote_application(
-                    guild, applicant, app.get("change_type_id"),
-                    decided_by=interaction.user, reason=reason,
-                )
-            except Exception as e:
-                print(f"[applications] promotion failed: {e}")
-                review_notes = ["Something went wrong promoting the applicant. Use `/promote` instead."]
-
-        refreshed = await models.get_application_submission(str(sub["_id"])) or sub
-
-        dest_channel_id = app.get("accepted_channel_id") if status == "Accepted" \
-            else app.get("denied_channel_id")
-        dest_channel = guild.get_channel(int(dest_channel_id)) if dest_channel_id else None
-
-        # Delete the old message from the submit channel.
-        old_channel_id = refreshed.get("submit_channel_id")
-        old_message_id = refreshed.get("submit_message_id")
-        if old_channel_id and old_message_id:
-            old_channel = guild.get_channel(int(old_channel_id))
-            if old_channel:
-                try:
-                    old_msg = await old_channel.fetch_message(int(old_message_id))
-                    await old_msg.delete()
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                    pass
-            await models.clear_submission_submit_message(str(sub["_id"]))
-
-        # Post to the destination channel (no pings on decision).
-        if dest_channel is not None:
-            try:
-                posted = await dest_channel.send(
-                    embed=_review_embed(refreshed, app, guild),
-                    view=_disabled_review_view(refreshed),
-                )
-                await models.set_submission_final_message(str(sub["_id"]), dest_channel.id, posted.id)
-            except (discord.Forbidden, discord.HTTPException):
-                pass
-
-        # ALWAYS DM the applicant, with reason if any, prefixed by the configured message if set.
-        configured_message = app.get("accept_message") if status == "Accepted" \
-            else app.get("deny_message")
-        default_message = (
-            f"Your application for **{app.get('name', 'Application')}** has been **accepted**."
-            if status == "Accepted"
-            else f"Your application for **{app.get('name', 'Application')}** has been **denied**."
-        )
-        body = (configured_message or "").strip() or default_message
-        if reason:
-            body += f"\n\n**Reason:** {reason}"
-        if role_warnings:
-            body += "\n\n⚠️ Some roles couldn't be assigned: " + "; ".join(role_warnings)
-
-        try:
-            user = await interaction.client.fetch_user(int(sub["applicant_id"]))
-            await user.send(embed=base_embed(
-                title=f"{app.get('name', 'Application')} — {status}",
-                description=body[:4000],
-                color=(constants.COLOR_SUCCESS if status == "Accepted"
-                       else constants.COLOR_ERROR),
-            ))
-        except (discord.Forbidden, discord.NotFound, discord.HTTPException):
-            pass
+        role_warnings, review_notes = res
 
         await rq.refresh(interaction.client, guild.id, APP_QUEUE)
 
@@ -682,6 +609,90 @@ class _ReviewDecisionButton(discord.ui.DynamicItem[discord.ui.Button],
             ),
             ephemeral=True,
         )
+
+
+async def _decide_application(client, guild, staff, sub, app, status: str, reason):
+    """Claim the submission and run the whole decision (promotion, channel post, DM).
+    -> None if someone else already decided it, else (role_warnings, review_notes)."""
+    claimed = await models.claim_submission_decision(
+        str(sub["_id"]), staff.id, status, reason
+    )
+    if claimed is None:
+        return None
+
+    # On accept: promote the applicant in the linked Change type (exactly like /promote,
+    # but always onto rung 1+). Role failures go in the warning spot (reviewer + DM);
+    # `review_notes` (LOA, type gone...) are for the reviewer only. A failure here never
+    # breaks the accept flow.
+    role_warnings = []
+    review_notes = []
+    if status == "Accepted":
+        applicant = guild.get_member(int(sub["applicant_id"]))
+        try:
+            from cogs.changes import promote_application
+            role_warnings, review_notes = await promote_application(
+                guild, applicant, app.get("change_type_id"),
+                decided_by=staff, reason=reason,
+            )
+        except Exception as e:
+            print(f"[applications] promotion failed: {e}")
+            review_notes = ["Something went wrong promoting the applicant. Use `/promote` instead."]
+
+    refreshed = await models.get_application_submission(str(sub["_id"])) or sub
+
+    dest_channel_id = app.get("accepted_channel_id") if status == "Accepted" \
+        else app.get("denied_channel_id")
+    dest_channel = guild.get_channel(int(dest_channel_id)) if dest_channel_id else None
+
+    # Delete the old message from the submit channel.
+    old_channel_id = refreshed.get("submit_channel_id")
+    old_message_id = refreshed.get("submit_message_id")
+    if old_channel_id and old_message_id:
+        old_channel = guild.get_channel(int(old_channel_id))
+        if old_channel:
+            try:
+                old_msg = await old_channel.fetch_message(int(old_message_id))
+                await old_msg.delete()
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                pass
+        await models.clear_submission_submit_message(str(sub["_id"]))
+
+    # Post to the destination channel (no pings on decision).
+    if dest_channel is not None:
+        try:
+            posted = await dest_channel.send(
+                embed=_review_embed(refreshed, app, guild),
+                view=_disabled_review_view(refreshed),
+            )
+            await models.set_submission_final_message(str(sub["_id"]), dest_channel.id, posted.id)
+        except (discord.Forbidden, discord.HTTPException):
+            pass
+
+    # ALWAYS DM the applicant, with reason if any, prefixed by the configured message if set.
+    configured_message = app.get("accept_message") if status == "Accepted" \
+        else app.get("deny_message")
+    default_message = (
+        f"Your application for **{app.get('name', 'Application')}** has been **accepted**."
+        if status == "Accepted"
+        else f"Your application for **{app.get('name', 'Application')}** has been **denied**."
+    )
+    body = (configured_message or "").strip() or default_message
+    if reason:
+        body += f"\n\n**Reason:** {reason}"
+    if role_warnings:
+        body += "\n\n⚠️ Some roles couldn't be assigned: " + "; ".join(role_warnings)
+
+    try:
+        user = await client.fetch_user(int(sub["applicant_id"]))
+        await user.send(embed=base_embed(
+            title=f"{app.get('name', 'Application')} — {status}",
+            description=body[:4000],
+            color=(constants.COLOR_SUCCESS if status == "Accepted"
+                   else constants.COLOR_ERROR),
+        ))
+    except (discord.Forbidden, discord.NotFound, discord.HTTPException):
+        pass
+    return role_warnings, review_notes
 
 
 class _ReasonModal(discord.ui.Modal):
@@ -847,10 +858,33 @@ async def _queue_open(interaction: discord.Interaction, guild: discord.Guild, it
     )
 
 
+async def _queue_bulk_decide(client, guild: discord.Guild, staff, item_id: str, accept: bool):
+    """Accept All / Deny All for one submission. -> (status, note); see QueueSpec.bulk_decide.
+    Same as the plain Accept / Deny buttons (no reason)."""
+    sub = await models.get_application_submission(item_id)
+    if not sub or str(sub.get("guild_id")) != str(guild.id):
+        return "skipped", "no longer exists"
+    app = await models.get_application(guild.id, sub.get("application_id"))
+    if not app:
+        return "skipped", "application was deleted"
+    if not _member_can_decide(staff, app):
+        return "skipped", "no permission"
+    if sub.get("status") != "Pending":
+        return "skipped", None
+    res = await _decide_application(
+        client, guild, staff, sub, app, "Accepted" if accept else "Denied", None)
+    if res is None:
+        return "skipped", None
+    role_warnings, review_notes = res
+    return "done", "; ".join(role_warnings + review_notes) or None
+
+
 APP_QUEUE = rq.QueueSpec(
     key="applications", select_id="app_queue:select",
     title="Application Queue", emoji="📝", noun="applications",
     gather=_queue_gather, open_item=_queue_open,
+    bulk_decide=_queue_bulk_decide,
+    bulk_note="⚠️ Each accepted applicant is promoted and gets the accept message.",
 )
 
 
