@@ -17,6 +17,22 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Leaves: a leave message with the same three types",
+        "tags": ["Dashboard", "Members"],
+        "summary": "Welcome & Auto Role has a new Leaves section under Welcome. It posts when a member leaves and has the same Normal, Embed and Image types as Welcome.",
+        "details": [
+            "Its own channel and its own text for each type, saved separately from Welcome.",
+            "Nobody is pinged (the member is gone), so {user} is just their name. {membercount} is the member count after they left.",
+            "Image type: the banner says GOODBYE and has its own uploadable background (same limits and fallbacks as Welcome).",
+            "Defaults: \"{username} left {server}\" with a red colour bar for the embed. Bots leaving are ignored.",
+        ],
+        "files": [
+            "cogs/welcome.py", "utils/welcome.py", "utils/welcome_image.py", "database/models.py",
+            "dashboard/routes.py", "dashboard/templates/welcome.html",
+        ],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Welcome message types: Normal, Embed and Image",
         "tags": ["Dashboard", "Members"],
         "summary": "A server now picks one of three welcome styles in Welcome & Auto Role: plain text (as before), an embed with the member's avatar, or a generated welcome image.",

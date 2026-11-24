@@ -2305,10 +2305,19 @@ async def get_welcome_config(guild_id: int) -> dict:
     return cfg
 
 
-async def get_welcome_background(guild_id: int):
-    """Bytes of the server's uploaded welcome-image background, or None (= use default)."""
+async def get_leave_config(guild_id: int) -> dict:
+    """Same shape as get_welcome_config (without autorole_ids), from guild_settings["leave"]."""
+    from utils.welcome import normalize_welcome
+    settings = await get_guild_settings(guild_id)
+    return normalize_welcome(settings.get("leave"), "leave")
+
+
+async def get_welcome_background(guild_id: int, kind: str = "welcome"):
+    """Bytes of the server's uploaded image background for the welcome (or kind="leave")
+    banner, or None (= use the default)."""
     from database.mongo import welcome_backgrounds_col
-    doc = await welcome_backgrounds_col().find_one({"_id": str(guild_id)})
+    doc_id = f"{guild_id}:leave" if kind == "leave" else str(guild_id)
+    doc = await welcome_backgrounds_col().find_one({"_id": doc_id})
     data = (doc or {}).get("data")
     return bytes(data) if data else None
 

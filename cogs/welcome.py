@@ -10,6 +10,9 @@ A server uses ONE welcome type (cfg["type"], missing = normal):
   embed  - ping above an embed (joiner's avatar as the right-hand thumbnail)
   image  - ping + text line + a banner drawn with Pillow (utils/welcome_image.py)
 Only the new member can ever be pinged.
+
+The Leaves section (guild_settings["leave"]) works the same way when a member leaves,
+except nobody is pinged and the image says GOODBYE.
 """
 import asyncio
 import io
@@ -19,8 +22,9 @@ from discord.ext import commands
 
 from database import models
 from utils.welcome import (
-    DEFAULT_EMBED, DEFAULT_WELCOME_MESSAGE, EMBED_DESC_MAX, EMBED_FOOTER_MAX,
-    EMBED_TITLE_MAX, IMAGE_TEXT_MAX, MAX_WELCOME_LEN, render_welcome, role_is_dangerous,
+    DEFAULT_EMBED, DEFAULT_LEAVE_EMBED, DEFAULT_LEAVE_MESSAGE, DEFAULT_WELCOME_MESSAGE,
+    EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, IMAGE_TEXT_MAX, MAX_WELCOME_LEN,
+    render_welcome, role_is_dangerous,
 )
 
 
@@ -72,25 +76,38 @@ class Welcome(commands.Cog):
         except (discord.Forbidden, discord.HTTPException) as e:
             print(f"[welcome] couldn't add auto roles in {guild.id}: {e}")
 
-    async def _send_welcome(self, member: discord.Member, cfg: dict):
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        if member.bot:
+            return
+        try:
+            cfg = await models.get_leave_config(member.guild.id)
+            await self._send_welcome(member, cfg, leave=True)
+        except Exception as e:
+            print(f"[welcome] leave message failed in {member.guild.id}: {e}")
+
+    async def _send_welcome(self, member: discord.Member, cfg: dict, leave: bool = False):
+        """leave=True: the Leaves section - same types, but nobody is pinged and the
+        member's name is plain text."""
         if not cfg["channel_id"]:
             return
         guild = member.guild
         channel = guild.get_channel(int(cfg["channel_id"]))
         if not isinstance(channel, discord.TextChannel):
             return
-        # Only the new member can be pinged - never @everyone or roles.
-        mentions = discord.AllowedMentions(users=[member], roles=False, everyone=False)
+        # Only the new member can be pinged - never @everyone or roles. On leave: nobody.
+        mentions = (discord.AllowedMentions.none() if leave else
+                    discord.AllowedMentions(users=[member], roles=False, everyone=False))
         kind = cfg.get("type") or "normal"
         try:
             if kind == "embed":
-                await self._send_embed(member, channel, cfg, mentions)
+                await self._send_embed(member, channel, cfg, mentions, leave)
             elif kind == "image":
-                await self._send_image(member, channel, cfg, mentions)
+                await self._send_image(member, channel, cfg, mentions, leave)
             else:
-                await self._send_normal(member, channel, cfg, mentions)
+                await self._send_normal(member, channel, cfg, mentions, leave)
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[welcome] couldn't post welcome in {guild.id}: {e}")
+            print(f"[welcome] couldn't post {'leave' if leave else 'welcome'} message in {guild.id}: {e}")
 
     @staticmethod
     def _fill(template: str, member: discord.Member, *, markdown: bool, mention: bool) -> str:
@@ -109,10 +126,10 @@ class Welcome(commands.Cog):
             member_count=guild.member_count,
         )
 
-    async def _send_normal(self, member, channel, cfg, mentions):
+    async def _send_normal(self, member, channel, cfg, mentions, leave=False):
         text = render_welcome(
-            cfg["message"] or DEFAULT_WELCOME_MESSAGE,
-            user_mention=member.mention,
+            cfg["message"] or (DEFAULT_LEAVE_MESSAGE if leave else DEFAULT_WELCOME_MESSAGE),
+            user_mention=member.name if leave else member.mention,
             username=member.name,
             server=member.guild.name,
             member_count=member.guild.member_count,
@@ -121,41 +138,45 @@ class Welcome(commands.Cog):
             return
         await channel.send(text, allowed_mentions=mentions)
 
-    async def _send_embed(self, member, channel, cfg, mentions):
+    async def _send_embed(self, member, channel, cfg, mentions, leave=False):
         e = cfg["embed"]
+        ping = not leave
         title = self._fill(e["title"], member, markdown=False, mention=False)[:EMBED_TITLE_MAX]
-        desc = self._fill(e["description"], member, markdown=True, mention=True)[:EMBED_DESC_MAX]
+        desc = self._fill(e["description"], member, markdown=True, mention=ping)[:EMBED_DESC_MAX]
         footer = self._fill(e["footer"], member, markdown=False, mention=False)[:EMBED_FOOTER_MAX]
+        default = DEFAULT_LEAVE_EMBED if leave else DEFAULT_EMBED
         if not (title.strip() or desc.strip() or footer.strip()):
             # an embed with nothing in it can't be sent: use the defaults
-            title = self._fill(DEFAULT_EMBED["title"], member, markdown=False, mention=False)
-            desc = self._fill(DEFAULT_EMBED["description"], member, markdown=True, mention=True)
+            title = self._fill(default["title"], member, markdown=False, mention=False)
+            desc = self._fill(default["description"], member, markdown=True, mention=ping)
         try:
             colour = discord.Colour(int(e["color"].lstrip("#"), 16))
         except (ValueError, AttributeError):
-            colour = discord.Colour(int(DEFAULT_EMBED["color"].lstrip("#"), 16))
+            colour = discord.Colour(int(default["color"].lstrip("#"), 16))
         embed = discord.Embed(title=title.strip() or None, description=desc.strip() or None, colour=colour)
         embed.set_thumbnail(url=member.display_avatar.replace(size=256).url)   # shown on the right
         if footer.strip():
             embed.set_footer(text=footer.strip())
-        # the ping lives in the message content, above the embed (embeds never ping)
-        await channel.send(member.mention, embed=embed, allowed_mentions=mentions)
+        # welcome: the ping lives in the message content, above the embed (embeds never ping)
+        await channel.send(None if leave else member.mention, embed=embed, allowed_mentions=mentions)
 
-    async def _send_image(self, member, channel, cfg, mentions):
-        text = self._fill(cfg["image_text"], member, markdown=True, mention=True)[:IMAGE_TEXT_MAX].strip()
-        if member.mention not in text:          # the joiner is always pinged
+    async def _send_image(self, member, channel, cfg, mentions, leave=False):
+        text = self._fill(cfg["image_text"], member, markdown=True, mention=not leave)[:IMAGE_TEXT_MAX].strip()
+        if not leave and member.mention not in text:     # the joiner is always pinged
             text = f"{member.mention}\n{text}".strip()
-        png = await self._make_image(member)
-        if png is None:                          # image failed: still welcome them, text only
-            await channel.send(text, allowed_mentions=mentions)
+        png = await self._make_image(member, leave)
+        if png is None:                          # image failed: still post the text line
+            if text:
+                await channel.send(text, allowed_mentions=mentions)
             return
         try:
-            await channel.send(text, file=discord.File(io.BytesIO(png), filename="welcome.png"),
+            await channel.send(text or None, file=discord.File(io.BytesIO(png), filename="welcome.png"),
                                allowed_mentions=mentions)
         except discord.Forbidden:               # no "Attach Files" here: text only
-            await channel.send(text, allowed_mentions=mentions)
+            if text:
+                await channel.send(text, allowed_mentions=mentions)
 
-    async def _make_image(self, member: discord.Member):
+    async def _make_image(self, member: discord.Member, leave: bool = False):
         """PNG bytes, or None if anything goes wrong (never raises)."""
         try:
             from utils.welcome_image import render_welcome_image
@@ -165,12 +186,13 @@ class Welcome(commands.Cog):
             except Exception as e:
                 print(f"[welcome] avatar download failed in {member.guild.id}: {e}")
             try:
-                background = await models.get_welcome_background(member.guild.id)
+                background = await models.get_welcome_background(member.guild.id, "leave" if leave else "welcome")
             except Exception as e:
                 print(f"[welcome] background load failed in {member.guild.id}: {e}")
                 background = None
             return await asyncio.to_thread(
-                render_welcome_image, member.display_name or member.name, avatar, background)
+                render_welcome_image, member.display_name or member.name, avatar, background,
+                "GOODBYE" if leave else "WELCOME")
         except Exception as e:
             print(f"[welcome] image failed in {member.guild.id}: {e}")
             return None

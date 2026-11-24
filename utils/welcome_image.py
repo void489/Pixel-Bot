@@ -119,8 +119,9 @@ def _circle_avatar(avatar: bytes | None, fallback_letter: str) -> Image.Image:
     return img.resize((AVATAR, AVATAR), Image.LANCZOS)
 
 
-def render_welcome_image(name: str, avatar: bytes | None = None, background: bytes | None = None) -> bytes:
-    """PNG bytes of the welcome banner."""
+def render_welcome_image(name: str, avatar: bytes | None = None, background: bytes | None = None,
+                         word: str = "WELCOME") -> bytes:
+    """PNG bytes of the banner. word = the big text ("WELCOME", or "GOODBYE" for leaves)."""
     bg = _load_background(background).convert("RGBA")
     # flat dark veil so white text stays readable on any background
     bg = Image.alpha_composite(bg, Image.new("RGBA", (W, H), SHADE + (110,)))
@@ -135,9 +136,9 @@ def render_welcome_image(name: str, avatar: bytes | None = None, background: byt
     d.ellipse((box[0] + 7, box[1] + 7, box[2] - 7, box[3] - 7), fill=INK)
     bg.alpha_composite(_circle_avatar(avatar, name[:1]), (cx - AVATAR // 2, top + ring))
 
-    # WELCOME
+    # big word
     big = _font(78)
-    d.text((cx, 262), "WELCOME", font=big, fill=INK, anchor="mm", stroke_width=5, stroke_fill=SHADE)
+    d.text((cx, 262), word, font=big, fill=INK, anchor="mm", stroke_width=5, stroke_fill=SHADE)
 
     # name: shrink until it fits, never wider than 90% of the image
     font = _font(46)

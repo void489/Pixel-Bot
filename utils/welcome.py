@@ -23,6 +23,22 @@ EMBED_FOOTER_MAX = 200
 # Image type: a text line (the joiner is always pinged) + a generated wide image.
 DEFAULT_IMAGE_TEXT = "Welcome {user} to **{server}**!"
 IMAGE_TEXT_MAX = 300
+# Leaves section: same three types, posted when a member leaves. Nobody is pinged
+# (the member is gone), so {user} is just their name there.
+DEFAULT_LEAVE_MESSAGE = "**{username}** left **{server}**. We are now {membercount} members."
+DEFAULT_LEAVE_EMBED = {
+    "title": "{username} left {server}",
+    "description": "We are now {membercount} members.",
+    "footer": "{server}",
+    "color": "#FF6270",
+}
+DEFAULT_LEAVE_IMAGE_TEXT = "**{username}** left **{server}**."
+LEAVE_PLACEHOLDERS = [
+    ("{user}", "their name (they left, so no ping)"),
+    ("{username}", "their username"),
+    ("{server}", "the server name"),
+    ("{membercount}", "total members now, without them"),
+]
 BG_MAX_UPLOAD = 5 * 1024 * 1024         # bytes the dashboard accepts for a background upload
 BG_MAX_PIXELS = 25_000_000              # refuse huge images before decoding them
 BG_UPLOAD_FORMATS = {"PNG": "png", "JPEG": "jpg", "WEBP": "webp"}
@@ -79,9 +95,12 @@ def _text_or_default(raw, default: str, limit: int) -> str:
     return default if raw is None else str(raw)[:limit]
 
 
-def normalize_welcome(welcome) -> dict:
-    """The saved guild_settings["welcome"] dict (may be missing, empty or old) as a full
-    config with safe defaults. Used by the bot AND the dashboard so they always agree."""
+def normalize_welcome(welcome, kind: str = "welcome") -> dict:
+    """The saved guild_settings["welcome"] (or ["leave"], kind="leave") dict - may be
+    missing, empty or old - as a full config with safe defaults. Used by the bot AND the
+    dashboard so they always agree."""
+    leave = kind == "leave"
+    d_embed = DEFAULT_LEAVE_EMBED if leave else DEFAULT_EMBED
     welcome = welcome if isinstance(welcome, dict) else {}
     embed = welcome.get("embed") if isinstance(welcome.get("embed"), dict) else {}
     image = welcome.get("image") if isinstance(welcome.get("image"), dict) else {}
@@ -90,10 +109,11 @@ def normalize_welcome(welcome) -> dict:
         "type": clean_welcome_type(welcome.get("type")),
         "message": welcome.get("message") or "",
         "embed": {
-            "title": _text_or_default(embed.get("title"), DEFAULT_EMBED["title"], EMBED_TITLE_MAX),
-            "description": _text_or_default(embed.get("description"), DEFAULT_EMBED["description"], EMBED_DESC_MAX),
-            "footer": _text_or_default(embed.get("footer"), DEFAULT_EMBED["footer"], EMBED_FOOTER_MAX),
-            "color": clean_hex_color(embed.get("color")),
+            "title": _text_or_default(embed.get("title"), d_embed["title"], EMBED_TITLE_MAX),
+            "description": _text_or_default(embed.get("description"), d_embed["description"], EMBED_DESC_MAX),
+            "footer": _text_or_default(embed.get("footer"), d_embed["footer"], EMBED_FOOTER_MAX),
+            "color": clean_hex_color(embed.get("color"), d_embed["color"]),
         },
-        "image_text": _text_or_default(image.get("text"), DEFAULT_IMAGE_TEXT, IMAGE_TEXT_MAX),
+        "image_text": _text_or_default(
+            image.get("text"), DEFAULT_LEAVE_IMAGE_TEXT if leave else DEFAULT_IMAGE_TEXT, IMAGE_TEXT_MAX),
     }
