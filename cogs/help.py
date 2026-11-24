@@ -8,7 +8,9 @@ prefix, e.g. !help, !staffhelp, !admin help).
 
 All three are @command_check() commands, so they appear on the dashboard's Command
 Permissions page by themselves (blocked for non-admins until you enable them there and
-pick the roles). Each one replies publicly in the channel with a category dropdown. The
+pick the roles). Each one replies publicly in the channel with a category dropdown, shown as one box (text and
+dropdown inside it, Discord Components V2). If the box can't be used (old discord.py) it falls
+back to the old embed + dropdown. Menus posted earlier as embeds keep working and keep updating. The
 dropdown never expires (it survives restarts) and ANYONE can use it, not just the person
 who ran the command: each category opens as a private message only the clicker sees, and
 it lists the commands THAT person can ACTUALLY run (it follows the dashboard's Command
@@ -32,6 +34,8 @@ from discord.ext import commands, tasks
 from database import models
 from utils.embeds import base_embed, error_embed
 from utils.permissions import command_check, register_all_commands
+from utils import panel_box
+from config import constants
 
 # ---------------------------------------------------------------------------
 # Which command belongs to which help
@@ -260,6 +264,21 @@ def category_embed(name: str, lines: list, footer: str) -> discord.Embed:
     return embed
 
 
+def overview_text(kind: str, pages: dict) -> str:
+    """The same overview as overview_embed, as text for the box look."""
+    title, intro, _ = KINDS[kind]
+    rows = [f"{EMOJI.get(n, '📁')} **{n}** - {_count(len(l))}" for n, l in pages.items()]
+    return f"## {title}\n{intro}\n\n" + "\n".join(rows)
+
+
+def category_text(name: str, lines: list) -> str:
+    """One category page as text for the box look (a box holds 4000 characters of text)."""
+    body = "\n\n".join(lines)
+    if len(body) > 3700:
+        body = body[:3690].rsplit("\n\n", 1)[0] + "\n\n…"
+    return f"## {EMOJI.get(name, '📁')} {name}\n{body}"
+
+
 def _default_options(kind: str) -> list:
     names = {"member": list(MEMBER_COMMANDS), "staff": list(STAFF_COMMANDS),
              "admin": ADMIN_ORDER}[kind]
@@ -321,10 +340,13 @@ async def refresh_panels(bot) -> int:
             await models.delete_help_panel(p["_id"])
             continue
         try:
-            await channel.get_partial_message(int(p["_id"])).edit(
-                embed=overview_embed(kind, pages, _footer(prefix)),
-                view=HelpView(kind, _options_for(pages)),
-            )
+            msg = await channel.fetch_message(int(p["_id"]))
+            if panel_box.is_box_message(msg):
+                await msg.edit(view=HelpBoxView(kind, overview_text(kind, pages),
+                                                _footer(prefix), _options_for(pages)))
+            else:                           # an older embed menu stays an embed
+                await msg.edit(embed=overview_embed(kind, pages, _footer(prefix)),
+                               view=HelpView(kind, _options_for(pages)))
         except discord.NotFound:
             await models.delete_help_panel(p["_id"])   # the message was deleted
             continue
@@ -340,39 +362,42 @@ async def refresh_panels(bot) -> int:
 # ---------------------------------------------------------------------------
 # The menu (embed + category dropdown) - persistent, usable by anyone
 # ---------------------------------------------------------------------------
-class HelpView(discord.ui.View):
-    """timeout=None + a fixed custom_id per menu type, and registered once at startup, so
-    the dropdown on any help message keeps working forever (even after a restart) and for
-    every member. What a click shows is worked out from the CLICKER's permissions."""
+class HelpSelect(discord.ui.Select):
+    """The category dropdown. A fixed custom_id per menu type, and one registered view per type
+    at startup, so the dropdown on any help message (embed or box) keeps working forever and
+    for every member. What a click shows is worked out from the CLICKER's permissions."""
 
     def __init__(self, kind: str, options: list = None):
-        super().__init__(timeout=None)
-        self.kind = kind
-        self.select = discord.ui.Select(
+        super().__init__(
             placeholder="Pick a category",
             options=(options or _default_options(kind))[:25],
             custom_id=f"help_menu:{kind}",
         )
-        self.select.callback = self._on_select
-        self.add_item(self.select)
+        self.kind = kind
 
-    async def _on_select(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction):
         if interaction.guild is None or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message(
                 embed=error_embed("Help only works inside a server."), ephemeral=True)
 
         # The category goes out as a private message only the clicker sees.
         await interaction.response.defer(ephemeral=True)
-        name = self.select.values[0] if self.select.values else None
+        name = self.values[0] if self.values else None
         pages = await build_pages(interaction.client, self.kind, interaction.user)
         prefix = await models.get_prefix(interaction.guild.id)
         footer = _footer(prefix)
 
         if name in pages:
-            embed = category_embed(name, pages[name], footer)
+            if panel_box.box_supported():
+                await interaction.followup.send(view=CategoryBoxView(name, pages[name], footer),
+                                                ephemeral=True)
+            else:
+                await interaction.followup.send(embed=category_embed(name, pages[name], footer),
+                                                ephemeral=True)
         else:
-            embed = error_embed("You don't have access to any commands in this category.")
-        await interaction.followup.send(embed=embed, ephemeral=True)
+            await interaction.followup.send(
+                embed=error_embed("You don't have access to any commands in this category."),
+                ephemeral=True)
 
         # An admin picking from an old menu makes it a live one (kept up to date from now on).
         if _can_manage(interaction.user) and interaction.message is not None:
@@ -384,16 +409,78 @@ class HelpView(discord.ui.View):
 
         # Re-send the public menu untouched so the same category can be picked again.
         try:
-            await interaction.message.edit(
-                view=HelpView(self.kind, _options_from_message(interaction.message, self.kind)))
+            msg = interaction.message
+            options = _options_from_message(msg, self.kind)
+            if panel_box.is_box_message(msg):
+                texts = _texts_of(msg)
+                view = HelpBoxView(self.kind, texts[0] if texts else "",
+                                   texts[-1].removeprefix("-# ") if len(texts) > 1 else "", options)
+            else:
+                view = HelpView(self.kind, options)
+            await msg.edit(view=view)
         except Exception:
             pass
+
+
+class HelpView(discord.ui.View):
+    """The embed look: the dropdown sits in a row under the embed."""
+
+    def __init__(self, kind: str, options: list = None):
+        super().__init__(timeout=None)
+        self.kind = kind
+        self.select = HelpSelect(kind, options)
+        self.add_item(self.select)
+
+
+_LayoutBase = getattr(discord.ui, "LayoutView", discord.ui.View)
+
+
+class HelpBoxView(_LayoutBase):
+    """The box look: the overview text, the dropdown and the footer all inside one box."""
+
+    def __init__(self, kind: str, text: str, footer: str = "", options: list = None):
+        super().__init__(timeout=None)
+        ui = discord.ui
+        children = [ui.TextDisplay(text[:3800] or "\u200b"), ui.Separator(),
+                    ui.ActionRow(HelpSelect(kind, options))]
+        if footer:
+            children.append(ui.TextDisplay(f"-# {footer}"[:500]))
+        self.add_item(ui.Container(*children, accent_colour=discord.Colour(constants.COLOR_DEFAULT)))
+
+
+class CategoryBoxView(_LayoutBase):
+    """One category page (private, only the clicker sees it) as a box."""
+
+    def __init__(self, name: str, lines: list, footer: str = ""):
+        super().__init__()
+        ui = discord.ui
+        children = [ui.TextDisplay(category_text(name, lines))]
+        if footer:
+            children += [ui.Separator(), ui.TextDisplay(f"-# {footer}"[:500])]
+        self.add_item(ui.Container(*children, accent_colour=discord.Colour(constants.COLOR_DEFAULT)))
+
+
+def _texts_of(message: discord.Message) -> list:
+    """All the text blocks of a posted box, in order."""
+    out = []
+
+    def walk(components):
+        for c in components or []:
+            content = getattr(c, "content", None)
+            if isinstance(content, str):
+                out.append(content)
+            walk(getattr(c, "children", None))
+    try:
+        walk(message.components)
+    except Exception:
+        pass
+    return out
 
 
 def _options_from_message(message: discord.Message, kind: str) -> list:
     """The dropdown options the message was posted with (what its runner could see)."""
     try:
-        comp = message.components[0].children[0]
+        comp = panel_box.find_select(message)
         return [discord.SelectOption(label=o.label, value=o.value, emoji=o.emoji,
                                      description=o.description) for o in comp.options]
     except Exception:
@@ -442,8 +529,12 @@ class Help(commands.Cog):
             await ctx.send(embed=error_embed(empty_msg))
             return
         prefix = await models.get_prefix(ctx.guild.id)
-        msg = await ctx.send(embed=overview_embed(kind, pages, _footer(prefix)),
-                             view=HelpView(kind, _options_for(pages)))
+        if panel_box.box_supported():
+            msg = await ctx.send(view=HelpBoxView(kind, overview_text(kind, pages),
+                                                  _footer(prefix), _options_for(pages)))
+        else:
+            msg = await ctx.send(embed=overview_embed(kind, pages, _footer(prefix)),
+                                 view=HelpView(kind, _options_for(pages)))
         # A menu an admin posts (e.g. in a bot-info channel) stays up to date by itself.
         if _can_manage(ctx.author) and msg is not None:
             try:

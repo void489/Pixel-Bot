@@ -533,6 +533,7 @@ def _clamp_seconds(value, default: int = 60) -> int:
 #
 # guild_settings.spawners = {
 #     category_id, allow_role_ids, ping_role_ids, notes,   <- dashboard
+#     panel_style, image_url, image_position, control, placeholder  <- panel look (dashboard)
 #     types:  { <key>: {name, emoji, sell_price, buy_price} },   <- /spawner add, setprice
 #     panels: [ {channel_id, message_id}, ... ],                 <- /spawner panel
 # }
@@ -575,6 +576,12 @@ async def get_spawner_config(guild_id: int) -> dict:
         "notes": cfg.get("notes") or "",
         "types": sort_spawner_types(cfg.get("types") or {}),
         "panels": cfg.get("panels") or [],
+        # panel look (dashboard, Spawners tab); old servers have none of these = embed + buttons
+        "panel_style": cfg.get("panel_style") or "embed",
+        "image_url": cfg.get("image_url") or "",
+        "image_position": cfg.get("image_position") or "",
+        "control": cfg.get("control") or "buttons",
+        "placeholder": cfg.get("placeholder") or "",
     }
 
 

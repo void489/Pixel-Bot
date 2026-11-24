@@ -41,7 +41,9 @@ from config import constants, settings
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
 from utils import review_queue_core as rq
-MAX_APPS_PER_PANEL = 5
+from utils import panel_style, panel_box
+MAX_APPS_PER_PANEL = 5          # buttons (Discord: 5 per row)
+MAX_APPS_DROPDOWN = 25          # a dropdown menu holds 25 options
 
 
 # ---------------------------------------------------------------------------
@@ -81,8 +83,7 @@ def _member_can_decide(member: discord.Member, app: dict) -> bool:
 # Embed builders
 # ---------------------------------------------------------------------------
 
-def _panel_embed(panel: dict, apps: list) -> discord.Embed:
-    title = panel.get("title") or "Applications"
+def _panel_lines(panel: dict, apps: list) -> list:
     lines = []
     if panel.get("description"):
         lines.append(panel["description"])
@@ -91,8 +92,12 @@ def _panel_embed(panel: dict, apps: list) -> discord.Embed:
         status = "🟢 Open" if app.get("is_open") else "🔴 Closed"
         emoji = app.get("emoji") or "📝"
         lines.append(f"{emoji} **{app.get('name', 'Application')}** • {status}")
+    return lines
 
-    embed = base_embed(title=title, description="\n".join(lines).strip())
+
+def _panel_embed(panel: dict, apps: list) -> discord.Embed:
+    title = panel.get("title") or "Applications"
+    embed = base_embed(title=title, description="\n".join(_panel_lines(panel, apps)).strip())
     if panel.get("color"):
         embed.color = int(panel["color"])
     if panel.get("footer"):
@@ -791,24 +796,103 @@ def build_review_view(submission: dict, dashboard_url: str = None) -> discord.ui
     return view
 
 
-def build_panel_view(apps: list) -> discord.ui.View:
-    view = discord.ui.View(timeout=None)
-    for app in apps[:MAX_APPS_PER_PANEL]:
-        style_name = app.get("button_style") or "primary"
-        style = {
-            "primary":   discord.ButtonStyle.primary,
-            "secondary": discord.ButtonStyle.secondary,
-            "success":   discord.ButtonStyle.success,
-            "danger":    discord.ButtonStyle.danger,
-        }.get(style_name, discord.ButtonStyle.primary)
-        label = app.get("button_label") or app.get("name") or "Apply"
-        view.add_item(discord.ui.Button(
-            label=label[:80],
+_BUTTON_STYLES = {
+    "primary":   discord.ButtonStyle.primary,
+    "secondary": discord.ButtonStyle.secondary,
+    "success":   discord.ButtonStyle.success,
+    "danger":    discord.ButtonStyle.danger,
+}
+
+SELECT_ID = "application_panel_select"
+
+
+def _panel_apps(apps: list, control: str) -> list:
+    return apps[:MAX_APPS_DROPDOWN if control == "dropdown" else MAX_APPS_PER_PANEL]
+
+
+class _ApplicationSelect(discord.ui.Select):
+    """The dropdown version of the panel's buttons. Persistent: one fixed custom id,
+    registered in cog_load; the option value is the application's id."""
+
+    def __init__(self, apps: list = (), placeholder: str = None):
+        options = [
+            discord.SelectOption(
+                label=(app.get("button_label") or app.get("name") or "Apply")[:100],
+                value=str(app["_id"]),
+                emoji=app.get("emoji") or None,
+                description=("🟢 Open" if app.get("is_open", True) else "🔴 Closed"),
+            )
+            for app in list(apps)[:MAX_APPS_DROPDOWN]
+        ] or [discord.SelectOption(label="Apply", value="none")]
+        super().__init__(
+            custom_id=SELECT_ID,
+            placeholder=(placeholder or "Choose an application...")[:150],
+            min_values=1, max_values=1, options=options,
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        # Same flow as the buttons (blacklist, closed check, DM questions)
+        await _PanelOpenButton(self.values[0], "Application").callback(interaction)
+        # Discord keeps showing the pick until the message is re-sent: put the menu back.
+        if interaction.guild is not None and interaction.message is not None:
+            try:
+                panel = await models.get_application_panel(interaction.guild.id)
+                apps = await models.get_applications(interaction.guild.id)
+                if panel and apps:
+                    await _put_application_panel(interaction.message.channel,
+                                                 interaction.message.id, panel, apps)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def build_panel_items(apps: list, control: str = "buttons", placeholder: str = None) -> list:
+    apps = _panel_apps(apps, control)
+    if control == "dropdown":
+        return [_ApplicationSelect(apps, placeholder)]
+    return [
+        discord.ui.Button(
+            label=(app.get("button_label") or app.get("name") or "Apply")[:80],
             emoji=app.get("emoji") or None,
-            style=style,
+            style=_BUTTON_STYLES.get(app.get("button_style") or "primary", discord.ButtonStyle.primary),
             custom_id=f"application_open:{app['_id']}",
-        ))
+        )
+        for app in apps
+    ]
+
+
+def build_panel_view(apps: list, control: str = "buttons", placeholder: str = None) -> discord.ui.View:
+    view = discord.ui.View(timeout=None)
+    for item in build_panel_items(apps, control, placeholder):
+        view.add_item(item)
     return view
+
+
+async def _put_application_panel(channel, message_id, panel: dict, apps: list):
+    """Post the applications panel in `channel` (message_id None) or update its message, in
+    the saved look. Returns (message, posted_style, note)."""
+    look = panel_style.panel_look(panel)
+    control = panel.get("control") or "buttons"
+    placeholder = panel.get("placeholder") or ""
+    shown = _panel_apps(apps, control)
+    guild_id = panel.get("guild_id")
+
+    def make_box(image_url):
+        text = "\n".join(_panel_lines(panel, shown)).strip()
+        if panel.get("footer"):
+            text += f"\n\n-# {panel['footer']}"
+        return panel_box.BoxView(
+            title=panel.get("title") or "Applications", text=text,
+            colour=int(panel.get("color") or 0x5865F2), image_url=image_url,
+            position=look["image_position"],
+            rows=panel_box.box_rows(build_panel_items(apps, control, placeholder)))
+
+    def make_embed(image_url, position):
+        embed = panel_box.embed_picture(_panel_embed(panel, shown), image_url, position)
+        return embed, build_panel_view(apps, control, placeholder)
+
+    return await panel_box.put_panel(
+        channel, message_id, look=look, image_key=f"apps:{guild_id}",
+        make_box=make_box, make_embed=make_embed)
 
 
 # ---------------------------------------------------------------------------
@@ -897,6 +981,7 @@ class Applications(commands.Cog):
         self.bot.add_dynamic_items(_ReviewDecisionButton)
         self.bot.add_dynamic_items(_StartConfirmButton)
         self.bot.add_view(rq.persistent_view(APP_QUEUE))
+        self.bot.add_view(build_panel_view([], "dropdown"))   # the panel's dropdown
         self._sweep_sessions.start()
         self._poll_dashboard_tasks.start()
 
@@ -1123,25 +1208,9 @@ class Applications(commands.Cog):
                 "No applications configured. Create one on the dashboard first."
             ))
 
-        embed = _panel_embed(panel, apps[:MAX_APPS_PER_PANEL])
-        view = build_panel_view(apps)
-
         existing_id = panel.get("message_id")
-        if existing_id:
-            try:
-                msg = await channel.fetch_message(int(existing_id))
-                await msg.edit(embed=embed, view=view)
-                return await ctx.send(embed=success_embed(
-                    f"Panel refreshed in {channel.mention}."
-                ), ephemeral=(ctx.interaction is not None))
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                pass
-
         try:
-            posted = await channel.send(embed=embed, view=view)
-            await models.save_application_panel(
-                ctx.guild.id, {"message_id": str(posted.id)}
-            )
+            posted, _style, note = await _put_application_panel(channel, existing_id, panel, apps)
         except discord.Forbidden:
             return await ctx.send(embed=error_embed(
                 f"I can't post in {channel.mention} — check my permissions there."
@@ -1149,8 +1218,11 @@ class Applications(commands.Cog):
         except discord.HTTPException as e:
             return await ctx.send(embed=error_embed(f"Discord error: {e}"))
 
+        if str(posted.id) != str(existing_id):
+            await models.save_application_panel(ctx.guild.id, {"message_id": str(posted.id)})
+        what = "refreshed" if existing_id and str(posted.id) == str(existing_id) else "posted"
         await ctx.send(embed=success_embed(
-            f"Panel posted in {channel.mention}."
+            f"Panel {what} in {channel.mention}." + (f"\n{note}" if note else "")
         ), ephemeral=(ctx.interaction is not None))
 
     @applications.command(
@@ -1252,21 +1324,11 @@ class Applications(commands.Cog):
         if not apps:
             return
 
-        embed = _panel_embed(panel, apps[:MAX_APPS_PER_PANEL])
-        view = build_panel_view(apps)
-
         existing_id = panel.get("message_id")
-        if existing_id:
-            try:
-                msg = await channel.fetch_message(int(existing_id))
-                await msg.edit(embed=embed, view=view)
-                return
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                pass
-
         try:
-            posted = await channel.send(embed=embed, view=view)
-            await models.save_application_panel(guild_id, {"message_id": str(posted.id)})
+            posted, _style, _note = await _put_application_panel(channel, existing_id, panel, apps)
+            if str(posted.id) != str(existing_id):
+                await models.save_application_panel(guild_id, {"message_id": str(posted.id)})
         except (discord.Forbidden, discord.HTTPException) as e:
             print(f"[applications] could not post panel: {e}")
 

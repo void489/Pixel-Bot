@@ -4,11 +4,15 @@ Role panels - the newer button / dropdown style of self-assign roles.
 (The older "react with an emoji" roles are still in cogs/utilities.py under /reactionrole.)
 
 Everything is set up on the dashboard's **Role Panels** tab - there are no commands. A panel is
-a message with an embed plus either:
+a message plus either:
     buttons   one button per role. Click = get the role, click again = remove it.
     dropdown  one select menu. Members pick the roles they want and the menu applies exactly
               that choice (roles from this panel that they didn't pick are removed, so picking
               nothing clears them all).
+
+Look (dashboard): "embed" (buttons / dropdown under an embed) or "box" (text, picture and
+buttons / dropdown all inside one box), plus an optional picture (link or upload). Changing the
+look and posting again replaces the message (an embed message can't turn into a box).
 
 Modes
     multiple  members can hold any number of the panel's roles
@@ -36,6 +40,7 @@ from discord.ext import commands, tasks
 from database import models
 from database.mongo import dashboard_tasks_col, role_panels_col
 from utils.embeds import error_embed
+from utils import panel_style, panel_box
 
 POST_TASK = "post_role_panel"
 DELETE_TASK = "delete_role_panel"
@@ -68,7 +73,7 @@ def _entries(panel: dict) -> list:
     return [e for e in (panel.get("entries") or []) if e.get("role_id")][:MAX_ENTRIES]
 
 
-def build_embed(panel: dict, guild: discord.Guild = None) -> discord.Embed:
+def _description(panel: dict, guild: discord.Guild = None) -> str:
     desc = (panel.get("description") or "").strip()
     if panel.get("show_list", True):
         lines = []
@@ -80,12 +85,21 @@ def build_embed(panel: dict, guild: discord.Guild = None) -> discord.Embed:
             lines.append(f"{emoji + ' ' if emoji else ''}{who}{extra}")
         if lines:
             desc = (desc + "\n\n" if desc else "") + "\n".join(lines)
-    footer = {
+    return desc
+
+
+def _footer_text(panel: dict) -> str:
+    return {
         ("buttons", "unique"): "Press a button to pick your role (you can only have one).",
         ("buttons", "multiple"): "Press a button to get a role - press it again to remove it.",
         ("dropdown", "unique"): "Pick your role from the menu (you can only have one).",
         ("dropdown", "multiple"): "Pick the roles you want from the menu - anything you leave out is removed.",
     }.get((panel.get("style"), panel.get("mode")), "")
+
+
+def build_embed(panel: dict, guild: discord.Guild = None) -> discord.Embed:
+    desc = _description(panel, guild)
+    footer = _footer_text(panel)
     embed = discord.Embed(
         title=(panel.get("title") or "")[:256] or None,
         description=desc[:4000] or None,
@@ -136,20 +150,49 @@ class _RoleSelect(discord.ui.Select):
         await handle_select(interaction, self.panel_id, [str(v) for v in self.values])
 
 
-def build_view(panel: dict, guild: discord.Guild = None) -> discord.ui.View:
-    """The button / dropdown components. `guild` only supplies role names for labels."""
+def build_items(panel: dict, guild: discord.Guild = None) -> list:
+    """The buttons / the dropdown. `guild` only supplies role names for labels."""
     pid = str(panel["_id"])
     labels = {}
     for e in _entries(panel):
         role = guild.get_role(int(e["role_id"])) if guild else None
         labels[str(e["role_id"])] = (e.get("label") or "").strip() or (role.name if role else "Role")
-    view = discord.ui.View(timeout=None)
     if panel.get("style") == "dropdown":
-        view.add_item(_RoleSelect(pid, panel, labels))
-    else:
-        for e in _entries(panel):
-            view.add_item(_RoleButton(pid, e, labels[str(e["role_id"])]))
+        return [_RoleSelect(pid, panel, labels)]
+    return [_RoleButton(pid, e, labels[str(e["role_id"])]) for e in _entries(panel)]
+
+
+def build_view(panel: dict, guild: discord.Guild = None) -> discord.ui.View:
+    """The button / dropdown components of the embed look (and what is re-registered at startup)."""
+    view = discord.ui.View(timeout=None)
+    for item in build_items(panel, guild):
+        view.add_item(item)
     return view
+
+
+async def _put(channel, message_id, panel: dict, guild: discord.Guild):
+    """Post the panel in `channel` (message_id None) or update its message, in the saved
+    look. Returns (message, posted_style, note)."""
+    look = panel_style.panel_look(panel)
+
+    def make_box(image_url):
+        text = _description(panel, guild)
+        footer = _footer_text(panel)
+        if footer:
+            text += f"\n\n-# {footer}"
+        return panel_box.BoxView(
+            title=(panel.get("title") or "")[:256] or None, text=text,
+            colour=int(panel.get("color") or 0x5865F2), image_url=image_url,
+            position=look["image_position"],
+            rows=panel_box.box_rows(build_items(panel, guild)))
+
+    def make_embed(image_url, position):
+        embed = panel_box.embed_picture(build_embed(panel, guild), image_url, position)
+        return embed, build_view(panel, guild)
+
+    return await panel_box.put_panel(
+        channel, message_id, look=look, image_key=f"rp:{panel['_id']}",
+        make_box=make_box, make_embed=make_embed)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +316,10 @@ async def handle_select(interaction: discord.Interaction, panel_id: str, chosen:
     # Discord keeps showing the member's picks in the menu until the message is re-sent;
     # put the menu back to its clean state so it doesn't look "stuck".
     try:
-        await interaction.message.edit(view=build_view(panel, guild))
+        posted, _style, _note = await _put(interaction.message.channel, interaction.message.id,
+                                           panel, guild)
+        if posted.id != interaction.message.id:      # look changed since it was posted: remember the new one
+            await models.update_role_panel(panel["_id"], {"message_id": str(posted.id)})
     except (discord.Forbidden, discord.HTTPException, AttributeError):
         pass
 
@@ -304,26 +350,20 @@ async def post_panel(guild: discord.Guild, panel: dict) -> tuple:
             bad.append(f"{role.name if role else e['role_id']}: {problem.split(' - ')[-1].rstrip('.')}")
     warning = ("These roles can't be given right now - " + "; ".join(bad)) if bad else ""
 
-    embed = build_embed(panel, guild)
-    view = build_view(panel, guild)
     old_id = panel.get("message_id")
     old_channel = panel.get("posted_channel_id")
-    message = None
+    same_channel = bool(old_id) and str(old_channel) == str(channel.id)
     try:
-        if old_id and str(old_channel) == str(channel.id):
-            try:
-                message = await channel.get_partial_message(int(old_id)).edit(embed=embed, view=view)
-            except discord.NotFound:
-                message = None
-        if message is None:
-            message = await channel.send(embed=embed, view=view)
-            if old_id and str(old_channel) != str(channel.id):      # moved channels: remove the old one
-                old_ch = guild.get_channel(int(old_channel)) if old_channel else None
-                if old_ch is not None:
-                    try:
-                        await old_ch.get_partial_message(int(old_id)).delete()
-                    except (discord.NotFound, discord.Forbidden, discord.HTTPException):
-                        pass
+        message, _style, note = await _put(channel, old_id if same_channel else None, panel, guild)
+        if note:
+            warning = (warning + " " + note).strip()
+        if old_id and not same_channel:         # moved channels: remove the old one
+            old_ch = guild.get_channel(int(old_channel)) if old_channel else None
+            if old_ch is not None:
+                try:
+                    await old_ch.get_partial_message(int(old_id)).delete()
+                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                    pass
     except discord.Forbidden:
         return f"Discord refused (missing permission in #{channel.name}).", ""
     except discord.HTTPException as e:

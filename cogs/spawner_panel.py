@@ -16,8 +16,10 @@ Prices are from the CUSTOMER's point of view, matching the panel text:
 
 Numbers accept k / m / b everywhere: 64, 1,152, 100k, 1.5m, 2b (see utils/spawner_math.py).
 
-Panel: an embed with the prices + the free-text notes from the dashboard, and two
-buttons, Sell Spawners and Buy Spawners. The buttons are DynamicItems registered once
+Panel: the prices + the free-text notes from the dashboard, and two choices, Sell Spawners
+and Buy Spawners. Look (dashboard, Spawners tab): "embed" (buttons under an embed) or "box"
+(everything inside one box), buttons or a dropdown menu, and an optional picture (link or
+upload). Changing the look re-posts the live panels (an embed message can't turn into a box). The buttons are DynamicItems registered once
 in cog_load, so they keep working across restarts. Every panel message is remembered
 (guild_settings.spawners.panels) and edited in place whenever a price or the notes change.
 
@@ -54,7 +56,7 @@ from database import models
 from utils.embeds import success_embed, error_embed, info_embed
 from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
-from utils import ticket_core
+from utils import ticket_core, panel_style, panel_box
 from utils.spawner_math import parse_amount, parse_price, format_short, format_both
 from cogs.tickets import (
     TicketControlView, category_lock, find_category_by_name, _can_close_ticket,
@@ -160,7 +162,8 @@ def order_phrase(side: str, amount: int, t: dict) -> str:
 # Embeds
 # ---------------------------------------------------------------------------
 
-def build_panel_embed(cfg: dict) -> discord.Embed:
+def _panel_title_desc(cfg: dict) -> tuple:
+    """(title, description) of the panel: the prices and the notes."""
     types = list(cfg["types"].values())
 
     def lines_for(side):
@@ -195,6 +198,11 @@ def build_panel_embed(cfg: dict) -> discord.Embed:
 
     emoji = next((t.get("emoji") for t in types if t.get("emoji")), "")
     title = f"{emoji} SPAWNER PRICES {emoji}" if emoji else "SPAWNER PRICES"
+    return title, description
+
+
+def build_panel_embed(cfg: dict) -> discord.Embed:
+    title, description = _panel_title_desc(cfg)
     return discord.Embed(
         title=title, description=description, color=PANEL_COLOR,
         timestamp=datetime.now(timezone.utc),
@@ -253,11 +261,34 @@ def build_amount_embed(*, side: str, old_amount: int, new_amount: int, t: dict,
 # dashboard task poller)
 # ---------------------------------------------------------------------------
 
+async def _put_panel(channel, message_id, cfg: dict, guild_id: int):
+    """Post the panel in `channel` (message_id None) or update its message, in the saved look.
+    Returns (message, posted_style, note)."""
+    look = panel_style.panel_look(cfg)
+    control, placeholder = cfg.get("control") or "buttons", cfg.get("placeholder") or ""
+
+    def make_box(image_url):
+        title, text = _panel_title_desc(cfg)
+        text += f"\n\n-# Updated <t:{int(datetime.now(timezone.utc).timestamp())}:R>"
+        return panel_box.BoxView(
+            title=title, text=text, colour=PANEL_COLOR, image_url=image_url,
+            position=look["image_position"],
+            rows=panel_box.box_rows(build_panel_items(control, placeholder, plain=True)))
+
+    def make_embed(image_url, position):
+        embed = panel_box.embed_picture(build_panel_embed(cfg), image_url, position)
+        return embed, build_panel_view(control, placeholder)
+
+    return await panel_box.put_panel(
+        channel, message_id, look=look, image_key=f"spawner:{guild_id}",
+        make_box=make_box, make_embed=make_embed)
+
+
 async def refresh_panels(guild: discord.Guild) -> int:
     """Edit every remembered panel message in place. Returns how many were updated.
-    Panels whose message or channel no longer exists are forgotten."""
+    Panels whose message or channel no longer exists are forgotten. A panel whose look
+    changed (embed <-> box) is posted again, and the new message is remembered instead."""
     cfg = await models.get_spawner_config(guild.id)
-    embed = build_panel_embed(cfg)
     updated = 0
     for p in cfg["panels"]:
         channel = guild.get_channel_or_thread(int(p["channel_id"]))
@@ -266,12 +297,21 @@ async def refresh_panels(guild: discord.Guild) -> int:
             continue
         try:
             msg = await channel.fetch_message(int(p["message_id"]))
-            await msg.edit(embed=embed)   # buttons stay as they are
-            updated += 1
         except discord.NotFound:
             await models.remove_spawner_panel(guild.id, p["message_id"])
+            continue
         except (discord.Forbidden, discord.HTTPException) as e:
             print(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
+            continue
+        try:
+            posted, _style, _note = await _put_panel(channel, msg.id, cfg, guild.id)
+        except (discord.Forbidden, discord.HTTPException) as e:
+            print(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
+            continue
+        if posted.id != msg.id:     # replaced: remember the new message
+            await models.remove_spawner_panel(guild.id, msg.id)
+            await models.add_spawner_panel(guild.id, channel.id, posted.id)
+        updated += 1
     return updated
 
 
@@ -799,10 +839,58 @@ class SpawnerOpenButton(
         )
 
 
-def build_panel_view() -> discord.ui.View:
+SELECT_ID = "spawner_panel_select"
+
+
+class SpawnerPanelSelect(discord.ui.Select):
+    """The dropdown version of the panel's two buttons. Persistent: one fixed custom id,
+    registered in cog_load, so it works on every panel (and after a restart)."""
+
+    def __init__(self, placeholder: str = None):
+        super().__init__(
+            custom_id=SELECT_ID,
+            placeholder=(placeholder or "Sell or buy spawners...")[:150],
+            min_values=1, max_values=1,
+            options=[
+                discord.SelectOption(label="Sell Spawners", value=SELL, emoji="💰",
+                                     description="Sell your spawners to us"),
+                discord.SelectOption(label="Buy Spawners", value=BUY, emoji="🛒",
+                                     description="Buy spawners from us"),
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        # Same flow as the buttons (blacklist, picker, modal)
+        await SpawnerOpenButton(self.values[0]).callback(interaction)
+        # Discord keeps showing the pick until the message is re-sent: put the menu back.
+        if interaction.guild is not None and interaction.message is not None:
+            try:
+                cfg = await models.get_spawner_config(interaction.guild.id)
+                await _put_panel(interaction.message.channel, interaction.message.id, cfg,
+                                 interaction.guild.id)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def build_panel_items(control: str = "buttons", placeholder: str = None, plain: bool = False) -> list:
+    """The panel's components. plain=True gives ordinary buttons (for the box): clicks are
+    still handled by SpawnerOpenButton, which matches on the custom id."""
+    if control == "dropdown":
+        return [SpawnerPanelSelect(placeholder)]
+    if not plain:
+        return [SpawnerOpenButton(SELL), SpawnerOpenButton(BUY)]
+    return [
+        discord.ui.Button(label="Sell Spawners", emoji="💰", style=discord.ButtonStyle.success,
+                          custom_id=f"spawner_open:{SELL}"),
+        discord.ui.Button(label="Buy Spawners", emoji="🛒", style=discord.ButtonStyle.primary,
+                          custom_id=f"spawner_open:{BUY}"),
+    ]
+
+
+def build_panel_view(control: str = "buttons", placeholder: str = None) -> discord.ui.View:
     view = discord.ui.View(timeout=None)
-    view.add_item(SpawnerOpenButton(SELL))
-    view.add_item(SpawnerOpenButton(BUY))
+    for item in build_panel_items(control, placeholder):
+        view.add_item(item)
     return view
 
 
@@ -817,6 +905,7 @@ class Spawners(commands.Cog):
     async def cog_load(self):
         self.bot.add_dynamic_items(SpawnerOpenButton)
         self.bot.add_view(ChangeAmountView())
+        self.bot.add_view(build_panel_view("dropdown"))
         self._poll_dashboard_tasks.start()
 
     async def cog_unload(self):
@@ -960,7 +1049,7 @@ class Spawners(commands.Cog):
         await ctx.defer(ephemeral=True)
         cfg = await models.get_spawner_config(ctx.guild.id)
         try:
-            msg = await ctx.channel.send(embed=build_panel_embed(cfg), view=build_panel_view())
+            msg, _style, look_note = await _put_panel(ctx.channel, None, cfg, ctx.guild.id)
         except (discord.Forbidden, discord.HTTPException) as e:
             return await ctx.send(embed=error_embed(
                 f"I couldn't post the panel in this channel: {e}"
@@ -969,6 +1058,8 @@ class Spawners(commands.Cog):
         await models.add_spawner_panel(ctx.guild.id, ctx.channel.id, msg.id)
 
         note = "It updates by itself whenever a price or the notes change."
+        if look_note:
+            note += "\n" + look_note
         if not any(_price(t, SELL) or _price(t, BUY) for t in cfg["types"].values()):
             note += ("\nNo prices are set yet - use `spawner add` and `spawner setprice`, "
                      "the panel will fill in.")

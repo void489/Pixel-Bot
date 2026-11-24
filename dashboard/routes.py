@@ -898,8 +898,27 @@ def register_routes(app, discord_session):
             notes = (request.form.get("notes") or "").replace("\r\n", "\n").replace("\r", "\n")
             notes = notes.strip()[:SPAWNER_NOTES_MAX]
 
+            # Panel look: embed or box, buttons or dropdown, optional picture.
+            from utils import panel_style as _ps
+            try:
+                look, new_image, remove_image = _ps.read_look_form(request.form, request.files)
+            except ValueError as e:
+                return redirect(url_for("dashboard.spawners_page", guild_id=guild_id,
+                                        error=_ps.LOOK_ERRORS.get(str(e), "Invalid picture.")))
+
             # Ticket category / ping roles / allow roles live on the Tickets page now.
-            dashboard_db.update_guild_settings(guild_id, {"spawners.notes": notes})
+            dashboard_db.update_guild_settings(guild_id, {
+                "spawners.notes": notes,
+                "spawners.panel_style": look["panel_style"],
+                "spawners.image_url": look["image_url"],
+                "spawners.image_position": look["image_position"],
+                "spawners.control": look["control"],
+                "spawners.placeholder": look["placeholder"],
+            })
+            if new_image:
+                dashboard_db.save_panel_image(f"spawner:{guild_id}", *new_image)
+            elif remove_image:
+                dashboard_db.delete_panel_image(f"spawner:{guild_id}")
             # Tell the bot to re-draw the live panel(s) with the new notes.
             dashboard_db.enqueue_task("refresh_spawner_panels", guild_id)
             return redirect(url_for("dashboard.spawners_page", guild_id=guild_id, saved=1))
@@ -909,10 +928,15 @@ def register_routes(app, discord_session):
         notes = cfg.get("notes")
         if notes is None:
             notes = DEFAULT_SPAWNER_NOTES
+        from utils import panel_style as _ps
+        look = _ps.look_view(cfg, bool(dashboard_db.panel_image_ids([f"spawner:{guild_id}"])))
         return render_template(
             "spawners.html",
             guild_id=guild_id,
             cfg=cfg,
+            look=look,
+            panel_styles=_ps.PANEL_STYLES,
+            image_positions=_ps.IMAGE_POSITIONS,
             notes=notes,
             notes_max=SPAWNER_NOTES_MAX,
             types=[dict(v, key=k) for k, v in _sorted_spawner_types(cfg.get("types"))],
@@ -3238,7 +3262,19 @@ def register_routes(app, discord_session):
                     "color": _hex_to_int(request.form.get("panel_color", "#5865f2")),
                     "color_hex": request.form.get("panel_color", "#5865f2"),
                 }
+                # Panel look: embed or box, buttons or dropdown, optional picture.
+                from utils import panel_style as _ps
+                try:
+                    look, new_image, remove_image = _ps.read_look_form(request.form, request.files)
+                except ValueError as e:
+                    return redirect(url_for("dashboard.applications_page", guild_id=guild_id,
+                                            error=f"look_{e}"))
+                panel_data.update(look)
                 dashboard_db.upsert_application_panel(guild_id, panel_data)
+                if new_image:
+                    dashboard_db.save_panel_image(f"apps:{guild_id}", *new_image)
+                elif remove_image:
+                    dashboard_db.delete_panel_image(f"apps:{guild_id}")
 
             elif form_type == "post_panel":
                 dashboard_db.enqueue_task("post_application_panel", guild_id)
@@ -3257,12 +3293,16 @@ def register_routes(app, discord_session):
         settings_doc = dashboard_db.get_guild_settings(guild_id)
         apps = dashboard_db.get_applications(guild_id)
         panel = dashboard_db.get_application_panel(guild_id) or {}
+        from utils import panel_style as _ps
 
         return render_template(
             "applications.html",
             guild_id=guild_id,
             apps=apps,
             panel=panel,
+            look=_ps.look_view(panel, bool(dashboard_db.panel_image_ids([f"apps:{guild_id}"]))),
+            panel_styles=_ps.PANEL_STYLES,
+            image_positions=_ps.IMAGE_POSITIONS,
             dm_timeout_minutes=(settings_doc.get("applications") or {}).get("dm_timeout_minutes", 30),
             channels=get_text_channels(int(guild_id)),
             categories=get_categories(int(guild_id)),
@@ -3490,6 +3530,7 @@ def register_routes(app, discord_session):
                             "message_id": panel["message_id"],
                         })
                     dashboard_db.delete_role_panel(guild_id, panel_id)
+                    dashboard_db.delete_panel_image(f"rp:{panel_id}")
                 return _back(deleted=1)
 
             if panel_id and not dashboard_db.get_role_panel(guild_id, panel_id):
@@ -3534,7 +3575,19 @@ def register_routes(app, discord_session):
                 "color_hex": color_hex,
                 "entries": entries,
             }
+            # Look: embed or box, optional picture (the buttons / dropdown choice is "style" above)
+            from utils import panel_style as _ps
+            try:
+                look, new_image, remove_image = _ps.read_look_form(
+                    request.form, request.files, with_control=False)
+            except ValueError as e:
+                return _back(error=f"look_{e}", **({"open": panel_id} if panel_id else {}))
+            data.update(look)
             saved_id = dashboard_db.save_role_panel(guild_id, panel_id, data)
+            if new_image:
+                dashboard_db.save_panel_image(f"rp:{saved_id}", *new_image)
+            elif remove_image:
+                dashboard_db.delete_panel_image(f"rp:{saved_id}")
 
             if action == "post":
                 if not entries:
@@ -3546,10 +3599,17 @@ def register_routes(app, discord_session):
             return _back(saved=1, open=saved_id)
 
         panels = dashboard_db.get_role_panels(guild_id)
+        from utils import panel_style as _ps
+        uploaded = dashboard_db.panel_image_ids([f"rp:{p['_id']}" for p in panels])
+        for p in panels:
+            p["look"] = _ps.look_view(p, f"rp:{p['_id']}" in uploaded)
         return render_template(
             "role_panels.html",
             guild_id=guild_id,
             panels=panels,
+            panel_styles=_ps.PANEL_STYLES,
+            image_positions=_ps.IMAGE_POSITIONS,
+            blank_look=_ps.look_view({}),
             roles=roles,
             channels=get_text_channels(int(guild_id)),
             blank={"_id": "", "name": "", "style": "buttons", "mode": "multiple", "channel_id": None,

@@ -17,6 +17,28 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Box look for help, plus look, dropdown and picture options on more panels",
+        "tags": ["Dashboard", "Members", "Staff", "Admin"],
+        "summary": "/help, /staffhelp and /admin help now show as one box (text and dropdown inside it). The Spawner, Applications and Role panels can each be posted as an embed or as a box, can show a dropdown instead of buttons (Spawner and Applications), and can have a picture.",
+        "details": [
+            "Help: the menu and each category page are boxes. Older help messages that are embeds keep working and keep updating; new ones are boxes. If the server's discord.py can't do boxes it falls back to the old embed.",
+            "Spawner panel (dashboard Spawners tab): Look (embed or box), Show as (buttons or dropdown with Sell / Buy) and a picture. Saving updates the live panels.",
+            "Applications panel (dashboard Applications tab): Look, buttons or dropdown (up to 25 applications in a dropdown, 5 as buttons) and a picture.",
+            "Role Panels (dashboard Role Panels tab): Look and a picture. Buttons or dropdown was already there. This is the Role Panels tab, not the old emoji /reactionrole.",
+            "Picture: a https link or an uploaded PNG, JPG, WEBP or GIF (up to 4 MB). Positions: embed = right or bottom, box = up, down or right. An upload wins over the link.",
+            "Changing between embed and box posts the panel again as a new message and deletes the old one, because Discord can't turn one kind of message into the other.",
+            "If the box can't be built or Discord refuses the picture, the panel is still posted (as an embed, or without the picture).",
+            "Old panels have no look saved, so they stay embed + buttons until you change it.",
+            "Uploaded pictures are stored in the ticket_panel_images collection under spawner:<guild>, apps:<guild> and rp:<panel id>.",
+        ],
+        "files": ["cogs/help.py", "cogs/spawner_panel.py", "cogs/applications.py", "cogs/role_panels.py",
+                  "utils/panel_box.py", "utils/panel_style.py", "database/models.py",
+                  "dashboard/routes.py", "dashboard/templates/_look_fields.html",
+                  "dashboard/templates/spawners.html", "dashboard/templates/applications.html",
+                  "dashboard/templates/role_panels.html", "dashboard/static/look-fields.js"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "/blacklist add and remove: new type \"all\"",
         "tags": ["Blacklist"],
         "summary": "You can now pick type \"all\" in /blacklist add and /blacklist remove to blacklist or unblacklist someone for giveaways, tickets and applications in one request.",

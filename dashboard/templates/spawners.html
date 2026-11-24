@@ -1,3 +1,4 @@
+{% from '_look_fields.html' import look_fields %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -74,6 +75,7 @@
     .cmd small { display:block; font-family:inherit; color:var(--text-muted); margin-top:2px; }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='look-fields.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
 </head>
 <body>
@@ -92,7 +94,7 @@
     <div class="t-section">
       <div class="t-section-head"><h2>Settings</h2></div>
 
-      <form method="POST">
+      <form method="POST" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="hint" style="margin:0 0 14px;font-style:normal;">
           Ticket category, spare categories, ping roles and allow roles for spawner tickets are now set on the
@@ -104,6 +106,8 @@
         <textarea name="notes" id="f-notes" class="notes-area" maxlength="{{ notes_max }}" oninput="countNotes()">{{ notes }}</textarea>
         <div class="char-count"><span id="notes-count">0</span> / {{ notes_max }}</div>
         <div class="hint">Everything below the prices is this text. Normal Discord formatting works: <code>**bold**</code>, <code>*italic*</code>, <code>-# small text</code>.</div>
+
+        {{ look_fields(look, panel_styles, image_positions) }}
 
         <div style="margin-top:18px;">
           <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Settings</button>

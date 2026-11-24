@@ -1,0 +1,40 @@
+{# Shared "Look" fields for a panel: style (embed / box), buttons or dropdown, picture.
+   Use inside a <form method="POST" enctype="multipart/form-data">:
+     {% from '_look_fields.html' import look_fields %}
+     {{ look_fields(look, panel_styles, image_positions) }}
+   `look` comes from utils/panel_style.look_view(); the route reads it back with
+   panel_style.read_look_form(). Needs <script src="static/look-fields.js" defer> on the page. #}
+{% macro look_fields(look, panel_styles, image_positions, show_control=true) -%}
+<div class="lk-wrap" data-positions='{{ image_positions|tojson }}' data-position="{{ look.image_position }}">
+  <label class="t-label">Look</label>
+  <select name="look_style" class="lk-style">
+    {% for key, label in panel_styles %}<option value="{{ key }}" {% if look.panel_style == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <div class="hint lk-hint"></div>
+
+  {% if show_control %}
+  <label class="t-label">Show as</label>
+  <select name="look_control" class="lk-control">
+    <option value="buttons" {% if look.control != 'dropdown' %}selected{% endif %}>Buttons</option>
+    <option value="dropdown" {% if look.control == 'dropdown' %}selected{% endif %}>Dropdown menu</option>
+  </select>
+  <div class="lk-ph">
+    <label class="t-label">Dropdown placeholder</label>
+    <input type="text" name="look_placeholder" maxlength="150" value="{{ look.placeholder }}" placeholder="Choose an option...">
+    <div class="hint">The grey text on the closed menu.</div>
+  </div>
+  {% endif %}
+
+  <label class="t-label">Picture (optional)</label>
+  <input type="url" name="look_image_url" maxlength="500" value="{{ look.image_url }}" placeholder="https://example.com/picture.png">
+  <div class="hint">Paste a link, or upload a file below (PNG, JPG, WEBP or GIF, up to 4 MB). An uploaded file is used instead of the link.</div>
+  <input type="file" name="look_image_file" accept="image/png,image/jpeg,image/webp,image/gif">
+  {% if look.has_upload %}
+  <label class="toggle" style="margin-top:6px;display:inline-flex;gap:6px;align-items:center;font-size:12px;"><input type="checkbox" name="look_remove_image"> Remove the uploaded picture</label>
+  {% endif %}
+
+  <label class="t-label">Picture position</label>
+  <select name="look_image_position" class="lk-pos"></select>
+  <div class="hint">Switching between embed and box posts the panel again as a new message (Discord can't turn one into the other).</div>
+</div>
+{%- endmacro %}

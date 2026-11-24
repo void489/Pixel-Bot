@@ -1,3 +1,4 @@
+{% from '_look_fields.html' import look_fields %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -43,6 +44,7 @@
     @media (max-width:900px) { .entry { grid-template-columns:1fr 1fr; } .entry-head { display:none; } }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='look-fields.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
 </head>
 <body>
@@ -71,7 +73,7 @@
 {%- endmacro %}
 
 {% macro panel_form(p, is_new) -%}
-<form method="POST" class="rp-form" data-style="{{ p.style }}">
+<form method="POST" class="rp-form" data-style="{{ p.style }}" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="panel_id" value="{{ p._id }}">
 
@@ -123,6 +125,8 @@
     </div>
   </div>
 
+  <div style="margin-top:6px;">{{ look_fields(p.look or blank_look, panel_styles, image_positions, false) }}</div>
+
   <label class="t-label" style="margin-top:22px;">Roles (max 25)</label>
   <div class="entry-head"><div class="entry">
     <div>Role</div><div>Label</div><div>Emoji</div><div class="only-dropdown">Description</div><div class="only-buttons">Button color</div><div></div>
@@ -160,6 +164,9 @@
     {% elif error == 'no_channel' %}Pick a channel to post the panel in.
     {% elif error == 'bad_emoji' %}One of the emojis isn't valid. Use a normal emoji () or a custom one like &lt;:name:123456789012345678&gt;.
     {% elif error == 'too_many' %}A panel can have at most 25 roles.
+    {% elif error == 'look_url' %}The picture link must be a https:// link (under 500 characters, no spaces).
+    {% elif error == 'look_big' %}That picture is too big. Use a file up to 4 MB.
+    {% elif error == 'look_bad' %}That file isn't a usable picture. Use a PNG, JPG, WEBP or GIF.
     {% elif error == 'missing' %}That panel no longer exists.
     {% else %}Something in the form was invalid.{% endif %}
   </div>

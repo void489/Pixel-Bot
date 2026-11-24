@@ -1,3 +1,4 @@
+{% from '_look_fields.html' import look_fields %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -38,6 +39,7 @@
     .chip-closed { background:rgba(var(--danger-rgb),.15);  color:var(--danger); }
   </style>
   <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='look-fields.js') }}" defer></script>
   <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
 </head>
 <body>
@@ -58,6 +60,9 @@
     {% elif error == 'missing_denied_channel_id' %}Denied channel is required.
     {% elif error == 'missing_ticket_category_id' %}Ticket category is required.
     {% elif error == 'missing_questions' %}Add at least one question.
+    {% elif error == 'look_url' %}The picture link must be a https:// link (under 500 characters, no spaces).
+    {% elif error == 'look_big' %}That picture is too big. Use a file up to 4 MB.
+    {% elif error == 'look_bad' %}That file isn't a usable picture. Use a PNG, JPG, WEBP or GIF.
     {% else %}Missing required field: {{ error }}{% endif %}
   </div>
   {% endif %}
@@ -78,7 +83,7 @@
 
   <div class="t-section">
     <div class="t-section-head"><h2>Panel</h2></div>
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="form_type" value="save_panel">
       <label class="t-label">Post channel</label>
@@ -96,6 +101,8 @@
       <input type="text" name="panel_footer" value="{{ panel.footer or '' }}">
       <label class="t-label">Color</label>
       <input type="text" name="panel_color" value="{{ panel.color_hex or '#5865f2' }}" maxlength="7">
+      {{ look_fields(look, panel_styles, image_positions) }}
+      <div class="hint">A dropdown holds up to 25 applications, buttons only 5.</div>
       <div style="margin-top:14px;">
         <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Panel</button>
       </div>
