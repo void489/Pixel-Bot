@@ -12,6 +12,8 @@ _CODEBLOCK = re.compile(r"```(?:[A-Za-z0-9_+-]*\n)?(.*?)```", re.S)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 # Runs on already-escaped text, so '&amp;' is allowed but '&lt;' '&gt;' '&#34;' '&#39;' end a URL.
 _URL = re.compile(r"https?://(?:[^\s<>&]|&amp;)+")
+# [label](https://link) - runs on already-escaped text; the URL part can't contain quotes or '<'.
+_MASKED_LINK = re.compile(r"\[([^\]\n]{1,200})\]\((https?://(?:[^\s<>&()]|&amp;)+)\)")
 _CUSTOM_EMOJI = re.compile(r"&lt;(a?):([A-Za-z0-9_]{2,32}):(\d{15,25})&gt;")
 _BOLD = re.compile(r"\*\*(.+?)\*\*", re.S)
 _UNDERLINE = re.compile(r"__(.+?)__", re.S)
@@ -64,7 +66,11 @@ def render_markdown(text) -> Markup:
             url = url[:-1]
         return keep(f'<a href="{url}" target="_blank" rel="noopener noreferrer">{url}</a>') + tail
 
+    def masked(m):
+        return keep(f'<a href="{m.group(2)}" target="_blank" rel="noopener noreferrer">{m.group(1)}</a>')
+
     text = _CUSTOM_EMOJI.sub(emoji, text)
+    text = _MASKED_LINK.sub(masked, text)   # before bare URLs, so "[Click here](url)" shows as "Click here"
     text = _URL.sub(link, text)
 
     # 4) markdown

@@ -17,6 +17,17 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "Transcripts: [text](link) shows as a clickable word",
+        "tags": ["Dashboard", "Fix"],
+        "summary": "In a transcript, a link written as [Click here](https://...) now shows as just \"Click here\" (clickable) instead of the whole raw link spilling out.",
+        "details": [
+            "Works in message text and in embed descriptions and fields.",
+            "Only http and https links are turned into links.",
+        ],
+        "files": ["dashboard/transcript_render.py"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Fix: transcript page showed with broken styling",
         "tags": ["Dashboard", "Fix"],
         "summary": "Opening a transcript no longer looks broken. The page's security policy was blocking the shared stylesheet, fonts and theme script.",
