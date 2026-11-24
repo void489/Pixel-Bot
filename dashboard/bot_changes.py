@@ -17,6 +17,19 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-24",
+        "title": "/blacklist add and remove: new type \"all\"",
+        "tags": ["Blacklist"],
+        "summary": "You can now pick type \"all\" in /blacklist add and /blacklist remove to blacklist or unblacklist someone for giveaways, tickets and applications in one request.",
+        "details": [
+            "It is one request and one staff decision. When accepted, every blacklist role that is set up is added or removed.",
+            "Types that have no role set up are skipped and staff see a warning; at least one role must be set up.",
+            "Blocks a second request for the same person while one is pending, including a single-type request that overlaps an \"all\" one.",
+            "The counters count an \"all\" request once under each type.",
+        ],
+        "files": ["cogs/utilities.py", "database/models.py", "cogs/help.py"],
+    },
+    {
+        "date": "2026-11-24",
         "title": "Review queues: Accept All / Deny All and a new look",
         "tags": ["Applications", "Blacklist", "Scam Reports"],
         "summary": "The application, blacklist and scam report queues are now one box with Accept All and Deny All buttons above the dropdown. Decisions from a queue are logged instead of posted in the channel.",

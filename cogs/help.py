@@ -76,9 +76,9 @@ EMOJI = {
 
 # Clearer wording than the short description for a few commands.
 OVERRIDES = {
-    "blacklist add": "Request to blacklist someone. Type is giveaway, ticket or application; "
+    "blacklist add": "Request to blacklist someone. Type is giveaway, ticket, application or all; "
                      "proof is required and staff approve or deny it.",
-    "blacklist remove": "Request to unblacklist someone (type: giveaway, ticket or application). "
+    "blacklist remove": "Request to unblacklist someone (type: giveaway, ticket, application or all). "
                         "Staff approve or deny it.",
     "applications setqueue": "Review applications from ONE dropdown in a channel instead of one message each. Pick one to open it privately with its Accept / Deny buttons, or use Accept All / Deny All.",
     "applications removequeue": "Turn the application queue off. New applications go back to each application's submit channel (needs no pending applications in the queue).",

@@ -2053,6 +2053,11 @@ async def delete_reaction_roles_for_message(message_id: int) -> None:
 BLACKLIST_TYPES = ("giveaway", "ticket", "application")
 
 
+def blacklist_types_for(type_: str) -> tuple:
+    """A request of type "all" covers every blacklist type; otherwise just its own."""
+    return BLACKLIST_TYPES if type_ == "all" else (type_,)
+
+
 async def get_blacklist_config(guild_id: int) -> dict:
     settings = await get_guild_settings(guild_id)
     cfg = settings.get("blacklist") or {}
@@ -2110,7 +2115,7 @@ async def create_blacklist_request(guild_id: int, applicant_id: int, target_id: 
         "guild_id": str(guild_id),
         "applicant_id": str(applicant_id),
         "target_id": str(target_id),
-        "type": type_,            # "giveaway" | "ticket" | "application"
+        "type": type_,            # "giveaway" | "ticket" | "application" | "all"
         "action": action,         # "add" | "remove"
         "reason": (reason or "").strip()[:1000],
         "proof_urls": [str(u) for u in (proof_urls or [])][:3],
@@ -2122,10 +2127,10 @@ async def create_blacklist_request(guild_id: int, applicant_id: int, target_id: 
         "created_at": datetime.now(timezone.utc),
     }
     result = await blacklist_requests_col().insert_one(doc)
-    # bump the counter (per-type submitted)
+    # bump the counter (per-type submitted; "all" counts once for each type)
     await guild_settings_col().update_one(
         {"_id": str(guild_id)},
-        {"$inc": {f"blacklist.counters.submitted.{type_}": 1}},
+        {"$inc": {f"blacklist.counters.submitted.{t}": 1 for t in blacklist_types_for(type_)}},
         upsert=True,
     )
     return str(result.inserted_id)
@@ -2154,13 +2159,15 @@ async def get_blacklist_requests_for_guild(guild_id: int, status: str = None,
 
 async def has_pending_blacklist_request(guild_id: int, target_id: int, type_: str,
                                         action: str) -> bool:
-    doc = await blacklist_requests_col().find_one({
+    flt = {
         "guild_id": str(guild_id),
         "target_id": str(target_id),
-        "type": type_,
         "action": action,
         "status": "Pending",
-    })
+    }
+    if type_ != "all":      # an "all" request overlaps every type; a single type overlaps "all"
+        flt["type"] = {"$in": [type_, "all"]}
+    doc = await blacklist_requests_col().find_one(flt)
     return doc is not None
 
 
@@ -2198,14 +2205,16 @@ async def claim_blacklist_request_decision(request_id: str, staff_id: int,
 
 
 async def bump_blacklist_counter(guild_id: int, bucket: str, type_: str) -> None:
-    """bucket: "submitted" | "accepted" | "denied". type_: "giveaway" | "ticket" | "application"."""
+    """bucket: "submitted" | "accepted" | "denied". type_: "giveaway" | "ticket" | "application"
+    | "all" (counts once for each type)."""
     if bucket not in ("submitted", "accepted", "denied"):
         return
-    if type_ not in BLACKLIST_TYPES:
+    types = [t for t in blacklist_types_for(type_) if t in BLACKLIST_TYPES]
+    if not types:
         return
     await guild_settings_col().update_one(
         {"_id": str(guild_id)},
-        {"$inc": {f"blacklist.counters.{bucket}.{type_}": 1}},
+        {"$inc": {f"blacklist.counters.{bucket}.{t}": 1 for t in types}},
         upsert=True,
     )
 

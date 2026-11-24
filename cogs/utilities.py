@@ -363,7 +363,7 @@ def _blacklist_action_label(action: str) -> str:
 
 
 def _blacklist_type_label(type_: str) -> str:
-    return {"giveaway": "Giveaway", "application": "Application"}.get(type_, "Ticket")
+    return {"giveaway": "Giveaway", "application": "Application", "all": "All"}.get(type_, "Ticket")
 
 
 def _blacklist_role_id(cfg: dict, type_: str):
@@ -433,11 +433,11 @@ class _BlacklistDecisionView(discord.ui.View):
         self.add_item(deny)
 
 
-async def _blacklist_role_change(guild: discord.Guild, req: dict):
+async def _blacklist_role_change_one(guild: discord.Guild, req: dict, type_: str):
     cfg = await models.get_blacklist_config(guild.id)
-    role_id = _blacklist_role_id(cfg, req["type"])
+    role_id = _blacklist_role_id(cfg, type_)
     if not role_id:
-        return f"No {req['type']} blacklist role configured."
+        return f"No {type_} blacklist role configured."
 
     role = guild.get_role(int(role_id))
     if role is None:
@@ -462,6 +462,21 @@ async def _blacklist_role_change(guild: discord.Guild, req: dict):
     except discord.HTTPException as e:
         return f"Discord error: {e}"
     return None
+
+
+async def _blacklist_role_change(guild: discord.Guild, req: dict):
+    """Apply the role change for a request. Type "all" does giveaway, ticket and application
+    in one go. -> an error text, or None if everything worked (or was already as wanted)."""
+    if req.get("type") != "all":
+        return await _blacklist_role_change_one(guild, req, req["type"])
+    problems = []
+    for t in models.BLACKLIST_TYPES:
+        err = await _blacklist_role_change_one(guild, req, t)
+        if err:
+            text = err if err.startswith(("No ", "Target ")) else f"{t}: {err}"
+            if text not in problems:
+                problems.append(text)
+    return "; ".join(problems) or None
 
 
 async def _decide_blacklist(guild: discord.Guild, staff, req: dict, status: str):
@@ -1655,7 +1670,7 @@ class Utilities(commands.Cog):
     @command_check()
     async def blacklist_add(self, ctx: commands.Context,
                             user: discord.User,
-                            type: Literal["giveaway", "ticket", "application"],
+                            type: Literal["giveaway", "ticket", "application", "all"],
                             proof1: discord.Attachment,
                             *,
                             reason: str,
@@ -1671,7 +1686,7 @@ class Utilities(commands.Cog):
     @command_check()
     async def blacklist_remove(self, ctx: commands.Context,
                                user: discord.User,
-                               type: Literal["giveaway", "ticket", "application"],
+                               type: Literal["giveaway", "ticket", "application", "all"],
                                *,
                                reason: str,
                                proof1: discord.Attachment = None,
@@ -1692,9 +1707,9 @@ class Utilities(commands.Cog):
             ))
 
         type_ = (type_ or "").strip().lower()
-        if type_ not in ("giveaway", "ticket", "application"):
+        if type_ not in ("giveaway", "ticket", "application", "all"):
             return await _reply(ctx, error_embed(
-                "Type must be `giveaway`, `ticket` or `application`."
+                "Type must be `giveaway`, `ticket`, `application` or `all`."
             ))
 
         if user.id == ctx.author.id:
@@ -1706,11 +1721,14 @@ class Utilities(commands.Cog):
             return await _reply(ctx, error_embed("Proof 1 is required for blacklist requests."))
 
         cfg = await models.get_blacklist_config(ctx.guild.id)
-        role_id = _blacklist_role_id(cfg, type_)
-        if not role_id:
+        # "all" = giveaway + ticket + application together (whichever have a role set up)
+        role_ids = [_blacklist_role_id(cfg, t) for t in models.blacklist_types_for(type_)]
+        role_ids = [rid for rid in role_ids if rid]
+        if not role_ids:
             return await _reply(ctx, error_embed(
-                f"No **{type_}** blacklist role configured. "
-                "Set it on the dashboard's Config & Logs page."
+                ("No blacklist roles configured. " if type_ == "all"
+                 else f"No **{type_}** blacklist role configured. ")
+                + "Set it on the dashboard's Config & Logs page."
             ))
 
         if await models.has_pending_blacklist_request(ctx.guild.id, user.id, type_, action):
@@ -1720,14 +1738,16 @@ class Utilities(commands.Cog):
             ))
 
         member = ctx.guild.get_member(user.id)
-        has_role = _member_has_role(member, role_id) if member else False
-        if action == "add" and has_role:
+        has_all = bool(member) and all(_member_has_role(member, rid) for rid in role_ids)
+        has_any = bool(member) and any(_member_has_role(member, rid) for rid in role_ids)
+        what = "blacklist roles" if type_ == "all" else f"**{type_}** blacklist role"
+        if action == "add" and has_all:
             return await _reply(ctx, info_embed(
-                f"{user.mention} already has the **{type_}** blacklist role."
+                f"{user.mention} already has {'all the' if type_ == 'all' else 'the'} {what}."
             ))
-        if action == "remove" and member is not None and not has_role:
+        if action == "remove" and member is not None and not has_any:
             return await _reply(ctx, info_embed(
-                f"{user.mention} doesn't have the **{type_}** blacklist role."
+                f"{user.mention} doesn't have {'any of the ' if type_ == 'all' else 'the '}{what}."
             ))
 
         queue_channel = await rq.get_channel(ctx.guild, BLACKLIST_QUEUE)
