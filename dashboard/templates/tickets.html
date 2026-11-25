@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pixel Bot · Ticket Manager</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .t-content { flex:1; overflow-y:auto; padding:36px 44px; background:var(--bg-base); }
+    .page-title { font-size:24px; font-weight:800; letter-spacing:-0.03em; color:var(--text-bright); margin-bottom:4px; }
+    .page-sub   { color:var(--text-muted); font-size:13px; margin-bottom:32px; }
+
+    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
+    @media(max-width:960px){ .grid2{ grid-template-columns:1fr; } }
+    /* panel settings: custom button rows (label / emoji / colour) */
+    /* panel settings: toggles read as toggles (checkbox beside its text), with room between settings */
+    details.ps .t-label { margin-top:16px; }
+    details.ps label.t-label:has(> input[type=checkbox]) {
+      display:flex; gap:10px; align-items:flex-start; margin:16px 0 4px; line-height:1.4;
+      text-transform:none; letter-spacing:0; font-size:13px; font-weight:500; color:var(--text-main);
+    }
+    details.ps label.t-label:has(> input[type=checkbox]) > input { flex:none; width:auto; margin-top:2px; }
+    details.ps .hint { margin:6px 0 2px; }
+    .btn-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+    .btn-row-name { min-width:62px; font-size:12px; color:var(--text-muted); }
+    .btn-row .br-label { flex:2; min-width:0; } .btn-row .br-emoji { flex:1; min-width:0; } .btn-row .br-style { flex:1; min-width:0; }
+    #thread-box, details.adv select { text-overflow:ellipsis; }
+    @media(max-width:640px){
+      .btn-row { flex-wrap:wrap; padding:8px 0 10px; border-bottom:1px solid var(--border); }
+      .btn-row-name { flex-basis:100%; font-weight:700; color:var(--text-bright); }
+      .btn-row .br-label { flex:1 1 100%; } .btn-row .br-emoji { flex:1 1 40%; } .btn-row .br-style { flex:1 1 50%; }
+    }
+
+    .t-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:24px 26px; }
+    .t-section-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+    .t-section-head h2 { font-size:15px; font-weight:700; color:var(--text-bright); }
+
+    .t-card { background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); padding:14px 16px; margin-bottom:10px; }
+    .t-card-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+    .t-card-title { font-weight:600; font-size:14px; color:var(--text-bright); margin-bottom:4px; }
+    .t-card-meta  { color:var(--text-muted); font-size:12px; line-height:1.6; }
+    .t-card-actions { display:flex; gap:6px; flex-shrink:0; }
+    .tag { display:inline-block; background:var(--accent-tint); border:1px solid rgba(var(--ok-rgb),0.3); color:var(--accent-light); font-size:11px; padding:2px 7px; border-radius:var(--r-sm); margin:2px 2px 0 0; }
+
+    .sbadge { display:inline-block; padding:2px 7px; border-radius:var(--r-md); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; margin-left:6px; }
+    .sbadge-primary   { background:rgba(var(--ok-rgb),.2);  color:var(--ok); }
+    .sbadge-secondary { background:rgba(var(--ink-rgb),.12);   color:var(--text-muted); }
+    .sbadge-success   { background:rgba(var(--ok-rgb),.15);  color:var(--ok); }
+    .sbadge-danger    { background:rgba(var(--danger-rgb),.15);  color:var(--danger); }
+
+    .t-label { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text-muted); margin-top:14px; margin-bottom:6px; }
+    .t-label:first-child { margin-top:0; }
+    .color-row { display:flex; gap:8px; align-items:center; }
+    .color-row input[type=color] { width:42px; height:36px; padding:3px; border-radius:var(--r-sm); border:1px solid var(--border); background:var(--input-bg); cursor:pointer; }
+    .color-row input[type=text]  { flex:1; }
+    .q-row { display:flex; align-items:center; gap:12px; }
+    .q-row > input[type=text] { flex:1; }
+    .q-req { display:flex; align-items:center; gap:6px; white-space:nowrap; font-size:12.5px; color:var(--text-main); margin:0; cursor:pointer; }
+    .q-req input { width:auto; margin:0; }
+    select[multiple] { min-height:96px; background-image:none; padding-right:13px; }
+
+    .btn-xs { padding:5px 11px; font-size:12px; margin-top:0; border-radius:var(--r-sm); font-weight:600; cursor:pointer; border:none; font-family:inherit; display:inline-flex; align-items:center; gap:5px; }
+    .btn-xs-accent  { background:var(--accent); color:var(--on-accent); }
+    .btn-xs-accent:hover { background:var(--accent-mid); }
+    .btn-xs-ghost   { background:var(--bg-muted); color:var(--text-main); }
+    .btn-xs-ghost:hover { background:var(--bg-overlay); }
+    .btn-xs-danger  { background:transparent; color:var(--danger); border:1px solid rgba(var(--danger-rgb),.3); }
+    .btn-xs-danger:hover { background:var(--danger-tint); border-color:var(--danger); }
+
+    .m-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; align-items:center; justify-content:center; }
+    .m-overlay.open { display:flex; }
+    .m-box { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--r-lg); padding:28px; width:100%; max-width:420px; }
+    .m-box h3 { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:18px; }
+    .m-footer { margin-top:20px; display:flex; gap:8px; justify-content:flex-end; }
+
+    .banner-warn { background:rgba(var(--danger-rgb),.12); border:1px solid rgba(var(--danger-rgb),.4); color:var(--danger); padding:14px 18px; border-radius:var(--r-md); margin-bottom:22px; font-size:13px; line-height:1.6; }
+    .banner-warn code { background:rgba(0,0,0,.3); padding:1px 5px; border-radius:3px; }
+    .banner-error { background:rgba(var(--danger-rgb),.15); border:1px solid var(--danger); color:var(--danger); padding:12px 16px; border-radius:var(--r-md); margin-bottom:18px; font-size:13px; }
+
+    .cat-mode-row { display:flex; gap:14px; margin-bottom:8px; font-size:12px; color:var(--text-muted); }
+    .cat-mode-row label { display:flex; align-items:center; gap:5px; cursor:pointer; }
+
+    .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+    .hidden { display:none !important; }
+    /* panel look preview (Discord-like mock; the real message is made by the bot) */
+    .look-prev { background:#313338; border-radius:4px; padding:14px; margin-top:6px; color:#dbdee1; font-size:13px; line-height:1.4; }
+    .lp-embed { display:flex; gap:12px; background:#2b2d31; border-left:4px solid #5865f2; border-radius:4px; padding:10px 12px; max-width:440px; }
+    .lp-box { background:#2b2d31; border:1px solid #3f4147; border-left:4px solid #5865f2; border-radius:8px; padding:12px; max-width:440px; }
+    .lp-body { flex:1; min-width:0; } .lp-t { font-weight:700; color:#f2f3f5; overflow-wrap:anywhere; } .lp-d { white-space:pre-wrap; overflow-wrap:anywhere; }
+    .lp-img-r { width:64px; height:64px; flex:none; border-radius:4px; image-rendering:pixelated; background:#1e1f22; }
+    .lp-img-wide { display:block; width:100%; height:70px; object-fit:contain; background:#1e1f22; border-radius:4px; image-rendering:pixelated; margin:8px 0; }
+    .lp-btns { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; } .lp-btns span { background:#4e5058; color:#fff; padding:5px 12px; border-radius:4px; font-size:12px; }
+    .lp-btns span:first-child { background:#5865f2; } .lp-sep { height:1px; background:#3f4147; margin:10px 0 2px; }
+    .lp-sel { margin-top:8px; background:#1e1f22; border-radius:4px; padding:8px 10px; color:#b5bac1; font-size:12px; }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+
+{% set active_nav = 'tickets' %}
+{% include '_sidebar.html' %}
+
+<div class="t-content">
+  <div class="page-title">Ticket Manager</div>
+  <p class="page-sub">Build ticket types and post panels to your channels.</p>
+
+  {% if error == "thread_channel_required" %}
+  <div class="banner-error">
+    <strong>Pick a channel for thread tickets.</strong> Thread mode needs a text channel to open the threads in.
+  </div>
+  {% endif %}
+
+  {% if error == "claim_question_required" %}
+  <div class="banner-error">
+    <strong>Claim tickets need at least one question.</strong> Fill in Question 1 and save again.
+  </div>
+  {% endif %}
+
+  {% if error == "category_required" %}
+  <div class="banner-error">
+    <strong>Category is required.</strong> Pick an existing category or create a new one.
+  </div>
+  {% endif %}
+
+  {% if not channels %}
+  <div class="banner-warn">
+    <strong>The bot can't see this server's channels.</strong><br>
+    Make sure the bot is actually invited to this guild and has the
+    <code>View Channels</code> permission. The dropdowns below will stay empty
+    until that's fixed.
+  </div>
+  {% endif %}
+
+  {% if saved %}<div class="embed success"><strong>Saved.</strong></div>{% endif %}
+  {% set perr = request.args.get('error') %}
+  {% if perr == 'panel_img_url' %}<div class="banner-error">The picture link must start with https:// and have no spaces. The panel was not saved.</div>{% endif %}
+  {% if perr == 'panel_img_big' %}<div class="banner-error">That picture is too big. The limit is 4 MB. The panel was not saved.</div>{% endif %}
+  {% if perr == 'panel_img_bad' %}<div class="banner-error">That file is not a usable picture. Use PNG, JPG, WEBP or GIF. The panel was not saved.</div>{% endif %}
+
+  <!-- Server-wide categories (claim / spawner / application tickets) -->
+  <div class="t-section" style="margin-bottom:24px;">
+    <div class="t-section-head"><h2>Server-wide Categories</h2></div>
+    <p class="hint" style="margin:-8px 0 12px;font-style:normal;">
+      Used by any ticket type that has no category of its own. <b>Claim</b> and <b>Spawner</b> tickets only use it
+      until you give them their own category on their cards below; <b>application</b> tickets never use it.
+      Leave the main category empty to keep each one on the category it already uses.
+    </p>
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="form_type" value="save_ticket_categories">
+      <label class="t-label">Main Category</label>
+      <input type="text" name="fixed_category_name" list="cat-list" maxlength="100"
+             value="{{ server_main_name }}" placeholder="e.g. Tickets" autocomplete="off">
+      <label class="t-label">Spare Categories (max 5)</label>
+      {% for i in range(5) %}
+      <input type="text" name="overflow_category_names" list="cat-list" maxlength="100"
+             value="{{ server_spare_names[i] if i < server_spare_names|length else '' }}"
+             placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+      {% endfor %}
+      <div class="hint">Type a name. If the category exists it's used; if not it's created when needed and removed again when it's empty.
+        A spare is only used once the one before it holds 50 channels.</div>
+      <div style="margin-top:14px;">
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid2">
+    <!-- Ticket Types list -->
+    <div class="t-section">
+      <div class="t-section-head">
+        <h2>Ticket Types</h2>
+        <button class="btn-xs btn-xs-accent" onclick="openTypeForm(null)">+ New Type</button>
+      </div>
+
+      <!-- Built-in kinds (fixed cards): their existing settings are edited here -->
+      <div class="t-card" style="border-style:dashed;">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">Claim <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-meta">
+              {{ claim_view.main_name or "— server-wide category —" }}{% if claim_view.spare_names %} (+{{ claim_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              {{ claim_view.questions|length }} question(s)
+            </div>
+            <div style="margin-top:6px">
+              {% for rid in claim_view.allow_role_ids %}
+                {% set r = (roles | selectattr("id", "equalto", rid) | list | first) %}
+                {% if r %}<span class="tag">{{ r.name }}</span>{% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button type="button" class="btn-xs btn-xs-ghost" onclick="openClaimForm()">Edit</button>
+          </div>
+        </div>
+      </div>
+      <div class="t-card" style="border-style:dashed;">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">Spawner <span class="sbadge sbadge-secondary">built-in</span></div>
+            <div class="t-card-meta">
+              {{ spawner_view.main_name or "— server-wide category —" }}{% if spawner_view.spare_names %} (+{{ spawner_view.spare_names|length }} spare){% endif %}&nbsp;|&nbsp;
+              <a href="{{ url_for('dashboard.spawners_page', guild_id=guild_id) }}">Prices &amp; types →</a>
+            </div>
+            <div style="margin-top:6px">
+              {% for rid in spawner_view.allow_role_ids %}
+                {% set r = (roles | selectattr("id", "equalto", rid) | list | first) %}
+                {% if r %}<span class="tag">{{ r.name }}</span>{% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button type="button" class="btn-xs btn-xs-ghost" onclick="openSpawnerForm()">Edit</button>
+          </div>
+        </div>
+      </div>
+
+      {% for t in ticket_types %}
+      {% set cat = (categories | selectattr("id", "equalto", t.category_id) | list | first) if t.category_id else None %}
+      {% set ping = (roles | selectattr("id", "equalto", t.ping_role_id) | list | first) if t.ping_role_id else None %}
+      <div class="t-card">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">
+              {{ t.emoji or "" }} {{ t.name }}
+              <span class="sbadge sbadge-{{ t.button_style or 'primary' }}">{{ t.button_style or 'primary' }}</span>
+            </div>
+            <div class="t-card-meta">
+              {% if t.category_id and t.category_id.startswith("__new__:") %}
+                     <em>{{ t.category_id[8:] }} (will be created when the first ticket opens)</em>
+                   {% else %}
+                     {{ cat.name if cat else "— no category —" }}
+                   {% endif %}
+              {% if t.overflow_category_ids %}(+{{ t.overflow_category_ids|length }} spare){% endif %}&nbsp;|&nbsp;
+              {{ ping.name if ping else "— no ping —" }}&nbsp;|&nbsp;
+              {{ (t.questions or [])|length }} question(s)
+              {% if t.allow_blacklisted %}&nbsp;|&nbsp; blacklisted allowed{% endif %}
+            </div>
+            <div style="margin-top:6px">
+              {% for rid in (t.allow_role_ids or []) %}
+                {% set r = (roles | selectattr("id", "equalto", rid) | list | first) %}
+                {% if r %}<span class="tag">{{ r.name }}</span>{% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button class="btn-xs btn-xs-ghost"
+              onclick='openTypeForm({{ {
+                "_id": (t._id|string) if t._id is defined else "",
+                "name": t.name|default("", true),
+                "emoji": t.emoji|default("", true),
+                "button_style": t.button_style|default("primary", true),
+                "description": t.description|default("", true),
+                "color_hex": t.color_hex|default("#5865f2", true),
+                "category_id": (t.category_id|string) if t.category_id else "",
+                "ping_role_id": (t.ping_role_id|string) if t.ping_role_id else "",
+                "allow_role_ids": (t.allow_role_ids or [])|map("string")|list,
+                "questions": t.questions or [],
+                "questions_required": t.questions_required or [],
+                "auto_rename": t.auto_rename|default("", true),
+                "allow_blacklisted": t.allow_blacklisted or false,
+                "overflow_category_ids": (t.overflow_category_ids or [])|map("string")|list,
+                "button_label": t.get("button_label", ""),
+                "max_open_tickets": t.get("max_open_tickets", 0) or 0,
+                "required_role_ids": (t.get("required_role_ids") or [])|map("string")|list,
+                "welcome_message": t.get("welcome_message", ""),
+                "created_message": t.get("created_message", ""),
+                "claiming_enabled": t.get("claiming_enabled", true),
+                "claim_only_visible": t.get("claim_only_visible", false),
+                "save_transcripts": t.get("save_transcripts", true),
+                "linked_type_ids": (t.get("linked_type_ids") or [])|map("string")|list,
+                "buttons": t.get("buttons") or {},
+                "transcript_access": t.get("transcript_access", "managers"),
+                "thread_mode": t.get("thread_mode", false),
+                "thread_parent_id": t.get("thread_parent_id") or "",
+                "thread_auto_archive": t.get("thread_auto_archive", 10080),
+                "thread_invitable": t.get("thread_invitable", false),
+                "web_reply": t.get("web_reply", false),
+                "priority_enabled": t.get("priority_enabled", false),
+                "priority_rename": t.get("priority_rename", "off")
+              } | tojson }})'>Edit</button>
+            <form method="POST" style="display:inline" onsubmit="return confirm('Delete this ticket type?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="form_type" value="delete_ticket_type">
+              <input type="hidden" name="type_id" value="{{ t._id }}">
+              <button class="btn-xs btn-xs-danger">Delete</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="t-card"><div class="t-card-meta">No ticket types yet. Click <b>+ New Type</b> to create one.</div></div>
+      {% endfor %}
+    </div>
+
+    <div>
+    <!-- Ticket Type form -->
+    <div class="t-section" id="type-form-section">
+      <div class="t-section-head">
+        <h2 id="type-form-heading">New Ticket Type</h2>
+      </div>
+      <form method="POST" id="type-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_ticket_type">
+        <input type="hidden" name="type_id" id="f-type-id">
+
+        <label class="t-label">Name *</label>
+        <input type="text" name="name" id="f-name" required>
+
+        <label class="t-label">Emoji</label>
+        <input type="text" name="emoji" id="f-emoji" maxlength="4">
+
+        <label class="t-label">Description (shown in dropdown panels)</label>
+        <input type="text" name="description" id="f-desc" maxlength="100" placeholder="e.g. Buy or sell spawners">
+        <div class="hint">Appears in small text under this option when its panel is set to <b>Dropdown</b>. Max 100 characters. Ignored on button panels.</div>
+
+        <label class="t-label">Button Style</label>
+        <select name="button_style" id="f-style">
+          <option value="primary">Primary (Blue)</option>
+          <option value="secondary">Secondary (Grey)</option>
+          <option value="success">Success (Green)</option>
+          <option value="danger">Danger (Red)</option>
+        </select>
+
+        <label class="t-label">Embed Color</label>
+        <div class="color-row">
+          <input type="color" id="f-color-pick" value="#5865f2"
+                 oninput="document.getElementById('f-color').value=this.value">
+          <input type="text" name="color" id="f-color" value="#5865f2" maxlength="7"
+                 oninput="try{document.getElementById('f-color-pick').value=this.value}catch(e){}">
+        </div>
+
+        <label class="t-label">Discord Category <span id="cat-star">*</span></label>
+        <input type="text" id="f-category-name" list="cat-list" maxlength="100"
+               placeholder="e.g. Support Tickets" autocomplete="off" required
+               oninput="syncCategory()">
+        <datalist id="cat-list">
+          {% for c in categories %}<option value="{{ c.name }}"></option>{% endfor %}
+        </datalist>
+        <!-- what the server actually receives (same fields as before) -->
+        <input type="hidden" name="category_mode" id="f-category-mode" value="existing">
+        <input type="hidden" name="category_id" id="f-category" value="">
+        <input type="hidden" name="category_new_name" id="f-category-new" value="">
+        <div class="hint" id="cat-status">Type a category name. If it exists, tickets go there; if not, it's created for you.</div>
+
+        <label class="t-label">Spare Categories (max 5)</label>
+        {% for i in range(5) %}
+        <input type="text" name="overflow_category_names" id="f-overflow-{{ i }}" list="cat-list" maxlength="100"
+               placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+        {% endfor %}
+        <div class="hint">Same as the main category: type a name, it's created when needed and removed when empty. Used in order once the main category holds 50 channels.</div>
+
+        <label class="t-label">Ping Role</label>
+        <select name="ping_role_id" id="f-ping">
+          <option value="">— None —</option>
+          {% for r in roles %}
+          <option value="{{ r.id }}">{{ r.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="t-label">Support Roles - can see and manage these tickets (Ctrl/Cmd for multiple)</label>
+        <select name="allow_roles" id="f-allow" multiple>
+          {% for r in roles %}
+          <option value="{{ r.id }}">{{ r.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="t-label">Allow blacklisted members to open this type</label>
+        <input type="checkbox" name="allow_blacklisted" id="f-allow-blacklisted">
+        <div class="hint">If checked, members with the ticket blacklist role can still open this ticket type.</div>
+
+        <label class="t-label">Question 1 *</label>
+        <div class="q-row">
+          <input type="text" name="q0" id="f-q0" required>
+          <label class="q-req"><input type="checkbox" name="r0" id="f-r0" checked> Required</label>
+        </div>
+        <label class="t-label">Question 2</label>
+        <div class="q-row">
+          <input type="text" name="q1" id="f-q1">
+          <label class="q-req"><input type="checkbox" name="r1" id="f-r1"> Required</label>
+        </div>
+        <label class="t-label">Question 3</label>
+        <div class="q-row">
+          <input type="text" name="q2" id="f-q2">
+          <label class="q-req"><input type="checkbox" name="r2" id="f-r2"> Required</label>
+        </div>
+        <label class="t-label">Question 4</label>
+        <div class="q-row">
+          <input type="text" name="q3" id="f-q3">
+          <label class="q-req"><input type="checkbox" name="r3" id="f-r3"> Required</label>
+        </div>
+        <label class="t-label">Question 5</label>
+        <div class="q-row">
+          <input type="text" name="q4" id="f-q4">
+          <label class="q-req"><input type="checkbox" name="r4" id="f-r4"> Required</label>
+        </div>
+        <div class="hint">Tick <b>Required</b> for questions the member must answer. Blank questions are removed.</div>
+
+        <label class="t-label">Auto rename (ticket channel name)</label>
+        <input type="text" name="auto_rename" id="f-auto-rename" maxlength="100" placeholder="{q1}-{q2}-{q3}">
+        <div class="hint">
+          Build the channel name from the answers. Example: <code>{q1}-{q2}-{q3}</code> with answers
+          <i>buy</i>, <i>100</i>, <i>0xVoidX</i> becomes <code>buy-100-0xvoidx</code>.
+          Also available: <code>{username}</code>, <code>{user}</code> (display name), <code>{type}</code> or <code>{panel}</code>, <code>{number}</code> (ticket number, e.g. 0007), <code>{id}</code> (the member's ID).
+          Names are lowercased, cleaned of odd characters and cut to 100 characters.
+          Empty answers are skipped. Leave blank for the default (<code>{type}-{username}</code>).
+        </div>
+
+        <details class="adv ps" style="margin-top:18px;">
+          <summary style="cursor:pointer;font-weight:700;color:var(--text-bright);">Ticket settings</summary>
+
+          <label class="t-label">Required Roles - members need one of these to open a ticket</label>
+          <select name="required_role_ids" id="f-required" multiple size="4">
+            {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+          </select>
+          <div class="hint">Leave empty to let everyone open this ticket.</div>
+
+          <label class="t-label">Max open tickets per member (this ticket type)</label>
+          <select name="max_open_tickets" id="f-max-open">
+            <option value="0">Default (1 across the server)</option>
+            {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }} per member in this ticket type</option>{% endfor %}
+          </select>
+          <div class="hint">A number here only counts tickets of this ticket type. Types left on Default keep the old rule.</div>
+
+          <label class="t-label">Welcome message (inside the ticket)</label>
+          <textarea name="welcome_message" id="f-welcome" rows="3" maxlength="1500"
+                    placeholder="Hi {user}, thanks for opening ticket #{number} in {server}. Staff will be with you soon."></textarea>
+          <label class="t-label">"Ticket created" reply (only the member sees it)</label>
+          <textarea name="created_message" id="f-created" rows="2" maxlength="500"
+                    placeholder="Your ticket has been created: {channel}"></textarea>
+          <div class="hint">Placeholders: <code>{user}</code> <code>{username}</code> <code>{server}</code> <code>{channel}</code> <code>{panel}</code> <code>{number}</code>. Blank = the normal message.</div>
+
+          <label class="t-label">Button label (blank = the type name)</label>
+          <input type="text" name="button_label" id="f-button-label" maxlength="80">
+
+          <label class="t-label">Ticket buttons</label>
+          <div class="hint" style="margin-bottom:6px;">Blank = default. Emoji: a normal emoji or a custom one like <code>&lt;:name:123456789012345678&gt;</code>; type <code>-</code> for no emoji.</div>
+          {% for key, title in (("close","Close"),("claim","Claim"),("unclaim","Unclaim")) %}
+          <div class="btn-row">
+            <span class="btn-row-name">{{ title }}</span>
+            <input type="text" name="btn_{{ key }}_label" id="f-btn-{{ key }}-label" maxlength="80" placeholder="Label" class="br-label">
+            <input type="text" name="btn_{{ key }}_emoji" id="f-btn-{{ key }}-emoji" maxlength="60" placeholder="Emoji" class="br-emoji">
+            <select name="btn_{{ key }}_style" id="f-btn-{{ key }}-style" class="br-style">
+              <option value="">Default</option>
+              <option value="primary">Blue</option><option value="secondary">Grey</option>
+              <option value="success">Green</option><option value="danger">Red</option>
+            </select>
+          </div>
+          {% endfor %}
+
+          <label class="t-label"><input type="checkbox" name="claiming_enabled" id="f-claiming" checked> Allow claiming (shows Claim / Unclaim)</label>
+          <label class="t-label"><input type="checkbox" name="claim_only_visible" id="f-claim-only"> After a claim, only the claimer can see the ticket</label>
+          <div class="hint">Admins still see everything. Works for ticket channels.</div>
+          <label class="t-label"><input type="checkbox" name="save_transcripts" id="f-save-transcripts" checked> Save a transcript when the ticket closes</label>
+
+          <label class="t-label">Who can open this ticket type's transcripts on the dashboard</label>
+          <select name="transcript_access" id="f-transcript-access">
+            <option value="managers">Dashboard managers (default)</option>
+            <option value="staff">Staff roles only</option>
+            <option value="opener">Staff roles + the opener</option>
+          </select>
+          <div class="hint">"Staff roles only" means this ticket type's support roles plus the server's ticket support roles. Staff and opener access need a Discord login on the dashboard. With "Staff roles only", people who only have Manage Server can't open them. Administrators always can. The closing DM includes a transcript link when the opener may open it.</div>
+
+          <label class="t-label"><input type="checkbox" name="thread_mode" id="f-thread-mode" onchange="toggleThreadMode()"> Open tickets as private threads (instead of channels)</label>
+          <div id="thread-box">
+            <label class="t-label">Channel to open the threads in</label>
+            <select name="thread_parent_id" id="f-thread-parent">
+              <option value="">— pick a text channel —</option>
+              {% for c in channels %}<option value="{{ c.id }}">#{{ c.name }}</option>{% endfor %}
+            </select>
+            <label class="t-label">Archive the thread after no activity for</label>
+            <select name="thread_auto_archive" id="f-thread-archive">
+              <option value="60">1 hour</option><option value="1440">24 hours</option>
+              <option value="4320">3 days</option><option value="10080" selected>7 days</option>
+            </select>
+            <label class="t-label"><input type="checkbox" name="thread_invitable" id="f-thread-invitable"> Members can add other people to their ticket</label>
+            <div class="hint">
+              Use a <b>dedicated channel</b>. Members need <b>View Channel</b> there (deny them Send Messages so it stays quiet).
+              The bot needs <b>Create Private Threads</b>, <b>Send Messages in Threads</b> and <b>Manage Threads</b> there.
+              A role can't be added to a thread, so the support roles above are given <b>Manage Threads</b> on that channel, which lets them
+              see every ticket thread in it. Closing a ticket deletes its thread, like a channel. Claim-only visibility, <code>/ticket move</code> and category settings don't apply to threads.
+            </div>
+          </div>
+
+          <label class="t-label"><input type="checkbox" name="web_reply" id="f-web-reply"> Live replies: let staff read and answer open tickets from the dashboard (Live Tickets)</label>
+          <div class="hint">Who: administrators, dashboard managers (Manage Server) and members with this ticket type's support roles. If the transcript access above is "Staff roles only" (or "+ opener"), managers need a support role too. Replies are posted by the bot with the staff member's name. Staff points and taskbooks don't count web replies.</div>
+
+          <label class="t-label"><input type="checkbox" name="priority_enabled" id="f-priority"> Priority: add a Priority button and show it in the ticket</label>
+          <select name="priority_rename" id="f-priority-rename">
+            <option value="off">Don't rename the channel</option>
+            <option value="emoji">Emoji prefix (-name)</option>
+            <option value="prefix">Word prefix (urgent-name)</option>
+          </select>
+          <div class="hint">When the priority changes, the channel name gets a prefix. Staff can always use <code>/ticket priority</code>. Normal has no prefix. Discord limits channel renames to about 2 per 10 minutes.</div>
+
+          <label class="t-label">Linked ticket types (Ctrl/Cmd for multiple)</label>
+          <select name="linked_type_ids" id="f-linked" multiple size="4">
+            {% for tt in ticket_types %}<option value="{{ tt._id }}">{{ tt.name }}</option>{% endfor %}
+          </select>
+          <div class="hint">Listed in the ticket as related types, and <code>/ticket move</code> only offers these. Empty = every ticket type.</div>
+        </details>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Type</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Clear</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Claim settings form (built-in card) -->
+    <div class="t-section hidden" id="claim-form-section">
+      <div class="t-section-head"><h2>Edit Claim Tickets</h2></div>
+      <form method="POST" id="claim-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_claim_settings">
+
+        <label class="t-label">Discord Category</label>
+        <input type="text" name="category_name" id="cl-category" list="cat-list" maxlength="100"
+               placeholder="e.g. Claim Tickets" autocomplete="off">
+        <div class="hint">Type a name. If the category exists claim tickets go there; if not it's created when needed and removed again when empty. Leave empty to use the server-wide categories at the top.</div>
+
+        <label class="t-label">Spare Categories (max 5)</label>
+        {% for i in range(5) %}
+        <input type="text" name="overflow_category_names" id="cl-overflow-{{ i }}" list="cat-list" maxlength="100"
+               placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+        {% endfor %}
+        <div class="hint">Only claim tickets use these. A spare is only used once the one before it holds 50 channels.</div>
+
+        <label class="t-label">Ping mode (who gets pinged when a claim ticket opens)</label>
+        <select name="ping_mode" id="cl-ping-mode">
+          <option value="roles">Ping roles - the ticket opener + the Ping Roles below</option>
+          <option value="host">Ping host - the ticket opener + the giveaway host (no roles)</option>
+        </select>
+        <div class="hint">The Allow Roles setting below is not affected by this.</div>
+
+        <label class="t-label">Ping Roles (used when Ping mode is "Ping roles")</label>
+        <select name="ping_role_ids" id="cl-ping-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
+
+        <label class="t-label">Allow Roles (who can see &amp; reply in claim tickets)</label>
+        <select name="allow_role_ids" id="cl-allow-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">These roles also count as staff for the Close Ticket button.</div>
+
+        <label class="t-label">Rock Paper Scissors timer (seconds)</label>
+        <input type="number" name="rps_timer" id="cl-rps" min="10" max="600" step="1" style="width:110px;">
+        <label class="t-label">Split or Steal timer (seconds)</label>
+        <input type="number" name="splitsteal_timer" id="cl-split" min="10" max="600" step="1" style="width:110px;">
+        <div class="hint">How long each player has to pick in the giveaway games (10 to 600 seconds).</div>
+
+        <label class="t-label">Claim Questions (asked when a winner presses Claim)</label>
+        <input type="text" name="q0" id="cl-q0" maxlength="45" required placeholder="Question 1 *">
+        {% for i in range(1, 5) %}
+        <input type="text" name="q{{ i }}" id="cl-q{{ i }}" maxlength="45" placeholder="Question {{ i + 1 }}" style="margin-top:6px;">
+        {% endfor %}
+        <div class="hint">Up to 5 questions, 45 characters each. Question 1 is required.</div>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Claim Settings</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Spawner ticket settings form (built-in card) -->
+    <div class="t-section hidden" id="spawner-form-section">
+      <div class="t-section-head"><h2>Edit Spawner Tickets</h2></div>
+      <form method="POST" id="spawner-form">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_spawner_settings">
+
+        <label class="t-label">Ticket Category</label>
+        <input type="text" name="category_name" id="sp-category" list="cat-list" maxlength="100"
+               placeholder="e.g. Spawner Tickets" autocomplete="off">
+        <div class="hint">Type a name. If the category exists spawner tickets go there; if not it's created when needed and removed again when empty. Leave empty to use the server-wide categories at the top.</div>
+
+        <label class="t-label">Spare Categories (max 5)</label>
+        {% for i in range(5) %}
+        <input type="text" name="overflow_category_names" id="sp-overflow-{{ i }}" list="cat-list" maxlength="100"
+               placeholder="Spare {{ i + 1 }}" autocomplete="off" style="margin-bottom:6px;">
+        {% endfor %}
+        <div class="hint">Only spawner tickets use these. A spare is only used once the one before it holds 50 channels.</div>
+
+        <label class="t-label">Ping Roles (pinged when a spawner ticket opens)</label>
+        <select name="ping_role_ids" id="sp-ping-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">Hold Ctrl/Cmd to select several. Leave empty to ping nobody.</div>
+
+        <label class="t-label">Allow Roles (who can see &amp; reply in spawner tickets)</label>
+        <select name="allow_role_ids" id="sp-allow-roles" multiple>
+          {% for r in roles %}<option value="{{ r.id }}">{{ r.name }}</option>{% endfor %}
+        </select>
+        <div class="hint">These roles also count as staff for the Close Ticket button. With none selected, only the customer and admins can see a ticket.</div>
+
+        <div class="hint" style="margin-top:14px;font-style:normal;">
+          Spawner prices, types and the panel notes are on the
+          <a href="{{ url_for('dashboard.spawners_page', guild_id=guild_id) }}">Spawners page</a>.
+        </div>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Spawner Settings</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openTypeForm(null)" style="padding:9px 14px;font-size:13px;">Close</button>
+        </div>
+      </form>
+    </div>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="grid2">
+    <!-- Panels list -->
+    <div class="t-section">
+      <div class="t-section-head">
+        <h2>Panels</h2>
+        <button class="btn-xs btn-xs-accent" onclick="openPanelForm(null)">+ New Panel</button>
+      </div>
+
+      {% for p in panels %}
+      <div class="t-card">
+        <div class="t-card-row">
+          <div>
+            <div class="t-card-title">{{ p.name }}</div>
+            <div class="t-card-meta">{{ p.assigned_types|length }} ticket type(s) assigned
+              <span class="sbadge sbadge-{{ 'success' if p.display_style == 'dropdown' else 'secondary' }}">{{ 'dropdown' if p.display_style == 'dropdown' else 'buttons' }}</span></div>
+            <div style="margin-top:6px">
+              {% for t in p.assigned_types %}
+              <span class="tag">{{ t.emoji or "" }} {{ t.name }}</span>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="t-card-actions">
+            <button class="btn-xs btn-xs-ghost"
+              onclick='openPanelForm({{ {
+                "_id": (p._id|string) if p._id is defined else "",
+                "name": p.name|default("", true),
+                "title": p.title|default("", true),
+                "description": p.description|default("", true),
+                "color_hex": p.color_hex|default("#5865f2", true),
+                "display_style": p.display_style|default("buttons", true),
+                "placeholder": p.placeholder|default("", true),
+                "auto_close_warn_hours": p.auto_close_warn_hours|default(0, true),
+                "auto_close_grace_hours": p.auto_close_grace_hours|default(24, true),
+                "auto_close_claimed": p.auto_close_claimed|default("longer", true),
+                "panel_style": p.panel_style|default("embed", true),
+                "image_url": p.image_url|default("", true),
+                "image_position": p.image_position|default("", true),
+                "has_upload": p.has_upload|default(false, true),
+                "ticket_type_ids": (p.ticket_type_ids or [])|map("string")|list
+              } | tojson }})'>Edit</button>
+            <button class="btn-xs btn-xs-accent"
+              onclick="openPostModal('{{ p._id }}','{{ p.name }}')">Post</button>
+            <form method="POST" style="display:inline" onsubmit="return confirm('Delete this panel?')">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="form_type" value="delete_panel">
+              <input type="hidden" name="panel_id" value="{{ p._id }}">
+              <button class="btn-xs btn-xs-danger">Del</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="t-card"><div class="t-card-meta">No panels yet.</div></div>
+      {% endfor %}
+    </div>
+
+    <!-- Panel form -->
+    <div class="t-section">
+      <div class="t-section-head">
+        <h2 id="panel-form-heading">New Panel</h2>
+      </div>
+      <form method="POST" id="panel-form" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_type" value="save_panel">
+        <input type="hidden" name="panel_id" id="f-panel-id">
+
+        <label class="t-label">Panel Name * (used with /ticket panel)</label>
+        <input type="text" name="panel_name" id="f-panel-name" required>
+
+        <label class="t-label">Embed Title</label>
+        <input type="text" name="panel_title" id="f-panel-title">
+
+        <label class="t-label">Embed Description</label>
+        <textarea name="panel_desc" id="f-panel-desc" style="min-height:70px"></textarea>
+
+        <label class="t-label">Embed Color</label>
+        <div class="color-row">
+          <input type="color" id="f-panel-color-pick" value="#5865f2"
+                 oninput="document.getElementById('f-panel-color').value=this.value">
+          <input type="text" name="panel_color" id="f-panel-color" value="#5865f2" maxlength="7"
+                 oninput="try{document.getElementById('f-panel-color-pick').value=this.value}catch(e){}">
+        </div>
+
+        <label class="t-label" for="f-panel-style">Panel style</label>
+        <select name="panel_style" id="f-panel-style" onchange="syncLook()">
+          {% for key, label in panel_styles %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+        <div class="hint" id="look-hint"></div>
+
+        <label class="t-label" for="f-panel-img-url">Picture (optional)</label>
+        <input type="url" name="panel_image_url" id="f-panel-img-url" maxlength="500" placeholder="https://example.com/picture.png" oninput="syncLook()">
+        <div class="hint">Paste a link, or upload a file below (PNG, JPG, WEBP or GIF, up to 4 MB). An uploaded file is used instead of the link.</div>
+        <input type="file" name="panel_image_file" id="f-panel-img-file" accept="image/png,image/jpeg,image/webp,image/gif" onchange="syncLook()">
+        <label class="toggle" id="f-panel-img-rm-wrap" style="display:none;margin-top:6px;"><input type="checkbox" name="remove_panel_image" id="f-panel-img-rm"> Remove the uploaded picture</label>
+
+        <label class="t-label" for="f-panel-img-pos">Picture position</label>
+        <select name="panel_image_position" id="f-panel-img-pos" onchange="syncLook()"></select>
+
+        <label class="t-label">Preview (approximate)</label>
+        <div class="look-prev" id="look-prev" aria-live="polite"></div>
+        <div class="hint">Changing the style or picture only affects panels you post again. Old posted messages stay as they are.</div>
+
+        <label class="t-label">Display as</label>
+        <select name="panel_display_style" id="f-panel-display" onchange="syncPanelStyle()">
+          <option value="buttons">Buttons (max 5 types)</option>
+          <option value="dropdown">Dropdown menu (max 25 types)</option>
+        </select>
+
+        <div id="panel-placeholder-wrap" style="display:none">
+          <label class="t-label">Dropdown placeholder</label>
+          <input type="text" name="panel_placeholder" id="f-panel-placeholder" maxlength="150" placeholder="Select a ticket type...">
+          <div class="hint">The grey text on the closed menu. Each option shows the ticket type's emoji, name and description.</div>
+        </div>
+
+        <label class="t-label" id="panel-types-label">Ticket Types on this panel (max 5)</label>
+        <select name="panel_type_ids" id="f-panel-types" multiple>
+          {% for t in ticket_types %}
+          <option value="{{ t._id }}">{{ t.emoji or "" }} {{ t.name }}</option>
+          {% endfor %}
+        </select>
+
+        <label class="t-label" style="margin-top:14px;">Auto-close inactive tickets</label>
+        <div class="hint" style="margin:0 0 8px;">Post a warning after this many hours with no messages, then close the ticket if nobody replies. Any message cancels the warning. 0 = off.</div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap;">
+          <div><label class="t-label">Warn after (hours)</label>
+            <input type="number" name="auto_close_warn_hours" id="f-ac-warn" min="0" max="720" value="0" style="width:110px;"></div>
+          <div><label class="t-label">Then close after (hours)</label>
+            <input type="number" name="auto_close_grace_hours" id="f-ac-grace" min="1" max="168" value="24" style="width:110px;"></div>
+          <div><label class="t-label">Claimed tickets</label>
+            <select name="auto_close_claimed" id="f-ac-claimed">
+              <option value="longer">Wait twice as long</option>
+              <option value="same">Same as unclaimed</option>
+              <option value="never">Never auto-close</option>
+            </select></div>
+        </div>
+        <div class="hint">Closing uses the normal close, so the transcript is saved and logged as usual. Only tickets opened from this panel are affected.</div>
+
+        <div style="margin-top:18px; display:flex; gap:8px;">
+          <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save Panel</button>
+          <button class="btn-xs btn-xs-ghost" type="button" onclick="openPanelForm(null)" style="padding:9px 14px;font-size:13px;">Clear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="t-section" style="margin-top:24px">
+    <div class="t-section-head"><h2>Latest transcripts</h2>
+      <div class="toolbar"><a class="btn-xs btn-xs-accent" href="{{ url_for('dashboard.transcripts_page', guild_id=guild_id) }}">Search all transcripts</a></div>
+    </div>
+    <div class="tbl-scroll"><table class="cards">
+      <tr><th>Channel</th><th>Opened By</th><th>Closed By</th><th>Reason</th><th>Date</th><th></th></tr>
+      {% for t in transcripts %}
+      <tr>
+        <td class="title" data-label="Channel">#{{ t.channel_name }}</td>
+        <td data-label="Opened by">{{ t.opener_name or t.opener_id }}</td>
+        <td data-label="Closed by">{{ t.closer_name or t.closed_by_id }}</td>
+        <td data-label="Reason">{{ t.reason or "" }}</td>
+        <td data-label="Date">{{ t.created_at }}</td>
+        <td class="act"><a class="btn" href="{{ url_for('dashboard.view_transcript', guild_id=guild_id, transcript_id=t._id) }}" target="_blank">View</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">No transcripts yet.</td></tr>
+      {% endfor %}
+    </table></div>
+  </div>
+</div>
+
+<!-- Post Modal -->
+<div class="m-overlay" id="post-modal">
+  <div class="m-box">
+    <h3 id="post-modal-title">Post Panel</h3>
+    <form method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="form_type" value="post_panel">
+      <input type="hidden" name="panel_id" id="post-panel-id">
+      <label class="t-label">Post to Channel</label>
+      <select name="channel_id" required>
+        {% for c in channels %}
+        <option value="{{ c.id }}">#{{ c.name }}</option>
+        {% endfor %}
+      </select>
+      <p class="t-card-meta" style="margin-top:12px">
+        After saving, run <code>/ticket panel</code> in that channel to post it
+        (you'll be able to pick the panel from a dropdown).
+      </p>
+      <div class="m-footer">
+        <button class="btn-xs btn-xs-ghost" type="button" onclick="closePostModal()" style="padding:9px 14px;font-size:13px;">Cancel</button>
+        <button class="btn-xs btn-xs-accent" type="submit" style="padding:9px 18px;font-size:13px;">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  const CATEGORIES = [{% for c in categories %}{ id: {{ c.id|string|tojson }}, name: {{ c.name|tojson }} },{% endfor %}];
+
+  function syncCategory() {
+    const name  = document.getElementById('f-category-name').value.trim();
+    const match = CATEGORIES.find(c => c.name.trim().toLowerCase() === name.toLowerCase());
+    const status = document.getElementById('cat-status');
+    document.getElementById('f-category-mode').value = match ? 'existing' : 'new';
+    document.getElementById('f-category').value      = match ? match.id : '';
+    document.getElementById('f-category-new').value  = match ? '' : name;
+    if (!name)       status.textContent = "Type a category name. If it exists, tickets go there; if not, it's created for you.";
+    else if (match)  status.textContent = '"' + match.name + '" already exists - tickets will be placed in it.';
+    else             status.textContent = '"' + name + '" doesn\'t exist yet - it will be created automatically.';
+  }
+
+  // Thread mode: the category isn't needed (tickets are threads), the channel is
+  function toggleThreadMode() {
+    const on = document.getElementById('f-thread-mode').checked;
+    document.getElementById('f-category-name').required = !on;
+    document.getElementById('cat-star').style.display = on ? 'none' : '';
+    document.getElementById('f-thread-parent').required = on;
+    document.getElementById('thread-box').style.opacity = on ? '1' : '.55';
+  }
+
+  // Right-hand column: the ticket type form, or the Claim / Spawner settings form
+  function showPane(which) {
+    const panes = {type: 'type-form-section', claim: 'claim-form-section', spawner: 'spawner-form-section'};
+    for (const k in panes) document.getElementById(panes[k]).classList.toggle('hidden', k !== which);
+    if (which !== 'type') document.getElementById(panes[which]).scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+  const CLAIM = {{ {
+    "main": claim_view.main_name,
+    "spares": claim_view.spare_names,
+    "ping_mode": claim_view.ping_mode,
+    "ping_role_ids": claim_view.ping_role_ids,
+    "allow_role_ids": claim_view.allow_role_ids,
+    "rps_timer": claim_view.rps_timer,
+    "splitsteal_timer": claim_view.splitsteal_timer,
+    "questions": claim_view.questions
+  } | tojson }};
+  const SPAWNER = {{ {
+    "main": spawner_view.main_name,
+    "spares": spawner_view.spare_names,
+    "ping_role_ids": spawner_view.ping_role_ids,
+    "allow_role_ids": spawner_view.allow_role_ids
+  } | tojson }};
+  function _pickValues(id, vals) {
+    for (const o of document.getElementById(id).options) o.selected = vals.includes(o.value);
+  }
+  function _fillSpares(prefix, spares) {
+    for (let i = 0; i < 5; i++) document.getElementById(prefix + '-overflow-' + i).value = spares[i] || '';
+  }
+  function openClaimForm() {
+    document.getElementById('cl-category').value = CLAIM.main || '';
+    _fillSpares('cl', CLAIM.spares || []);
+    document.getElementById('cl-ping-mode').value = CLAIM.ping_mode || 'roles';
+    _pickValues('cl-ping-roles', CLAIM.ping_role_ids || []);
+    _pickValues('cl-allow-roles', CLAIM.allow_role_ids || []);
+    document.getElementById('cl-rps').value   = CLAIM.rps_timer || 60;
+    document.getElementById('cl-split').value = CLAIM.splitsteal_timer || 60;
+    for (let i = 0; i < 5; i++) document.getElementById('cl-q' + i).value = (CLAIM.questions || [])[i] || '';
+    showPane('claim');
+  }
+  function openSpawnerForm() {
+    document.getElementById('sp-category').value = SPAWNER.main || '';
+    _fillSpares('sp', SPAWNER.spares || []);
+    _pickValues('sp-ping-roles', SPAWNER.ping_role_ids || []);
+    _pickValues('sp-allow-roles', SPAWNER.allow_role_ids || []);
+    showPane('spawner');
+  }
+
+  function openTypeForm(t) {
+    showPane('type');
+    document.getElementById('type-form-heading').textContent = t ? 'Edit Ticket Type' : 'New Ticket Type';
+    document.getElementById('f-type-id').value  = t ? t._id : '';
+    document.getElementById('f-name').value     = t ? t.name : '';
+    document.getElementById('f-emoji').value    = t ? (t.emoji || '') : '';
+    document.getElementById('f-style').value    = t ? t.button_style : 'primary';
+    document.getElementById('f-desc').value     = t ? (t.description || '') : '';
+    const col = t ? (t.color_hex || '#5865f2') : '#5865f2';
+    document.getElementById('f-color').value       = col;
+    document.getElementById('f-color-pick').value  = col;
+    document.getElementById('f-ping').value        = t ? (t.ping_role_id || '') : '';
+
+    const catVal = t ? (t.category_id || '') : '';
+    let catName = '';
+    if (catVal.startsWith('__new__:')) {
+      catName = catVal.slice(8);
+    } else if (catVal) {
+      const found = CATEGORIES.find(c => c.id === catVal);
+      catName = found ? found.name : '';
+    }
+    document.getElementById('f-category-name').value = catName;
+    syncCategory();
+    const spares = t ? (t.overflow_category_ids || []) : [];
+    const spareName = (e) => String(e).startsWith('__new__:') ? String(e).slice(8)
+        : ((CATEGORIES.find(c => String(c.id) === String(e)) || {}).name || '');
+    for (let i = 0; i < 5; i++) {
+      document.getElementById(`f-overflow-${i}`).value = i < spares.length ? spareName(spares[i]) : '';
+    }
+
+    const qs = t ? (t.questions || []) : [];
+    const rq = t ? (t.questions_required || []) : [];
+    for (let i = 0; i < 5; i++) {
+      document.getElementById(`f-q${i}`).value = qs[i] || '';
+      // older types have no saved flags: only question 1 was required; a new form starts the same way
+      document.getElementById(`f-r${i}`).checked = (t && rq.length) ? !!rq[i] : (i === 0);
+    }
+    document.getElementById('f-auto-rename').value = t ? (t.auto_rename || '') : '';
+    const sel = document.getElementById('f-allow');
+    const ar  = t ? (t.allow_role_ids || []) : [];
+    for (let o of sel.options) o.selected = ar.includes(o.value);
+
+    document.getElementById('f-allow-blacklisted').checked = t ? !!t.allow_blacklisted : false;
+
+    // panel settings (new types start on the defaults = today's behaviour)
+    const pick = (id, vals) => { for (let o of document.getElementById(id).options) o.selected = vals.includes(o.value); };
+    pick('f-required', t ? (t.required_role_ids || []) : []);
+    pick('f-linked',   t ? (t.linked_type_ids || []) : []);
+    for (let o of document.getElementById('f-linked').options) o.disabled = !!t && o.value === t._id;
+    document.getElementById('f-max-open').value  = String(t ? (t.max_open_tickets || 0) : 0);
+    document.getElementById('f-welcome').value   = t ? (t.welcome_message || '') : '';
+    document.getElementById('f-created').value   = t ? (t.created_message || '') : '';
+    document.getElementById('f-button-label').value = t ? (t.button_label || '') : '';
+    document.getElementById('f-claiming').checked         = t ? t.claiming_enabled !== false : true;
+    document.getElementById('f-claim-only').checked       = t ? !!t.claim_only_visible : false;
+    document.getElementById('f-save-transcripts').checked = t ? t.save_transcripts !== false : true;
+    document.getElementById('f-transcript-access').value = t ? (t.transcript_access || 'managers') : 'managers';
+    document.getElementById('f-thread-mode').checked      = t ? !!t.thread_mode : false;
+    document.getElementById('f-thread-parent').value      = t ? (t.thread_parent_id || '') : '';
+    document.getElementById('f-thread-archive').value     = String(t ? (t.thread_auto_archive || 10080) : 10080);
+    document.getElementById('f-thread-invitable').checked = t ? !!t.thread_invitable : false;
+    toggleThreadMode();
+    document.getElementById('f-web-reply').checked = t ? !!t.web_reply : false;
+    document.getElementById('f-priority').checked = t ? !!t.priority_enabled : false;
+    document.getElementById('f-priority-rename').value = t ? (t.priority_rename || 'off') : 'off';
+    for (const key of ['close', 'claim', 'unclaim']) {
+      const b = (t && t.buttons && t.buttons[key]) || {};
+      document.getElementById(`f-btn-${key}-label`).value = b.label || '';
+      document.getElementById(`f-btn-${key}-emoji`).value = b.emoji || '';
+      document.getElementById(`f-btn-${key}-style`).value = b.style || '';
+    }
+  }
+
+  function openPanelForm(p) {
+    document.getElementById('panel-form-heading').textContent = p ? 'Edit Panel' : 'New Panel';
+    document.getElementById('f-panel-id').value    = p ? p._id : '';
+    document.getElementById('f-panel-name').value  = p ? p.name : '';
+    document.getElementById('f-panel-title').value = p ? (p.title || '') : '';
+    document.getElementById('f-panel-desc').value  = p ? (p.description || '') : '';
+    const col = p ? (p.color_hex || '#5865f2') : '#5865f2';
+    document.getElementById('f-panel-color').value      = col;
+    document.getElementById('f-panel-color-pick').value = col;
+    document.getElementById('f-panel-display').value     = p ? (p.display_style || 'buttons') : 'buttons';
+    document.getElementById('f-panel-placeholder').value = p ? (p.placeholder || '') : '';
+    document.getElementById('f-ac-warn').value    = p ? (p.auto_close_warn_hours || 0) : 0;
+    document.getElementById('f-ac-grace').value   = p ? (p.auto_close_grace_hours || 24) : 24;
+    document.getElementById('f-ac-claimed').value = p ? (p.auto_close_claimed || 'longer') : 'longer';
+    document.getElementById('f-panel-style').value   = p ? (p.panel_style || 'embed') : 'embed';
+    document.getElementById('f-panel-img-url').value = p ? (p.image_url || '') : '';
+    document.getElementById('f-panel-img-file').value = '';
+    document.getElementById('f-panel-img-rm').checked = false;
+    document.getElementById('f-panel-img-rm-wrap').style.display = (p && p.has_upload) ? 'inline-flex' : 'none';
+    syncLook(p ? p.image_position : '');
+    syncPanelStyle();
+    const ids = p ? (p.ticket_type_ids || []).map(String) : [];
+    const sel = document.getElementById('f-panel-types');
+    for (let o of sel.options) o.selected = ids.includes(o.value);
+  }
+
+  // ---- panel look: style, picture position (only the positions that style can do), preview
+  const IMAGE_POSITIONS = {{ image_positions|tojson }};
+  const LOOK_HINTS = {
+    embed: 'The buttons or dropdown sit in a row under the embed. The picture can go on the right (small) or at the bottom (big). Left and up are not possible in an embed.',
+    box: 'Everything (text, picture, buttons or dropdown) is inside one box. This is not an embed, so the colour becomes the side bar of the box. The picture can go up, down or right (small). Left is not possible.'
+  };
+  function syncLook(wantedPos) {
+    const style = document.getElementById('f-panel-style').value;
+    const posSel = document.getElementById('f-panel-img-pos');
+    const keep = wantedPos || posSel.value;
+    posSel.textContent = '';
+    (IMAGE_POSITIONS[style] || []).forEach(([key, label]) => {
+      const o = document.createElement('option'); o.value = key; o.textContent = label; posSel.appendChild(o);
+    });
+    if ([...posSel.options].some(o => o.value === keep)) posSel.value = keep;
+    document.getElementById('look-hint').textContent = LOOK_HINTS[style];
+    drawLook();
+  }
+  function drawLook() {
+    const style = document.getElementById('f-panel-style').value, pos = document.getElementById('f-panel-img-pos').value;
+    const hasImg = !!document.getElementById('f-panel-img-url').value.trim() || document.getElementById('f-panel-img-file').files.length > 0
+                   || (document.getElementById('f-panel-img-rm-wrap').style.display !== 'none' && !document.getElementById('f-panel-img-rm').checked);
+    const dd = document.getElementById('f-panel-display').value === 'dropdown';
+    const color = document.getElementById('f-panel-color').value || '#5865f2';
+    const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+    const sample = {{ url_for('static', filename='logo.png')|tojson }};
+    const img = (cls) => { const i = mk('img', cls); i.src = sample; i.alt = ''; return i; };
+    const body = mk('div', 'lp-body');
+    body.appendChild(mk('div', 'lp-t', document.getElementById('f-panel-title').value || 'Panel title'));
+    body.appendChild(mk('div', 'lp-d', document.getElementById('f-panel-desc').value || 'Panel text'));
+    const comps = dd ? mk('div', 'lp-sel', 'Select a ticket type...') : mk('div', 'lp-btns');
+    if (!dd) ['Support', 'Purchase', 'Report'].forEach(n => comps.appendChild(mk('span', '', n)));
+    const wrap = mk('div'); const box = mk('div', style === 'box' ? 'lp-box' : 'lp-embed');
+    box.style.borderLeftColor = color;
+    if (style === 'box') {
+      if (hasImg && pos === 'up') box.appendChild(img('lp-img-wide'));
+      if (hasImg && pos === 'right') { const row = mk('div'); row.style.display = 'flex'; row.style.gap = '12px'; row.appendChild(body); row.appendChild(img('lp-img-r')); box.appendChild(row); }
+      else box.appendChild(body);
+      if (hasImg && pos === 'down') box.appendChild(img('lp-img-wide'));
+      box.appendChild(mk('div', 'lp-sep')); box.appendChild(comps); wrap.appendChild(box);
+    } else {
+      body.style.flex = '1';
+      if (hasImg && pos === 'bottom') { const col = mk('div', 'lp-body'); col.appendChild(body); col.appendChild(img('lp-img-wide')); box.style.display = 'block'; box.appendChild(col); }
+      else { box.appendChild(body); if (hasImg) box.appendChild(img('lp-img-r')); }
+      wrap.appendChild(box); wrap.appendChild(comps);
+    }
+    const prev = document.getElementById('look-prev'); prev.textContent = ''; prev.appendChild(wrap);
+  }
+  ['f-panel-title', 'f-panel-desc', 'f-panel-color', 'f-panel-display'].forEach(id => document.getElementById(id).addEventListener('input', drawLook));
+  document.getElementById('f-panel-display').addEventListener('change', drawLook);
+  document.getElementById('f-panel-img-rm').addEventListener('change', drawLook);
+  syncLook();
+
+  // dropdowns hold 25 types, buttons only 5
+  function syncPanelStyle() {
+    const dd = document.getElementById('f-panel-display').value === 'dropdown';
+    document.getElementById('panel-placeholder-wrap').style.display = dd ? 'block' : 'none';
+    document.getElementById('panel-types-label').textContent =
+      'Ticket Types on this panel (max ' + (dd ? 25 : 5) + ')';
+  }
+
+  function openPostModal(id, name) {
+    document.getElementById('post-panel-id').value          = id;
+    document.getElementById('post-modal-title').textContent = `Post "${name}"`;
+    document.getElementById('post-modal').classList.add('open');
+  }
+  function closePostModal() {
+    document.getElementById('post-modal').classList.remove('open');
+  }
+  document.getElementById('post-modal').addEventListener('click', function(e) {
+    if (e.target === this) closePostModal();
+  });
+</script>
+</body>
+</html>

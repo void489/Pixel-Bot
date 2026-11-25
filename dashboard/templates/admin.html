@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>Pixel Bot · Admin</title>
+  <script src="{{ url_for('static', filename='theme-init.js') }}"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    .admin-wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 64px; }
+    .admin-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+    .admin-top h1 { margin: 0; font-family: var(--font-display); font-size: 30px; color: var(--text-bright); }
+    .admin-top a { color: var(--text-muted); font-size: 13px; font-weight: 600; text-decoration: none; }
+    .admin-top a:hover { color: var(--danger); }
+    .banner { padding: 10px 16px; border-radius: var(--r-sm); font-size: 13px; font-weight: 600; margin-bottom: 18px; }
+    .banner.ok  { background: rgba(61,220,132,.12); border: 1px solid rgba(61,220,132,.35); color: var(--ok); }
+    .banner.bad { background: var(--danger-tint); border: 1px solid rgba(var(--danger-rgb),.35); color: var(--danger); }
+    .sec { position: relative; background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 22px 24px; margin-bottom: 24px; }
+    .sec::before { content: ""; position: absolute; left: -1px; top: -1px; width: 8px; height: 8px; background: var(--accent); }
+    .sec h2 { margin: 0 0 4px; font-size: 17px; color: var(--text-bright); }
+    .sec .sub { color: var(--text-muted); font-size: 12.5px; margin-bottom: 16px; }
+    .act-grid { display: grid; grid-template-columns: 170px 1fr 190px; gap: 12px; align-items: end; }
+    .act-grid label { font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+    .act-grid input, .act-grid select, .search input { width: 100%; box-sizing: border-box; }
+    .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 8px; }
+    .status-line { font-size: 12.5px; margin-top: 10px; }
+    .status-line.ok { color: var(--ok); } .status-line.bad { color: var(--accent-light); }
+    .search input { max-width: 340px; margin-bottom: 16px; }
+    .server-list { display: flex; flex-direction: column; gap: 10px; }
+    .server-row { display: flex; align-items: center; gap: 14px; background: var(--bg-overlay);
+                  border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 16px; }
+    .server-row img.icon, .server-row .icon-fallback { width: 42px; height: 42px; border-radius: 0; flex-shrink: 0; object-fit: cover; }
+    .server-row .icon-fallback { display: flex; align-items: center; justify-content: center;
+                                 background: var(--bg-muted); color: var(--text-muted); font-weight: 800; }
+    .server-info { flex: 1; min-width: 0; }
+    .server-info .name { font-size: 14.5px; font-weight: 700; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .server-info .meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .server-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .server-actions form { margin: 0; }
+    .btn-sm { padding: 8px 14px; font-size: 12.5px; font-weight: 700; border-radius: var(--r-sm); cursor: pointer;
+              font-family: inherit; text-decoration: none; display: inline-block; line-height: 1.2;
+              background: var(--bg-muted); color: var(--text-main); border: 1px solid var(--border-hi); }
+    .btn-sm:hover { background: var(--bg-surface); color: var(--text-bright); text-decoration: none; }
+    .btn-sm.danger { background: var(--danger-tint); border-color: rgba(var(--danger-rgb),.35); color: var(--danger); }
+    .btn-sm.danger:hover { background: rgba(var(--danger-rgb),.22); }
+    .btn-sm:disabled { opacity: .5; cursor: default; }
+    .invite-result { font-size: 12px; margin-top: 6px; word-break: break-all; }
+    .invite-result.error { color: var(--accent-light); }
+    .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 18px; margin-bottom: -1px; font-size: 13.5px; font-weight: 700; color: var(--text-muted);
+           text-decoration: none; border-bottom: 2px solid transparent; }
+    .tab:hover { color: var(--text-bright); text-decoration: none; }
+    .tab.active { color: var(--text-bright); border-bottom-color: var(--accent); }
+    .links-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .links-grid label { display: block; font-size: 12px; font-weight: 700; color: var(--text-main); margin-bottom: 6px; }
+    .links-grid input { width: 100%; box-sizing: border-box; }
+    .empty { color: var(--text-muted); font-size: 13.5px; padding: 26px 0; text-align: center; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .stat { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; }
+    .stat .k { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+    .stat .v { font-size: 22px; font-weight: 800; color: var(--text-bright); margin-top: 4px; }
+    .stat .v.ok { color: var(--ok); } .stat .v.bad { color: var(--danger); }
+    .stat .s { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+    .lbl { display: block; font-size: 12px; font-weight: 700; color: var(--text-main); margin: 14px 0 6px; }
+    .check { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-main); margin: 10px 0 0; cursor: pointer; }
+    .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .feat { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: var(--bg-overlay);
+            border: 1px solid var(--border); border-radius: var(--r-md); padding: 9px 12px; font-size: 13px; font-weight: 600; color: var(--text-bright); cursor: pointer; }
+    .feat span { font-size: 11.5px; color: var(--text-muted); font-weight: 600; display: inline-flex; gap: 6px; align-items: center; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .kv td { padding: 7px 0; border-bottom: 1px solid var(--border); color: var(--text-main); }
+    .kv td:last-child { text-align: right; font-weight: 700; color: var(--text-bright); }
+    textarea.bc { width: 100%; box-sizing: border-box; min-height: 130px; resize: vertical; font-family: inherit; }
+    .pick-box { max-height: 240px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; margin-top: 8px; }
+    .pick-box label { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; color: var(--text-main); }
+    details.err, details.bc { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; margin-bottom: 8px; }
+    details summary { cursor: pointer; font-size: 13px; color: var(--text-bright); }
+    details summary .t { color: var(--text-muted); font-size: 12px; margin-right: 8px; }
+    details pre { white-space: pre-wrap; word-break: break-word; font-size: 11.5px; color: var(--text-main); margin: 10px 0 0; max-height: 320px; overflow: auto; }
+    .audit-row { display: grid; grid-template-columns: 150px 220px 1fr 110px; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--text-main); }
+    .audit-row .a { font-weight: 700; color: var(--text-bright); } .audit-row .t, .audit-row .ip { color: var(--text-muted); }
+    @media (max-width: 760px) {
+      .act-grid, .links-grid, .two-col, .feat-grid { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: 1fr 1fr; }
+      .audit-row { grid-template-columns: 1fr; gap: 2px; }
+      .server-row { flex-wrap: wrap; }
+      .server-actions { width: 100%; justify-content: flex-start; }
+    }
+  </style>
+  <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+  <link rel="icon" href="{{ url_for('static', filename='logo.png') }}" type="image/png">
+</head>
+<body>
+<div class="admin-wrap">
+  <div class="admin-top">
+    <h1>Admin</h1>
+    <a href="{{ url_for('admin.logout') }}">Log out</a>
+  </div>
+
+  {% if args.get('activity') == 'queued' %}<div class="banner ok">Saved. The bot applies it within a few seconds.</div>{% endif %}
+  {% if args.get('links') == 'saved' %}<div class="banner ok">Saved. The support link and contact email apply right away.</div>{% endif %}
+  {% if args.get('pick') == 'set' %}<div class="banner ok">Done. That person will be picked when the giveaway ends. Nothing is shown to the server.</div>{% endif %}
+  {% if args.get('pick') == 'cleared' %}<div class="banner ok">Cleared. The giveaway will pick randomly again.</div>{% endif %}
+  {% if args.get('pick') == 'gone' %}<div class="banner bad">That giveaway has already ended or can't be set.</div>{% endif %}
+  {% if args.get('left') == '1' %}<div class="banner ok">The bot left that server.</div>{% endif %}
+  {% if args.get('blocked') == '1' %}<div class="banner ok">Blocked. The bot left (if it was there) and leaves again whenever it is added back.</div>{% endif %}
+  {% if args.get('unblocked') == '1' %}<div class="banner ok">Unblocked. The bot can be added to that server again.</div>{% endif %}
+  {% if args.get('maint') == 'on' %}<div class="banner bad">Maintenance mode is ON. Commands are refused within about 10 seconds (you can still use them).</div>{% endif %}
+  {% if args.get('maint') == 'off' %}<div class="banner ok">Maintenance mode is off. Commands work again within about 10 seconds.</div>{% endif %}
+  {% if args.get('features') == 'saved' %}<div class="banner ok">Saved. Feature switches apply within about 10 seconds.</div>{% endif %}
+  {% if args.get('sent') == 'queued' %}<div class="banner ok">Broadcast queued. It sends about one server per second; reload to see how it went.</div>{% endif %}
+  {% if args.get('cleared') == '1' %}<div class="banner ok">Error list cleared.</div>{% endif %}
+  {% set errs = {
+      'leave': "Couldn't leave that server - check the logs.",
+      'notinserver': "The bot isn't in that server any more.",
+      'badvalue': "That activity/status isn't valid.",
+      'badurl': "Streaming needs a https Twitch or YouTube link.",
+      'badid': "Bad server id.",
+      'baduser': "That doesn't look like a Discord user ID (15-25 digits).",
+      'badsupport': "The support server link must be a https link (or empty).",
+      'bademail': "That email address doesn't look right (or leave it empty).",
+      'bctext': "Write a message first (up to " ~ bc_text_max ~ " characters).",
+      'bcconfirm': "Tick the box to confirm you want to send it.",
+      'bcnone': "Pick at least one server.",
+      'bcbusy': "Another broadcast is still sending. Wait for it to finish.",
+      'csrf': "Your page was out of date - try again." } %}
+  {% if args.get('error') in errs %}<div class="banner bad">{{ errs[args.get('error')] }}</div>{% endif %}
+
+  <div class="tabs">
+    <a class="tab{{ ' active' if tab == 'main' }}" href="{{ url_for('admin.admin_page') }}">Main</a>
+    <a class="tab{{ ' active' if tab in ('servers', 'server') }}" href="{{ url_for('admin.admin_page', tab='servers') }}">Servers</a>
+    <a class="tab{{ ' active' if tab == 'broadcast' }}" href="{{ url_for('admin.admin_page', tab='broadcast') }}">Broadcast</a>
+    <a class="tab{{ ' active' if tab == 'errors' }}" href="{{ url_for('admin.admin_page', tab='errors') }}">Errors</a>
+    <a class="tab{{ ' active' if tab == 'audit' }}" href="{{ url_for('admin.admin_page', tab='audit') }}">Audit</a>
+    <a class="tab{{ ' active' if tab == 'pickwinner' }}" href="{{ url_for('admin.admin_page', tab='pickwinner') }}">Pick Winner</a>
+  </div>
+
+  {% if tab == 'main' %}
+  <div class="sec">
+    <h2>Bot status</h2>
+    <div class="sub">The bot reports in every 30 seconds. Reload the page to refresh these numbers.</div>
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Status</div><div class="v {{ 'ok' if stats.online else 'bad' }}">{{ 'Online' if stats.online else 'Offline' }}</div><div class="s">last report {{ stats.seen }}</div></div>
+      <div class="stat"><div class="k">Uptime</div><div class="v">{{ stats.uptime }}</div><div class="s">since the last restart</div></div>
+      <div class="stat"><div class="k">Ping</div><div class="v">{{ (stats.latency ~ ' ms') if stats.latency is not none else '-' }}</div><div class="s">to Discord</div></div>
+      <div class="stat"><div class="k">Servers</div><div class="v">{{ stats.servers if stats.servers is not none else '-' }}</div><div class="s">{{ stats.members if stats.members is not none else '-' }} members</div></div>
+      <div class="stat"><div class="k">Open tickets</div><div class="v">{{ stats.open_tickets }}</div><div class="s">all servers</div></div>
+      <div class="stat"><div class="k">Pending applications</div><div class="v">{{ stats.pending_apps }}</div><div class="s">waiting for a review</div></div>
+      <div class="stat"><div class="k">Running giveaways</div><div class="v">{{ stats.running_giveaways }}</div><div class="s">all servers</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>Maintenance mode</h2>
+    <div class="sub">While on, every command answers with the message below instead of running. You (the bot's owner) can still use commands. Buttons, dropdowns and background jobs keep running. Takes effect within about 10 seconds.</div>
+    <form method="POST" action="{{ url_for('admin.set_maintenance') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="check" style="margin-top:0;"><input type="checkbox" name="enabled" {{ 'checked' if maint.enabled }}> Maintenance mode is on</label>
+      <label class="lbl" for="m-msg">Message people see</label>
+      <input id="m-msg" type="text" name="message" maxlength="{{ maint_max }}" value="{{ maint.message or '' }}" placeholder="Leave empty for: The bot is being updated right now. Please try again in a little while." style="width:100%;box-sizing:border-box;">
+      <div style="margin-top:14px;"><button type="submit">Save</button></div>
+    </form>
+    {% if maint.enabled %}<div class="status-line bad">Maintenance mode is ON right now.</div>{% endif %}
+  </div>
+
+  <div class="sec">
+    <h2>Feature switches</h2>
+    <div class="sub">Tick a feature to turn it off in every server. Its commands answer "This feature is turned off right now" (you can still use them). Only commands are refused: its buttons, dropdowns and background jobs keep running. Applies within about 10 seconds.</div>
+    <form method="POST" action="{{ url_for('admin.set_features') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="feat-grid">
+        {% for key, label, _cogs in features %}
+        <label class="feat">{{ label }}<span><input type="checkbox" name="off" value="{{ key }}" {{ 'checked' if key in features_off }}> off</span></label>
+        {% endfor %}
+      </div>
+      <div style="margin-top:14px;"><button type="submit">Save switches</button></div>
+    </form>
+  </div>
+
+  <div class="sec">
+    <h2>Bot activity</h2>
+    <div class="sub">What shows under the bot's name. Leave the text empty to remove the activity.<br>
+      You can use <code>{servers}</code> (how many servers the bot is in) and <code>{members}</code> (total members in all those servers). Example: <code>{members} members in {servers} servers</code>. The numbers refresh every 5 minutes.</div>
+    <form method="POST" action="{{ url_for('admin.set_activity') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="act-grid">
+        <div>
+          <label for="a-type">Type</label>
+          <select id="a-type" name="type">
+            {% for v, label in activity_types %}<option value="{{ v }}" {{ 'selected' if presence.type == v }}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="a-text">Text</label>
+          <input id="a-text" type="text" name="text" maxlength="{{ max_len }}" value="{{ presence.text }}" placeholder="e.g. {members} members in {servers} servers">
+        </div>
+        <div>
+          <label for="a-status">Status</label>
+          <select id="a-status" name="status">
+            {% for v, label in statuses %}<option value="{{ v }}" {{ 'selected' if presence.status == v }}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div id="a-url-wrap" style="margin-top:12px;" hidden>
+        <label for="a-url" style="font-size:12px;font-weight:700;">Stream link</label>
+        <input id="a-url" type="url" name="url" maxlength="300" value="{{ presence.url }}" placeholder="https://twitch.tv/yourchannel" style="width:100%;box-sizing:border-box;">
+        <div class="hint">Twitch or YouTube link. Discord only shows the purple Streaming badge for these.</div>
+      </div>
+      <div style="margin-top:14px;"><button type="submit">Save activity</button></div>
+    </form>
+    {% if presence.last %}
+      <div class="status-line {{ 'ok' if presence.last.ok else 'bad' }}">
+        Last apply: {{ presence.last.message }}
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="sec">
+    <h2>Links &amp; contact</h2>
+    <div class="sub">Shown to everyone. Leave a field empty to hide it. Nothing here is saved in the code.</div>
+    <form method="POST" action="{{ url_for('admin.set_links') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="links-grid">
+        <div>
+          <label for="l-support">Support server link</label>
+          <input id="l-support" type="url" name="support_url" maxlength="200" value="{{ site.support_url }}" placeholder="https://discord.gg/yourserver">
+          <div class="hint">Shown as a Support button in /botinfo and as a Support link on the dashboard. Must start with https://.</div>
+        </div>
+        <div>
+          <label for="l-email">Contact email</label>
+          <input id="l-email" type="email" name="contact_email" maxlength="120" value="{{ site.contact_email }}" placeholder="you@example.com">
+          <div class="hint">Shown on the public Privacy Policy and Terms of Service pages. If empty, those pages point to the support link instead.</div>
+        </div>
+      </div>
+      <div style="margin-top:14px;"><button type="submit">Save links</button></div>
+    </form>
+  </div>
+  {% elif tab == 'pickwinner' %}
+  <div class="sec">
+    <h2>Pick Winner</h2>
+    <div class="sub">Choose a server and one of its running giveaways, then enter the Discord user ID who should win. When the giveaway ends, that person is picked (any other winner slots stay random). The server's staff can't see this and it is not in their audit log. You can clear it any time before the giveaway ends.</div>
+    {% if not pick_servers %}
+      <div class="empty">No server has a running giveaway right now.</div>
+    {% else %}
+    <form method="GET" action="{{ url_for('admin.admin_page') }}" style="margin-bottom:18px;">
+      <input type="hidden" name="tab" value="pickwinner">
+      <label for="pk-guild" style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;">Server</label>
+      <select id="pk-guild" name="guild" onchange="this.form.submit()" style="max-width:420px;width:100%;">
+        <option value="">Choose a server…</option>
+        {% for s in pick_servers %}<option value="{{ s.id }}" {{ 'selected' if s.id == pick_guild }}>{{ s.name }} ({{ s.id }})</option>{% endfor %}
+      </select>
+    </form>
+    {% if pick_guild %}
+      {% if not pick_gws %}<div class="empty">No running giveaways in that server.</div>{% endif %}
+      <div class="server-list">
+      {% for g in pick_gws %}
+        <div class="server-row" style="flex-wrap:wrap;">
+          <div class="server-info">
+            <div class="name">{{ g.prize }}</div>
+            <div class="meta">ID {{ g.display_id }} · message {{ g.message_id }} · {{ g.entry_count }} entries · {{ g.winners_count }} winner(s){% if g.end_time %} · ends {{ g.end_time.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}</div>
+            {% if g.forced_winner %}<div class="meta" style="color:var(--ok);">Set winner: {{ g.forced_winner }}</div>{% endif %}
+          </div>
+          <div class="server-actions" style="width:100%;justify-content:flex-start;">
+            <form method="POST" action="{{ url_for('admin.pickwinner_set') }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="guild_id" value="{{ pick_guild }}">
+              <input type="hidden" name="message_id" value="{{ g.message_id }}">
+              <input type="text" name="user_id" inputmode="numeric" pattern="[0-9]{15,25}" required placeholder="Winner's Discord user ID" value="{{ g.forced_winner or '' }}" style="width:240px;">
+              <button type="submit" class="btn-sm">Set winner</button>
+            </form>
+            {% if g.forced_winner %}
+            <form method="POST" action="{{ url_for('admin.pickwinner_clear') }}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <input type="hidden" name="guild_id" value="{{ pick_guild }}">
+              <input type="hidden" name="message_id" value="{{ g.message_id }}">
+              <button type="submit" class="btn-sm danger">Clear</button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+      </div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% elif tab == 'server' %}
+  <div class="sec">
+    {% if guilds_failed %}
+      <div class="banner bad">Couldn't get the server list from Discord. Reload in a moment.</div>
+    {% elif not detail %}
+      <div class="empty">The bot isn't in that server (or the ID is wrong).<br><a href="{{ url_for('admin.admin_page', tab='servers') }}">Back to servers</a></div>
+    {% else %}
+    {% set g = detail.guild %}
+    <div class="server-row" style="margin-bottom:20px;">
+      {% if g.icon %}<img class="icon" src="https://cdn.discordapp.com/icons/{{ g.id }}/{{ g.icon }}.png?size=64" alt="">
+      {% else %}<div class="icon-fallback">{{ (g.name or '?')[0]|upper }}</div>{% endif %}
+      <div class="server-info">
+        <div class="name">{{ g.name }}</div>
+        <div class="meta">ID: {{ g.id }}{% if detail.members is not none %} · {{ detail.members }} members{% endif %}{% if detail.joined %} · bot joined {{ detail.joined }} UTC{% endif %}</div>
+        <div class="invite-result" id="invite-result-{{ g.id }}" style="display:none;"></div>
+      </div>
+      <div class="server-actions">
+        <a class="btn-sm" href="{{ url_for('dashboard.tickets_page', guild_id=g.id) }}">Manage</a>
+        <button type="button" class="btn-sm" onclick="getInvite('{{ g.id }}', this)">Get Invite</button>
+        <form method="POST" action="{{ url_for('admin.leave_server', guild_id=g.id) }}"
+              onsubmit='return confirm({{ ("Make the bot leave " ~ (g.name or "this server") ~ "? All its features stop working there immediately.") | tojson }});'>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="btn-sm danger">Leave</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.block_server', guild_id=g.id) }}"
+              onsubmit='return confirm({{ ("Block " ~ (g.name or "this server") ~ "? The bot leaves now and leaves again every time it is added back, until you unblock it.") | tojson }});'>
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="name" value="{{ g.name }}">
+          <button type="submit" class="btn-sm danger">Block</button>
+        </form>
+      </div>
+    </div>
+    <div class="two-col">
+      <div><h2 style="font-size:15px;margin-bottom:8px;">Activity</h2>
+        <table class="kv">{% for k, v in detail.counts %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table></div>
+      <div><h2 style="font-size:15px;margin-bottom:8px;">Settings snapshot</h2>
+        <table class="kv">{% for k, v in detail.settings %}<tr><td>{{ k }}</td><td>{{ v }}</td></tr>{% endfor %}</table></div>
+    </div>
+    <div class="hint" style="margin-top:16px;"><a href="{{ url_for('admin.admin_page', tab='servers') }}">&larr; Back to servers</a></div>
+    {% endif %}
+  </div>
+  {% elif tab == 'broadcast' %}
+  <div class="sec">
+    <h2>Broadcast</h2>
+    <div class="sub">Posts one embed to each server's log channel, or its system channel if no log channel is set. A server with neither (or without permission) is skipped and listed below. It sends about one server per second. It is logged on the Audit tab.</div>
+    <form method="POST" action="{{ url_for('admin.broadcast_send') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="lbl" for="bc-title" style="margin-top:0;">Title (optional)</label>
+      <input id="bc-title" type="text" name="title" maxlength="{{ bc_title_max }}" placeholder="Message from the bot owner" style="width:100%;box-sizing:border-box;">
+      <label class="lbl" for="bc-text">Message</label>
+      <textarea id="bc-text" class="bc" name="text" maxlength="{{ bc_text_max }}" required placeholder="e.g. The bot restarts in 10 minutes for an update."></textarea>
+      <div class="hint" id="bc-count">0 / {{ bc_text_max }}</div>
+      <label class="lbl">Send to</label>
+      <label class="check" style="margin-top:0;"><input type="radio" name="audience" value="all" checked onchange="bcAudience()"> All {{ bc_servers|length }} servers</label>
+      <label class="check"><input type="radio" name="audience" value="selected" onchange="bcAudience()"> Only the servers I pick</label>
+      <div id="bc-pick" hidden>
+        <input type="text" id="bc-filter" placeholder="Filter by name…" oninput="bcFilter()" style="margin-top:10px;max-width:340px;width:100%;box-sizing:border-box;">
+        <div class="pick-box" id="bc-list">
+          {% for sv in bc_servers %}<label data-search="{{ sv.name|lower }} {{ sv.id }}"><input type="checkbox" name="guild_ids" value="{{ sv.id }}"> {{ sv.name }}</label>{% endfor %}
+        </div>
+      </div>
+      <label class="check" style="margin-top:16px;"><input type="checkbox" name="confirm" required> I've checked the message and want to send it</label>
+      <div style="margin-top:14px;"><button type="submit">Send broadcast</button></div>
+    </form>
+  </div>
+  <div class="sec">
+    <h2>Recent broadcasts</h2>
+    {% if not broadcasts %}<div class="empty">Nothing sent yet.</div>{% endif %}
+    {% for b in broadcasts %}
+    <details class="bc">
+      <summary><span class="t">{{ b.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</span>
+        {% if b.status == 'done' %}{{ b.sent }} sent · {{ b.failed }} skipped / failed{% else %}{{ b.status }}…{% endif %}
+        · {{ b.text|truncate(70) }}</summary>
+      <pre>{{ b.text }}</pre>
+      {% if b.results %}<div class="hint">{% for r in b.results if not r.ok %}{{ r.name }}: {{ r.reason }}<br>{% else %}Every server got it.{% endfor %}</div>{% endif %}
+    </details>
+    {% endfor %}
+  </div>
+  {% elif tab == 'errors' %}
+  <div class="sec">
+    <h2>Errors{% if errors %} (latest {{ errors|length }}){% endif %}</h2>
+    <div class="sub">What the bot logged as an error. Kept for 7 days. People's own mistakes (a wrong argument, a missing permission) aren't listed. Click one for the full traceback.</div>
+    {% if errors %}
+    <form method="POST" action="{{ url_for('admin.errors_clear') }}" style="margin-bottom:14px;" onsubmit="return confirm('Clear the whole error list?');">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit" class="btn-sm danger">Clear list</button>
+    </form>
+    {% endif %}
+    {% for e in errors %}
+    <details class="err">
+      <summary><span class="t">{{ e.created_at.strftime('%m-%d %H:%M:%S') }} UTC</span><b>{{ e.exc_type or e.logger }}</b> · {{ e.message|truncate(110) }}</summary>
+      <div class="hint">logger: {{ e.logger }}</div>
+      <pre>{{ e.traceback or e.message }}</pre>
+    </details>
+    {% else %}
+    <div class="empty">No errors recorded. That's a good sign.</div>
+    {% endfor %}
+  </div>
+  {% elif tab == 'audit' %}
+  <div class="sec">
+    <h2>Audit log</h2>
+    <div class="sub">Changes made on this page, newest first (last 100, kept for 6 months). Pick Winner is deliberately not recorded. There is one admin login, so the IP address is what tells sessions apart.</div>
+    {% for a in audit %}
+    <div class="audit-row"><div class="t">{{ a.at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</div><div class="a">{{ a.action }}</div><div>{{ a.detail }}</div><div class="ip">{{ a.ip }}</div></div>
+    {% else %}
+    <div class="empty">Nothing recorded yet.</div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="sec">
+    <h2>Servers ({{ guilds|length }})</h2>
+    <div class="sub">Every server the bot is in. Manage opens that server's dashboard without needing Discord permissions.</div>
+
+    {% if guilds_failed %}
+      <div class="banner bad">Couldn't get the server list from Discord. Reload in a moment.</div>
+    {% elif guilds %}
+    <div class="search" style="display:flex;gap:10px;flex-wrap:wrap;">
+      <input type="text" id="server-search" placeholder="Filter by name or ID…" oninput="filterServers()">
+      <select id="server-sort" onchange="sortServers()" style="margin-bottom:16px;">
+        <option value="name">Sort: name (A-Z)</option>
+        <option value="members">Sort: most members</option>
+        <option value="joined">Sort: newest join</option>
+        <option value="joined-old">Sort: oldest join</option>
+      </select>
+    </div>
+    <div class="server-list" id="server-list">
+      {% for g in guilds %}
+      <div class="server-row" data-search="{{ (g.name or '')|lower }} {{ g.id }}" data-name="{{ (g.name or '')|lower }}" data-members="{{ g.members_n or 0 }}" data-joined="{{ g.joined_iso }}">
+        {% if g.icon %}
+        <img class="icon" src="https://cdn.discordapp.com/icons/{{ g.id }}/{{ g.icon }}.png?size=64" alt="">
+        {% else %}
+        <div class="icon-fallback">{{ (g.name or '?')[0]|upper }}</div>
+        {% endif %}
+        <div class="server-info">
+          <div class="name">{{ g.name }}</div>
+          <div class="meta">ID: {{ g.id }}{% if g.members_n is not none %} · {{ g.members_n }} members{% endif %}{% if g.joined_iso %} · joined {{ g.joined_iso[:10] }}{% endif %}</div>
+          <div class="invite-result" id="invite-result-{{ g.id }}" style="display:none;"></div>
+        </div>
+        <div class="server-actions">
+          <a class="btn-sm" href="{{ url_for('admin.admin_page', tab='server', guild=g.id) }}">Details</a>
+          <a class="btn-sm" href="{{ url_for('dashboard.tickets_page', guild_id=g.id) }}">Manage</a>
+          <button type="button" class="btn-sm" onclick="getInvite('{{ g.id }}', this)">Get Invite</button>
+          <form method="POST" action="{{ url_for('admin.leave_server', guild_id=g.id) }}"
+                onsubmit='return confirm({{ ("Make the bot leave " ~ (g.name or "this server") ~ "? All its features stop working there immediately.") | tojson }});'>
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button type="submit" class="btn-sm danger">Leave</button>
+          </form>
+          <form method="POST" action="{{ url_for('admin.block_server', guild_id=g.id) }}"
+                onsubmit='return confirm({{ ("Block " ~ (g.name or "this server") ~ "? The bot leaves now and leaves again every time it is added back, until you unblock it.") | tojson }});'>
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <input type="hidden" name="name" value="{{ g.name }}">
+            <button type="submit" class="btn-sm danger">Block</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+      <div class="empty">The bot isn't in any servers right now.</div>
+    {% endif %}
+  </div>
+  {% if blocked %}
+  <div class="sec">
+    <h2>Blocked servers ({{ blocked|length }})</h2>
+    <div class="sub">The bot leaves these as soon as it is added, and again at every start. Unblock one to allow it back.</div>
+    <div class="server-list">
+      {% for b in blocked %}
+      <div class="server-row">
+        <div class="server-info"><div class="name">{{ b.name or b.id }}</div><div class="meta">ID: {{ b.id }}</div></div>
+        <div class="server-actions">
+          <form method="POST" action="{{ url_for('admin.unblock_server', guild_id=b.id) }}">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button type="submit" class="btn-sm">Unblock</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  var type = document.getElementById('a-type');
+  if (!type) return;          // Servers tab: no activity form
+  var wrap = document.getElementById('a-url-wrap'), url = document.getElementById('a-url');
+  function sync() { var on = type.value === 'streaming'; wrap.hidden = !on; url.required = on && document.getElementById('a-text').value.trim() !== ''; }
+  type.addEventListener('change', sync); document.getElementById('a-text').addEventListener('input', sync); sync();
+})();
+const CSRF = {{ csrf | tojson }};
+
+function sortServers() {
+  const list = document.getElementById('server-list');
+  if (!list) return;
+  const mode = document.getElementById('server-sort').value;
+  const rows = Array.from(list.children);
+  const by = {
+    'name': (a, b) => a.dataset.name.localeCompare(b.dataset.name),
+    'members': (a, b) => (+b.dataset.members) - (+a.dataset.members),
+    'joined': (a, b) => (b.dataset.joined || '').localeCompare(a.dataset.joined || ''),
+    'joined-old': (a, b) => (a.dataset.joined || '9').localeCompare(b.dataset.joined || '9'),
+  }[mode];
+  rows.sort(by).forEach(r => list.appendChild(r));
+}
+
+function bcAudience() {
+  const sel = document.querySelector('input[name=audience]:checked');
+  document.getElementById('bc-pick').hidden = !(sel && sel.value === 'selected');
+}
+function bcFilter() {
+  const q = document.getElementById('bc-filter').value.trim().toLowerCase();
+  document.querySelectorAll('#bc-list label').forEach(l => { l.style.display = l.dataset.search.includes(q) ? '' : 'none'; });
+}
+(function () {
+  const t = document.getElementById('bc-text');
+  if (!t) return;
+  const c = document.getElementById('bc-count');
+  const max = t.maxLength;
+  t.addEventListener('input', () => { c.textContent = t.value.length + ' / ' + max; });
+})();
+
+function filterServers() {
+  const q = document.getElementById('server-search').value.trim().toLowerCase();
+  document.querySelectorAll('#server-list .server-row').forEach(row => {
+    row.style.display = row.dataset.search.includes(q) ? '' : 'none';
+  });
+}
+
+async function getInvite(guildId, btn) {
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Working…';
+  const el = document.getElementById('invite-result-' + guildId);
+  el.style.display = 'block';
+  el.textContent = '';
+  try {
+    const r = await fetch('/admin/servers/' + guildId + '/invite', {
+      method: 'POST', headers: { 'X-CSRF-Token': CSRF }
+    });
+    const data = await r.json();
+    if (data.ok) {
+      el.className = 'invite-result';
+      const a = document.createElement('a');
+      a.href = data.invite_url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = data.invite_url;
+      el.appendChild(a);
+      el.appendChild(document.createTextNode('  (24h, single use)'));
+    } else {
+      el.className = 'invite-result error';
+      el.textContent = '' + (data.error || 'Could not create an invite.');
+    }
+  } catch (e) {
+    el.className = 'invite-result error';
+    el.textContent = 'Request failed: ' + e;
+  }
+  btn.disabled = false;
+  btn.textContent = original;
+}
+</script>
+  {% include '_footer.html' %}
+</body>
+</html>
