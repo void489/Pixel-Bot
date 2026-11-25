@@ -1435,6 +1435,18 @@ async def get_submissions_for_user(guild_id: int, applicant_id: int,
     return [doc async for doc in cursor]
 
 
+async def get_pending_submission_for_user(guild_id: int, applicant_id: int,
+                                           application_id: str) -> dict:
+    """The person's submission for THIS application type that is still waiting for a
+    review (status "Pending"), or None. Other types, and accepted / denied ones, don't count."""
+    return await application_submissions_col().find_one({
+        "guild_id": str(guild_id),
+        "applicant_id": str(applicant_id),
+        "application_id": str(application_id),
+        "status": "Pending",
+    })
+
+
 async def claim_submission_decision(submission_id: str, staff_id: int, status: str,
                                     reason: str = None) -> dict:
     try:

@@ -17,6 +17,35 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-25",
+        "title": "Applications: one pending application per type",
+        "tags": ["Members", "Applications"],
+        "summary": "A member can't send a second application of the same type while one is still waiting for review. Other types are unaffected, and they can apply again once it has been accepted or denied.",
+        "details": [
+            "Example: with Builder and Staff applications, someone whose Staff application is in review can't apply for Staff again, but can still apply for Builder.",
+            "Checked when they press the button (or pick it in the dropdown): they get a private message saying it is already waiting for review.",
+            "Checked again when the last answer comes in, in case a form was started before the earlier one was submitted.",
+            "Once the submission is accepted or denied (or removed), they can apply again.",
+        ],
+        "files": ["cogs/applications.py", "database/models.py"],
+    },
+    {
+        "date": "2026-11-25",
+        "title": "Box look for announcements and welcome / leave messages",
+        "tags": ["Dashboard", "Members", "Announcements", "Welcome"],
+        "summary": "Scheduled announcements and the welcome / leave messages can now be posted as one box (text, picture or avatar and ping all inside it), next to the existing plain, embed and image options.",
+        "details": [
+            "Announcements: the \"Send as an embed\" checkbox is now a Look choice: Plain message, Embed or Box. In a box the title, text and picture (at the bottom) sit in one container, the colour becomes the side bar and the role ping sits inside the box. A box holds up to 3600 characters of message text.",
+            "Welcome and Leave (Join & Leave tab): a new Box type. It uses the same fields as the Embed type (title, text, footer, colour) with the member's avatar on the right. The welcome ping sits inside the box; nobody is pinged on a leave message, as before.",
+            "If a box can't be built or Discord refuses it, the embed version is posted instead, so a message is never lost.",
+            "Existing announcements and welcome settings are unchanged (old ones keep their plain / embed look).",
+            "Giveaways and Vouches stay as they are: giveaway messages are edited in too many places and vouch cards rely on embed fields.",
+        ],
+        "files": ["cogs/announcements.py", "cogs/welcome.py", "utils/announce_core.py", "utils/welcome.py",
+                  "dashboard/routes.py", "dashboard/templates/announcements.html",
+                  "dashboard/templates/welcome.html"],
+    },
+    {
+        "date": "2026-11-25",
         "title": "Admin page: stats, maintenance mode, feature switches, server tools, broadcast, errors, audit",
         "tags": ["Dashboard", "Admin"],
         "summary": "The /admin page (bot owner only) has new tools: live bot stats, a maintenance switch, per-feature switches, better server management (sort, details page, block), a broadcast to servers, an error list and an audit log.",

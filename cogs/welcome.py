@@ -11,6 +11,8 @@ A server uses ONE welcome type (cfg["type"], missing = normal):
   normal - plain text
   embed  - ping above an embed (joiner's avatar as the right-hand thumbnail)
   image  - ping + text line + a banner drawn with Pillow (utils/welcome_image.py)
+  box    - the embed's fields (title, text, footer, colour), but all inside one box with the
+           joiner's avatar on the right and the ping inside the box (falls back to embed)
 Only the new member can ever be pinged.
 
 The Leaves section (guild_settings["leave"]) works the same way when a member leaves,
@@ -23,6 +25,7 @@ import discord
 from discord.ext import commands
 
 from database import models
+from utils import panel_box
 from utils.welcome import (
     DEFAULT_EMBED, DEFAULT_LEAVE_EMBED, DEFAULT_LEAVE_MESSAGE, DEFAULT_WELCOME_MESSAGE,
     EMBED_DESC_MAX, EMBED_FOOTER_MAX, EMBED_TITLE_MAX, GHOSTPING_MAX_CHANNELS, IMAGE_TEXT_MAX,
@@ -128,6 +131,8 @@ class Welcome(commands.Cog):
         try:
             if kind == "embed":
                 await self._send_embed(member, channel, cfg, mentions, leave)
+            elif kind == "box":
+                await self._send_box(member, channel, cfg, mentions, leave)
             elif kind == "image":
                 await self._send_image(member, channel, cfg, mentions, leave)
             else:
@@ -164,7 +169,8 @@ class Welcome(commands.Cog):
             return
         await channel.send(text, allowed_mentions=mentions)
 
-    async def _send_embed(self, member, channel, cfg, mentions, leave=False):
+    def _embed_parts(self, member, cfg, leave=False):
+        """(title, description, footer, colour) for the embed and box types."""
         e = cfg["embed"]
         ping = not leave
         title = self._fill(e["title"], member, markdown=False, mention=False)[:EMBED_TITLE_MAX]
@@ -179,6 +185,37 @@ class Welcome(commands.Cog):
             colour = discord.Colour(int(e["color"].lstrip("#"), 16))
         except (ValueError, AttributeError):
             colour = discord.Colour(int(default["color"].lstrip("#"), 16))
+        return title, desc, footer, colour
+
+    async def _send_box(self, member, channel, cfg, mentions, leave=False):
+        """Box type: the embed's content in one box, the avatar on the right, the ping inside
+        the box (welcome only). If the box can't be built or Discord refuses it, the embed is
+        posted instead, so a joiner is never left without a message."""
+        try:
+            title, desc, footer, colour = self._embed_parts(member, cfg, leave)
+            lines = [member.mention if not leave else "",
+                     f"## {title.strip()}" if title.strip() else "",
+                     desc.strip(), f"-# {footer.strip()}" if footer.strip() else ""]
+            view = None
+            if panel_box.box_supported():
+                view = panel_box.BoxView(
+                    text="\n".join(x for x in lines if x), colour=colour.value,
+                    image_url=member.display_avatar.replace(size=256).url, position="right")
+        except Exception as e:
+            print(f"[welcome] couldn't build the box in {member.guild.id}: {e}")
+            view = None
+        if view is None:
+            return await self._send_embed(member, channel, cfg, mentions, leave)
+        try:
+            await channel.send(view=view, allowed_mentions=mentions)
+        except discord.Forbidden:
+            raise
+        except discord.HTTPException as e:
+            print(f"[welcome] box refused in {member.guild.id}: {e}")
+            await self._send_embed(member, channel, cfg, mentions, leave)
+
+    async def _send_embed(self, member, channel, cfg, mentions, leave=False):
+        title, desc, footer, colour = self._embed_parts(member, cfg, leave)
         embed = discord.Embed(title=title.strip() or None, description=desc.strip() or None, colour=colour)
         embed.set_thumbnail(url=member.display_avatar.replace(size=256).url)   # shown on the right
         if footer.strip():

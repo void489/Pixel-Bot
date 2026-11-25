@@ -252,6 +252,19 @@ class _PanelOpenButton(discord.ui.DynamicItem[discord.ui.Button],
                 ephemeral=True,
             )
 
+        # One application per type at a time: while one of THIS type is waiting for a review
+        # the person can't send another. Other types are fine, and so is applying again once
+        # it has been accepted or denied.
+        if await models.get_pending_submission_for_user(guild.id, interaction.user.id,
+                                                        self.application_id):
+            return await interaction.response.send_message(
+                embed=info_embed(
+                    f"You already have a **{app.get('name', 'Application')}** application "
+                    "waiting for review.\n\nYou can apply again once it has been accepted or "
+                    "denied. Other applications are still open to you."),
+                ephemeral=True,
+            )
+
         await interaction.response.defer(ephemeral=True)
 
         # Ignore rapid double-clicks on the same panel button.
@@ -1072,6 +1085,19 @@ class Applications(commands.Cog):
 
         final = await models.get_application_session(gid, uid, aid)
         if not final:
+            return
+
+        # Safety net: a form started before an earlier one of this type was submitted (or two
+        # sessions racing) must not create a second pending application.
+        if await models.get_pending_submission_for_user(gid, uid, aid):
+            await models.delete_application_session(gid, uid, aid)
+            try:
+                await dm.send(embed=info_embed(
+                    f"You already have a **{app.get('name', 'Application')}** application "
+                    "waiting for review, so this one wasn't sent. You can apply again once "
+                    "it has been accepted or denied."))
+            except (discord.Forbidden, discord.HTTPException):
+                pass
             return
 
         questions = list(final.get("questions") or [])

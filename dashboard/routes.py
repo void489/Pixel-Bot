@@ -2276,10 +2276,13 @@ def register_routes(app, discord_session):
                 if channel_id not in channels:
                     return _back(error="channel")
                 role_id = request.form.get("ping_role_id") or ""
-                use_embed = request.form.get("use_embed") == "on"
+                look = request.form.get("look")
+                if look not in ac.LOOKS:            # an older form: only the "embed" checkbox
+                    look = "embed" if request.form.get("use_embed") == "on" else "plain"
+                use_embed = look in ("embed", "box")
                 message = (request.form.get("message") or "").strip()
                 title = (request.form.get("title") or "").strip()[:ac.MAX_TITLE]
-                limit = ac.MAX_EMBED_TEXT if use_embed else ac.MAX_TEXT
+                limit = {"plain": ac.MAX_TEXT, "embed": ac.MAX_EMBED_TEXT, "box": ac.MAX_BOX_TEXT}[look]
                 if not message:
                     return _back(error="empty")
                 if len(message) > limit:
@@ -2298,7 +2301,7 @@ def register_routes(app, discord_session):
                 data = {
                     "guild_id": guild_id, "channel_id": channel_id,
                     "ping_role_id": role_id if role_id in roles else None,
-                    "use_embed": use_embed, "title": title if use_embed else "",
+                    "use_embed": use_embed, "look": look, "title": title if use_embed else "",
                     "message": message,
                     "color": ac.clean_color(request.form.get("color")),
                     "image_url": ac.clean_image_url(request.form.get("image_url")),
@@ -2334,8 +2337,10 @@ def register_routes(app, discord_session):
             r["next_local"] = ac.to_local_text(r["next_run"], r.get("tz"))
             r["last_local"] = (ac.to_local_text(r["last_sent_at"], r.get("tz"))
                                if r.get("last_sent_at") else "")
-            r["edit"] = {k: r.get(k) for k in ("message", "title", "use_embed", "image_url",
+            r["look"] = ac.look_of(r)
+            r["edit"] = {k: r.get(k) for k in ("message", "title", "use_embed", "look", "image_url",
                                                 "first_local", "tz", "repeat")}
+            r["edit"]["look"] = r["look"]
             r["edit"].update({"id": r["id"], "channel_id": str(r.get("channel_id")),
                               "ping_role_id": str(r.get("ping_role_id") or ""),
                               "color": "#%06x" % int(r.get("color") or 0x5865F2)})
@@ -2346,6 +2351,7 @@ def register_routes(app, discord_session):
             guild_id=guild_id, upcoming=upcoming, past=past[:25],
             channels=get_text_channels(gid), roles=get_guild_roles(gid),
             timezones=ac.COMMON_TIMEZONES, max_text=ac.MAX_TEXT, max_embed=ac.MAX_EMBED_TEXT,
+            max_box=ac.MAX_BOX_TEXT,
             saved=request.args.get("saved"), error=request.args.get("error"),
         )
 

@@ -1,7 +1,10 @@
 """Pure helpers for scheduled announcements (no Discord or DB imports).
 
 A schedule document (collection `scheduled_announcements`):
-    guild_id, channel_id, ping_role_id (or None), use_embed, title, message, color, image_url,
+    guild_id, channel_id, ping_role_id (or None), use_embed, look, title, message, color, image_url,
+    look         "plain" | "embed" | "box" (missing = embed if use_embed else plain). "box" is one
+                 container with the title, text and picture inside it (Components V2); use_embed
+                 is also saved True for it, so an older bot still posts an embed.
     first_local  "YYYY-MM-DDTHH:MM"  - the first send time on the wall clock of `tz`
     tz           IANA name, e.g. "Europe/Lisbon"
     repeat       "once" | "daily" | "weekly"
@@ -20,6 +23,8 @@ STEP_DAYS = {"daily": 1, "weekly": 7}
 MAX_ACTIVE = 50
 MAX_TEXT = 2000
 MAX_EMBED_TEXT = 4000
+MAX_BOX_TEXT = 3600             # a box holds 4000 characters in all: the title and ping use the rest
+LOOKS = ("plain", "embed", "box")
 MAX_TITLE = 256
 LATE_AFTER_SECONDS = 300        # posted this much after its time = "late" (bot was down)
 
@@ -88,6 +93,14 @@ def to_local_text(dt_utc, tzname: str) -> str:
     """'2026-10-18 18:00' on the schedule's own clock (for the dashboard list)."""
     tz = get_tz(tzname) or timezone.utc
     return aware(dt_utc).astimezone(tz).strftime("%Y-%m-%d %H:%M")
+
+
+def look_of(doc: dict) -> str:
+    """How a schedule is posted: "plain", "embed" or "box". Old schedules only have use_embed."""
+    look = doc.get("look")
+    if look in LOOKS:
+        return look
+    return "embed" if doc.get("use_embed") else "plain"
 
 
 def clean_color(raw, default=0x5865F2) -> int:

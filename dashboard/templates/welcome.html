@@ -81,7 +81,7 @@
 
     [hidden] { display:none !important; }
     /* welcome types */
-    .type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px; }
+    .type-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:8px; }
     .type-opt { display:flex !important; align-items:flex-start; gap:10px; padding:12px 14px; background:var(--bg-overlay); border:1px solid var(--border); border-radius:var(--r-md); cursor:pointer; margin:0; }
     .type-opt:hover { border-color:var(--border-hi); }
     .type-opt:has(input:checked) { border-color:var(--accent-text); background:var(--accent-tint); }
@@ -141,6 +141,7 @@
         {% for key, title, desc in [
           ('normal', 'Normal', 'Plain text message.'),
           ('embed',  'Embed',  ('Card with the member\'s avatar on the right.' if k == 'leave' else 'Ping above a card with the member\'s avatar on the right.')),
+          ('box',    'Box',    ('The same card, but all inside one box with the member\'s avatar on the right.' if k == 'leave' else 'The same card, but ping and card all inside one box, avatar on the right.')),
           ('image',  'Image',  ('A text line and a banner with the member\'s avatar and name.' if k == 'leave' else 'Ping, a text line and a banner with the member\'s avatar and name.')) ] %}
         <label class="type-opt">
           <input type="radio" name="{{ pre }}type" value="{{ key }}" {% if s.type == key %}checked{% endif %}>
@@ -172,7 +173,7 @@
       </div>
 
       <!-- EMBED -->
-      <div class="wp-grid" id="{{ k }}-panel-embed" {% if s.type != 'embed' %}hidden{% endif %}>
+      <div class="wp-grid" id="{{ k }}-panel-embed" {% if s.type not in ('embed', 'box') %}hidden{% endif %}>
         <div>
           <label class="t-label" for="{{ k }}-f-etitle">Title</label>
           <input type="text" name="{{ pre }}embed_title" id="{{ k }}-f-etitle" maxlength="{{ embed_title_max }}" value="{{ s.embed.title }}">
@@ -189,6 +190,7 @@
         </div>
         <div>
           <label class="t-label">Preview (sample values)</label>
+          <div class="hint" style="margin-top:0;">The Embed and Box types share these fields. In a box the ping sits inside the box and the colour becomes its side bar; the preview below shows the embed.</div>
           <div class="dc-msg">
             <div class="dc-line">{% if k != 'leave' %}<span class="dc-ping">@NewMember</span>{% else %}<span class="dc-ping" hidden></span>{% endif %}</div>
             <div class="dc-embed" id="{{ k }}-pv-embed">
@@ -290,7 +292,8 @@
     function showType() {
       let t = 'normal';
       radios.forEach(r => { if (r.checked) t = r.value; });
-      ['normal', 'embed', 'image'].forEach(k => { $('panel-' + k).hidden = (k !== t); });
+      const shown = t === 'box' ? 'embed' : t;     // the Box type uses the Embed fields
+      ['normal', 'embed', 'image'].forEach(k => { $('panel-' + k).hidden = (k !== shown); });
     }
     function update() {
       const box = $('f-message');

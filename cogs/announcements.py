@@ -5,6 +5,9 @@ passed and posts them. Schedules live in Mongo, so they survive restarts. If the
 at the scheduled time the announcement is posted late, once (repeating ones skip the missed
 occurrences and carry on from the next one) and the dashboard marks it "posted late".
 
+Look (doc["look"]): plain text, an embed, or one box (title, text and picture inside a single
+container; the role ping sits inside the box). If the box can't be used it is posted as an embed.
+
 Claiming: before posting, the loop moves `next_run` forward (or marks a one-off "sent") with a
 compare-and-set update, so two loop runs - or two bot processes - can never post the same
 occurrence twice.
@@ -16,6 +19,7 @@ from discord.ext import commands, tasks
 
 from database.mongo import scheduled_announcements_col
 from utils import announce_core as core
+from utils import panel_box
 
 KEEP_DAYS = 90        # finished / cancelled schedules older than this are deleted
 
@@ -27,7 +31,7 @@ def build_message(doc: dict):
     text = (doc.get("message") or "").strip()
     image = doc.get("image_url") or ""
     embed = None
-    if doc.get("use_embed"):
+    if core.look_of(doc) in ("embed", "box"):       # a box falls back to the embed
         embed = discord.Embed(
             title=(doc.get("title") or None),
             description=text[:core.MAX_EMBED_TEXT] or None,
@@ -42,6 +46,20 @@ def build_message(doc: dict):
         everyone=False, users=False,
         roles=[discord.Object(id=int(role_id))] if role_id else False)
     return content, embed, mentions
+
+
+def build_box(doc: dict):
+    """The one-box version of a schedule, or None when boxes aren't available."""
+    if core.look_of(doc) != "box" or not panel_box.box_supported():
+        return None
+    role_id = doc.get("ping_role_id")
+    title = (doc.get("title") or "").strip()
+    lines = [f"<@&{role_id}>" if role_id else "", f"## {title}" if title else "",
+             (doc.get("message") or "").strip()]
+    return panel_box.BoxView(
+        text="\n".join(x for x in lines if x)[:core.MAX_BOX_TEXT + 400],
+        colour=int(doc.get("color") or 0x5865F2),
+        image_url=doc.get("image_url") or None, position="down")
 
 
 class Announcements(commands.Cog):
@@ -115,7 +133,17 @@ class Announcements(commands.Cog):
                 error = "The announcement is empty."
             else:
                 try:
-                    await channel.send(content=content, embed=embed, allowed_mentions=mentions)
+                    box = build_box(doc)
+                    if box is not None:
+                        try:
+                            await channel.send(view=box, allowed_mentions=mentions)
+                        except discord.Forbidden:
+                            raise
+                        except discord.HTTPException as e:      # Discord refused the box: use the embed
+                            print(f"[announcements] box refused in {doc['guild_id']}: {e}")
+                            await channel.send(content=content, embed=embed, allowed_mentions=mentions)
+                    else:
+                        await channel.send(content=content, embed=embed, allowed_mentions=mentions)
                 except discord.Forbidden:
                     error = "I don't have permission to post in that channel."
                 except discord.HTTPException as e:

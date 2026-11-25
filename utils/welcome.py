@@ -7,7 +7,8 @@ GHOSTPING_MAX_CHANNELS = 10     # Ping on Join: most channels a server can pick
 
 # A server uses exactly ONE welcome type at a time. A missing / unknown value means
 # "normal", so servers saved before types existed keep working unchanged.
-WELCOME_TYPES = ("normal", "embed", "image")
+# "box" = the same fields as "embed", but everything sits inside one box (Components V2).
+WELCOME_TYPES = ("normal", "embed", "image", "box")
 DEFAULT_WELCOME_TYPE = "normal"
 
 # Embed type: the joiner is pinged above an embed (joiner's avatar = right thumbnail).

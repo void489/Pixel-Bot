@@ -52,7 +52,7 @@
   {% if saved %}<div class="banner-ok">Saved.</div>{% endif %}
   {% if error == 'channel' %}<div class="banner-error">Pick a text channel from the list.</div>{% endif %}
   {% if error == 'empty' %}<div class="banner-error">Write a message first.</div>{% endif %}
-  {% if error == 'long' %}<div class="banner-error">That message is too long ({{ max_text }} characters for plain text, {{ max_embed }} for an embed).</div>{% endif %}
+  {% if error == 'long' %}<div class="banner-error">That message is too long ({{ max_text }} characters for plain text, {{ max_embed }} for an embed, {{ max_box }} for a box).</div>{% endif %}
   {% if error == 'time' %}<div class="banner-error">Pick a valid date, time and timezone.</div>{% endif %}
   {% if error == 'past' %}<div class="banner-error">That time has already passed. Pick a time in the future.</div>{% endif %}
   {% if error == 'full' %}<div class="banner-error">You can have up to 50 active schedules. Cancel or delete one first.</div>{% endif %}
@@ -65,7 +65,7 @@
       <div>
         <span class="pill p-sched">{{ a.repeat|capitalize }}</span>
         <strong style="color:var(--text-bright); margin-left:6px;">#{{ a.channel_name }}</strong>
-        <div class="meta">Next: {{ a.next_local }} ({{ a.tz }}){% if a.role_name %} · pings @{{ a.role_name }}{% endif %}{% if a.use_embed %} · embed{% endif %}
+        <div class="meta">Next: {{ a.next_local }} ({{ a.tz }}){% if a.role_name %} · pings @{{ a.role_name }}{% endif %}{% if a.look == 'box' %} · box{% elif a.use_embed %} · embed{% endif %}
           {% if a.run_count %}· posted {{ a.run_count }}×{% endif %}
           {% if a.last_error %}<br><span style="color:var(--danger);">Last problem: {{ a.last_error }}</span>{% endif %}
           {% if a.late %}<br><span style="color:var(--warn);">Last post went out late (bot was offline).</span>{% endif %}</div>
@@ -107,18 +107,22 @@
       <label class="t-label">Message</label>
       <textarea name="message" id="f-message" required placeholder="What should the bot say?"></textarea>
 
-      <label class="switch-row" style="display:flex; gap:8px; align-items:center; margin-top:12px; font-size:13px; color:var(--text-bright); font-weight:600;">
-        <input type="checkbox" name="use_embed" id="f-embed" onchange="syncEmbed()"> Send as an embed
-      </label>
+      <label class="t-label">Look</label>
+      <select name="look" id="f-look" onchange="syncEmbed()" style="max-width:320px;">
+        <option value="plain">Plain message</option>
+        <option value="embed">Embed (card with a colour bar)</option>
+        <option value="box">Box (title, text and picture inside one box)</option>
+      </select>
+      <div class="hint">A box isn't an embed: the colour becomes its side bar and the role ping sits inside it.</div>
       <div id="embed-wrap" style="display:none;">
         <div class="row">
-          <div><label class="t-label">Embed title (optional)</label><input type="text" name="title" id="f-title" maxlength="256" style="width:320px;"></div>
+          <div><label class="t-label">Title (optional)</label><input type="text" name="title" id="f-title" maxlength="256" style="width:320px;"></div>
           <div><label class="t-label">Color</label><input type="text" name="color" id="f-color" value="#5865f2" maxlength="7" style="width:110px;"></div>
         </div>
       </div>
       <label class="t-label">Image URL (optional, https only)</label>
       <input type="text" name="image_url" id="f-image" maxlength="500" placeholder="https://..." style="max-width:520px;">
-      <div class="hint">Shown inside the embed, or added under a plain message.</div>
+      <div class="hint">Shown at the bottom of an embed or box, or added under a plain message.</div>
 
       <div class="row">
         <div><label class="t-label">Date &amp; time</label>
@@ -176,7 +180,7 @@
 <script>
   function syncEmbed() {
     document.getElementById('embed-wrap').style.display =
-      document.getElementById('f-embed').checked ? 'block' : 'none';
+      document.getElementById('f-look').value !== 'plain' ? 'block' : 'none';
   }
   // a = announcement (or null to clear). asCopy = "Reuse": fill the form but save as a NEW one.
   function fillForm(a, asCopy) {
@@ -186,7 +190,7 @@
     document.getElementById('f-channel').value = a ? a.channel_id : document.getElementById('f-channel').options[0]?.value;
     document.getElementById('f-role').value    = a ? (a.ping_role_id || '') : '';
     document.getElementById('f-message').value = a ? (a.message || '') : '';
-    document.getElementById('f-embed').checked = a ? !!a.use_embed : false;
+    document.getElementById('f-look').value    = a ? (a.look || (a.use_embed ? 'embed' : 'plain')) : 'plain';
     document.getElementById('f-title').value   = a ? (a.title || '') : '';
     document.getElementById('f-color').value   = a ? (a.color || '#5865f2') : '#5865f2';
     document.getElementById('f-image').value   = a ? (a.image_url || '') : '';
