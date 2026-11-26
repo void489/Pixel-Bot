@@ -25,6 +25,11 @@ Commands (all hybrid, all @command_check()):
                                        (stat: members|humans|bots|boosts|roles|channels|voice; with no
                                        channel the bot makes a locked voice channel; {count} = the number)
     /statchannel remove <channel> | list | refresh
+    /stats combined | joins | leaves
+                                    -> server growth card (Today / Last 7 Days / Last 30 Days) with
+                                       a joins and leaves history chart. Every join and leave is
+                                       logged (collection member_events, kept 90 days, humans only);
+                                       a toggle sits on the dashboard's Config & Logs page.
     /poll create <question> <options>
                                     -> post a button poll (| separated options)
     /poll end <message_id>          -> close a poll and lock its buttons
@@ -64,11 +69,12 @@ Notes:
 """
 import ast
 import asyncio
+import io
 import math
 import operator
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 import discord
@@ -76,6 +82,8 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from database import models
+from database.mongo import member_events_col
+from utils import member_stats
 from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
@@ -1095,10 +1103,16 @@ class Utilities(commands.Cog):
         self.bot = bot
         self.afk = {}              # (guild_id, user_id) -> afk doc
         self._afk_loaded = False
+        self._stats_lock = asyncio.Lock()   # one first-time /stats backfill at a time
 
     async def cog_load(self):
         self.bot.add_dynamic_items(_BlacklistDecisionButton, PollVoteButton)
         self.bot.add_view(rq.persistent_view(BLACKLIST_QUEUE))
+        try:
+            await member_events_col().create_index([("guild_id", 1), ("at", 1)])
+            await member_events_col().create_index("at", expireAfterSeconds=models.MEMBER_EVENT_KEEP_SECONDS)
+        except Exception as e:
+            print(f"[stats] couldn't create the member_events indexes: {e}")
         self._check_temp_roles.start()
         self._update_stat_channels.start()
 
@@ -2246,6 +2260,91 @@ class Utilities(commands.Cog):
         if len(docs) > 20:
             embed.set_footer(text=f"Showing 20 of {len(docs)}")
         await _reply(ctx, embed, ephemeral=True)
+
+    # ------------------------------------------------------------------
+    # /stats  -  server growth: joins and leaves, with a chart
+    # ------------------------------------------------------------------
+    async def _log_member_event(self, member: discord.Member, kind: str):
+        """One row per join / leave (humans only). Never lets a database error touch a join."""
+        if member.bot:
+            return
+        try:
+            cfg = await models.get_member_stats_config(member.guild.id)
+            if cfg["enabled"]:
+                await models.record_member_event(member.guild.id, member.id, kind)
+        except Exception as e:
+            print(f"[stats] couldn't record a {kind} in {member.guild.id}: {type(e).__name__}: {e}")
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        await self._log_member_event(member, "join")
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        await self._log_member_event(member, "leave")
+
+    async def _send_member_stats(self, ctx: commands.Context, mode: str):
+        if ctx.guild is None:
+            return
+        cfg = await models.get_member_stats_config(ctx.guild.id)
+        if not cfg["enabled"]:
+            return await _reply(ctx, error_embed(
+                "Server stats are turned off in this server. An admin can turn them on in the "
+                "dashboard (Config & Logs)."))
+        await ctx.defer()
+
+        if not cfg["backfilled"]:       # first use: copy what the invite tracker already knew
+            async with self._stats_lock:
+                if not (await models.get_member_stats_config(ctx.guild.id))["backfilled"]:
+                    try:
+                        await models.backfill_member_events(ctx.guild.id)
+                    except Exception as e:
+                        print(f"[stats] backfill failed in {ctx.guild.id}: {type(e).__name__}: {e}")
+
+        today = datetime.now(timezone.utc).date()
+        since = datetime.combine(today - timedelta(days=member_stats.CHART_DAYS - 1),
+                                 datetime.min.time(), tzinfo=timezone.utc)
+        buckets = await models.get_member_event_buckets(ctx.guild.id, since)
+        dates, joins, leaves = member_stats.build_series(buckets, today)
+        png = await asyncio.to_thread(member_stats.render_chart, mode, dates, joins, leaves)
+
+        embed = base_embed(title=member_stats.CARD_TITLES[mode], color=0x00C8D2)
+        for name, days in (("Today", 1), ("Last 7 Days", 7), ("Last 30 Days", 30)):
+            embed.add_field(name=name, inline=True, value=member_stats.card_value(
+                mode, member_stats.window(joins, days), member_stats.window(leaves, days)))
+        first = await models.get_first_member_event_at(ctx.guild.id)
+        if first is None:
+            embed.description = "Nothing recorded yet. Joins and leaves are counted from now on."
+        elif first > since:
+            embed.description = (f"Counting started {discord.utils.format_dt(first, 'D')}, "
+                                 "so earlier days show 0.")
+        embed.set_image(url="attachment://stats.png")
+        embed.set_footer(text=f"{ctx.guild.name} • UTC")
+        await ctx.send(embed=embed, file=discord.File(io.BytesIO(png), filename="stats.png"))
+
+    @commands.hybrid_group(name="stats", description="Server growth stats (joins and leaves)",
+                           invoke_without_command=True)
+    async def stats(self, ctx: commands.Context):
+        if ctx.invoked_subcommand is None:
+            await _reply(ctx, info_embed("Use `stats combined`, `stats joins` or `stats leaves`."))
+
+    @stats.command(name="combined",
+                   description="Displays your server combined joins and leaves members history with a graph.")
+    @command_check()
+    async def stats_combined(self, ctx: commands.Context):
+        await self._send_member_stats(ctx, "combined")
+
+    @stats.command(name="joins",
+                   description="Displays your server joins members history with a graph.")
+    @command_check()
+    async def stats_joins(self, ctx: commands.Context):
+        await self._send_member_stats(ctx, "joins")
+
+    @stats.command(name="leaves",
+                   description="Displays your server leaves members history with a graph.")
+    @command_check()
+    async def stats_leaves(self, ctx: commands.Context):
+        await self._send_member_stats(ctx, "leaves")
 
     # ------------------------------------------------------------------
     # /statchannel  -  channels whose name shows a live server stat

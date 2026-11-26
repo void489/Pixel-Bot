@@ -3939,6 +3939,7 @@ def register_routes(app, discord_session):
                 "blacklist.staff_role_id": (
                     str(staff_role) if staff_role else None
                 ),
+                "member_stats.enabled": request.form.get("member_stats_enabled") == "on",
             })
             return redirect(url_for("dashboard.config_logs_page", guild_id=guild_id, saved=1))
 
@@ -3951,6 +3952,7 @@ def register_routes(app, discord_session):
         return render_template(
             "config_logs.html",
             guild_id=guild_id,
+            member_stats_enabled=bool((settings_doc.get("member_stats") or {}).get("enabled", True)),
             cfg={
                 "log_channel_id": cfg.get("log_channel_id"),
                 "transcript_channel_id": cfg.get("transcript_channel_id"),

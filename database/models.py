@@ -37,7 +37,7 @@ from database.mongo import (
     honeypot_kicks_col,
     reaction_roles_col,
     temp_bans_col,
-    invite_joins_col,
+    invite_joins_col, member_events_col,
     automod_strikes_col,
     role_panels_col,
 )
@@ -3008,6 +3008,78 @@ async def mark_invite_left(guild_id: int, user_id: int) -> None:
         {"guild_id": str(guild_id), "user_id": str(user_id)},
         {"$set": {"active": False, "left_at": datetime.now(timezone.utc)}},
     )
+
+
+# ---------------------------------------------------------------------------
+# Server growth stats (/stats combined | joins | leaves, cogs/utilities.py)
+#   settings: guild_settings.member_stats = {enabled (default True), backfilled}
+#   events:   `member_events`, one document per join / leave (see database/mongo.py)
+# ---------------------------------------------------------------------------
+MEMBER_EVENT_KEEP_SECONDS = 90 * 24 * 3600
+
+
+async def get_member_stats_config(guild_id: int) -> dict:
+    settings = await get_guild_settings(guild_id)
+    cfg = settings.get("member_stats") or {}
+    return {
+        "enabled": bool(cfg.get("enabled", True)),       # old servers: on
+        "backfilled": bool(cfg.get("backfilled", False)),
+    }
+
+
+async def record_member_event(guild_id: int, user_id: int, kind: str, source: str = "live",
+                              at: datetime = None) -> None:
+    await member_events_col().insert_one({
+        "guild_id": str(guild_id), "kind": kind, "user_id": str(user_id),
+        "at": at or datetime.now(timezone.utc), "source": source,
+    })
+
+
+async def get_member_event_buckets(guild_id: int, since: datetime) -> dict:
+    """{"YYYY-MM-DD": {"join": n, "leave": n}} for every UTC day since `since`."""
+    pipeline = [
+        {"$match": {"guild_id": str(guild_id), "at": {"$gte": since}}},
+        {"$group": {"_id": {"d": {"$dateToString": {"format": "%Y-%m-%d", "date": "$at"}},
+                            "k": "$kind"}, "n": {"$sum": 1}}},
+    ]
+    out = {}
+    async for row in member_events_col().aggregate(pipeline):
+        out.setdefault(row["_id"]["d"], {})[row["_id"]["k"]] = row["n"]
+    return out
+
+
+async def get_first_member_event_at(guild_id: int):
+    """When the oldest recorded join / leave happened (UTC), or None if there is none yet."""
+    doc = await member_events_col().find_one({"guild_id": str(guild_id)}, sort=[("at", 1)])
+    return doc["at"].replace(tzinfo=timezone.utc) if doc else None
+
+
+async def backfill_member_events(guild_id: int) -> int:
+    """Fill the event log once from the invite tracker's records (joined_at / left_at).
+
+    Approximate: the tracker keeps one record per person, so earlier rejoins were overwritten.
+    Only moments BEFORE the first live event are copied, so nothing is counted twice.
+    The "backfilled" flag is set first, so a second run (or a crash half way) can never
+    double-count. Returns how many events were added."""
+    await update_guild_settings(guild_id, {"member_stats.backfilled": True})
+    gid = str(guild_id)
+    first_live = await member_events_col().find_one({"guild_id": gid, "source": "live"},
+                                                    sort=[("at", 1)])
+    cutoff = first_live["at"].replace(tzinfo=timezone.utc) if first_live \
+        else datetime.now(timezone.utc)
+
+    def before(dt):
+        return dt is not None and dt.replace(tzinfo=dt.tzinfo or timezone.utc) < cutoff
+
+    events = []
+    async for rec in invite_joins_col().find({"guild_id": gid}):
+        for kind, when in (("join", rec.get("joined_at")), ("leave", rec.get("left_at"))):
+            if before(when):
+                events.append({"guild_id": gid, "kind": kind, "user_id": str(rec.get("user_id")),
+                               "at": when, "source": "backfill"})
+    if events:
+        await member_events_col().insert_many(events, ordered=False)
+    return len(events)
 
 
 async def get_invite_stats(guild_id: int, inviter_id: int) -> dict:

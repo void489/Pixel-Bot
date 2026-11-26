@@ -16,6 +16,23 @@ Entry fields:
 
 CHANGES = [
     {
+        "date": "2026-11-26",
+        "title": "Server growth stats: /stats combined, /stats joins, /stats leaves",
+        "tags": ["Commands", "Admin", "Dashboard", "Database"],
+        "summary": "New commands show how many members joined and left today, in the last 7 days and in the last 30 days, with a joins-and-leaves history chart under the numbers.",
+        "details": [
+            "Card: Today / Last 7 Days / Last 30 Days as +net (+joins, -leaves) on /stats combined; just the joins or just the leaves on the other two. Days are UTC days, and the numbers add up to what the chart shows.",
+            "Chart: drawn with Pillow (no new dependency), 30 daily points, green = joins, red = leaves, dates every second day.",
+            "Every join and leave is now logged in a new collection, member_events (humans only, bots are skipped), kept for 90 days. It is separate from the invite tracker, so it works whether or not invite tracking is on.",
+            "Counting starts when this update goes live. The first time /stats is used in a server, earlier history is filled in once from the invite tracker's records. That part is approximate: the tracker keeps one record per person, so earlier rejoins were overwritten. Days before counting started show 0, and the card says when counting started.",
+            "Toggle: dashboard > Config & Logs > Server growth stats (on by default). Off = nothing is counted and the commands say stats are off.",
+            "Like every new command, these are admin-only until turned on under Command Permissions; they are listed in /admin help under Roles & utilities.",
+        ],
+        "commands": ["/stats combined", "/stats joins", "/stats leaves"],
+        "files": ["cogs/utilities.py", "cogs/help.py", "utils/member_stats.py", "database/models.py",
+                  "database/mongo.py", "dashboard/routes.py", "dashboard/templates/config_logs.html"],
+    },
+    {
         "date": "2026-11-25",
         "title": "Applications: one pending application per type",
         "tags": ["Members", "Applications"],

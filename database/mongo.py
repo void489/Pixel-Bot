@@ -187,6 +187,12 @@ def invite_joins_col():
     return get_db()["invite_joins"]
 
 
+def member_events_col():
+    """Every join and leave: {guild_id, kind "join"|"leave", user_id, at, source "live"|"backfill"}.
+    Behind /stats. Expires after 90 days (TTL index made in cogs/utilities.py)."""
+    return get_db()["member_events"]
+
+
 def automod_strikes_col():
     return get_db()["automod_strikes"]
 

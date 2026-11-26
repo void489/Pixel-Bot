@@ -100,6 +100,15 @@
     </div>
 
     <div class="t-section">
+      <div class="t-section-head"><h2>Server growth stats</h2></div>
+      <div class="evt-row">
+        <input type="checkbox" id="member-stats" name="member_stats_enabled" {% if member_stats_enabled %}checked{% endif %}>
+        <label for="member-stats">Count joins and leaves for <code>/stats combined</code>, <code>/stats joins</code> and <code>/stats leaves</code></label>
+      </div>
+      <div class="hint">On by default. Turning it off stops counting and the commands answer that stats are off. Counts are kept for 90 days (humans only, not bots).</div>
+    </div>
+
+    <div class="t-section">
       <div class="t-section-head"><h2>Blacklist</h2></div>
 
       <label class="t-label">Giveaway blacklist role</label>
