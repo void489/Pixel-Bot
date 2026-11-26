@@ -37,6 +37,9 @@ from utils.loa_core import (
 )
 from utils.permissions import command_check
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 ACTIVE = "active"
 PENDING = "pending"
 
@@ -272,7 +275,7 @@ class Loa(commands.Cog):
             await loa_requests_col().create_index([("status", 1), ("end", 1)])
             await loa_settings_col().create_index("guild_id", unique=True)
         except Exception as e:
-            print(f"[loa] index creation failed: {e}")
+            logger.error(f"[loa] index creation failed: {e}")
         self.bot.add_view(LoaView())
         self.expiry_loop.start()
 
@@ -309,7 +312,7 @@ class Loa(commands.Cog):
             if failed:
                 notes.append("I couldn't give back: " + ", ".join(failed))
             if notes:
-                print(f"[loa] finish problems in {guild.id}: {notes}")
+                logger.info(f"[loa] finish problems in {guild.id}: {notes}")
         await _refresh_message(self.bot, updated)
         return updated, notes
 
@@ -330,7 +333,7 @@ class Loa(commands.Cog):
                         + (" Your ranks have been given back." if done.get("paused_role_ids") else ""),
                         title="🏁 LOA finished"))
         except Exception as e:
-            print(f"[loa] loop error: {e}")
+            logger.error(f"[loa] loop error: {e}")
 
     @expiry_loop.before_loop
     async def _before_loop(self):

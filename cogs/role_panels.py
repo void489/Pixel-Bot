@@ -42,6 +42,9 @@ from database.mongo import dashboard_tasks_col, role_panels_col
 from utils.embeds import error_embed
 from utils import panel_style, panel_box
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 POST_TASK = "post_role_panel"
 DELETE_TASK = "delete_role_panel"
 
@@ -390,9 +393,9 @@ class RolePanels(commands.Cog):
                 try:
                     self.bot.add_view(build_view(panel), message_id=int(panel["message_id"]))
                 except Exception as e:
-                    print(f"[role_panels] couldn't re-register panel {panel.get('_id')}: {e}")
+                    logger.error(f"[role_panels] couldn't re-register panel {panel.get('_id')}: {e}")
         except Exception as e:
-            print(f"[role_panels] startup registration failed: {e}")
+            logger.error(f"[role_panels] startup registration failed: {e}")
         self._poll_dashboard_tasks.start()
 
     async def cog_unload(self):
@@ -405,7 +408,7 @@ class RolePanels(commands.Cog):
             batch = await models.take_pending_dashboard_tasks(
                 limit=10, types=[POST_TASK, DELETE_TASK])
         except Exception as e:
-            print(f"[role_panels] poller error: {e}")
+            logger.error(f"[role_panels] poller error: {e}")
             return
         for t in batch:
             payload = t.get("payload") or {}
@@ -431,7 +434,7 @@ class RolePanels(commands.Cog):
                             pass
             except Exception as e:
                 error = f"Unexpected error: {e}"
-                print(f"[role_panels] task {t.get('_id')} failed: {e}")
+                logger.error(f"[role_panels] task {t.get('_id')} failed: {e}")
             if error:
                 await dashboard_tasks_col().update_one({"_id": t["_id"]}, {"$set": {"error": error}})
 

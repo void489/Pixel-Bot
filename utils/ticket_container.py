@@ -17,6 +17,9 @@ Thread facts the code is built around:
 """
 import discord
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # permission attribute -> label, for the parent channel (checked before creating a thread)
 THREAD_PERMS = {
     "view_channel": "View Channel",
@@ -65,7 +68,7 @@ async def ensure_unarchived(channel) -> None:
         try:
             await channel.edit(archived=False)
         except discord.HTTPException as e:
-            print(f"[tickets] couldn't unarchive thread {channel.id}: {e}")
+            logger.error(f"[tickets] couldn't unarchive thread {channel.id}: {e}")
 
 
 def missing_thread_perms(parent, me) -> list:
@@ -127,7 +130,7 @@ async def delete_container(channel, reason: str) -> bool:
     except discord.HTTPException as e:
         if not is_thread(channel):
             return False
-        print(f"[tickets] couldn't delete thread {channel.id} ({e}); archiving it instead")
+        logger.error(f"[tickets] couldn't delete thread {channel.id} ({e}); archiving it instead")
     try:
         await channel.edit(archived=True, locked=True, reason=reason)
         return True

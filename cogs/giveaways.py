@@ -77,6 +77,9 @@ from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
 from cogs.tickets import TicketControlView, category_lock, find_category_by_name
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 EMBED_COLOR = 0x2B2D31
 CLAIM_COLOR = 0x57F287
 
@@ -521,7 +524,7 @@ async def create_claim_ticket(interaction: discord.Interaction, message_id: str,
     else:
         for role in _roles_from_ids(guild, cfg["ping_role_ids"]):
             ping += f" {role.mention}"
-    print(f"[giveaways] claim ticket in guild {guild.id}: ping_mode={cfg.get('ping_mode')!r} -> {ping}")
+    logger.info(f"[giveaways] claim ticket in guild {guild.id}: ping_mode={cfg.get('ping_mode')!r} -> {ping}")
 
     # In host mode role pings are hard-blocked, so a role can never ring even by accident.
     mentions = discord.AllowedMentions(users=True, roles=not host_mode, everyone=False)
@@ -621,7 +624,7 @@ class GiveawayEnterButton(
             await interaction.message.edit(embed=build_running_embed(
                 fresh, interaction.guild.member_count))
         except discord.HTTPException as e:
-            print(f"Failed to update giveaway entry count: {e}")
+            logger.error(f"Failed to update giveaway entry count: {e}")
 
 
 class WinnerClaimButton(
@@ -1059,7 +1062,7 @@ class Giveaways(commands.Cog):
             await col.create_index([("guild_id", 1), ("created_at", -1)])
             await col.create_index("message_id")
         except Exception as e:
-            print(f"[giveaways] couldn't create indexes: {e}")
+            logger.error(f"[giveaways] couldn't create indexes: {e}")
 
     # ------------------------------------------------------------------
     # In-memory lookups for the on_message listeners (rebuilt from Mongo on start)
@@ -1103,7 +1106,7 @@ class Giveaways(commands.Cog):
                 self._cache_language(g)
         except Exception as e:
             self._restored = False
-            print(f"[giveaways] cache restore failed: {e}")
+            logger.error(f"[giveaways] cache restore failed: {e}")
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -1124,7 +1127,7 @@ class Giveaways(commands.Cog):
                 try:
                     await self._resolve_game(g)
                 except Exception as e:
-                    print(f"[giveaways] failed to resolve game {g.get('message_id')}: {e}")
+                    logger.error(f"[giveaways] failed to resolve game {g.get('message_id')}: {e}")
             for g in await models.get_due_fastest(now):
                 try:
                     if g.get("ff_state") == "countdown":
@@ -1132,14 +1135,14 @@ class Giveaways(commands.Cog):
                     else:
                         await self._ff_timeout(g)
                 except Exception as e:
-                    print(f"[giveaways] fastest finger {g.get('message_id')}: {e}")
+                    logger.info(f"[giveaways] fastest finger {g.get('message_id')}: {e}")
             for g in await models.get_due_don(now):
                 try:
                     await self._don_take(g, note="⏰ Time's up - the prize was taken automatically.")
                 except Exception as e:
-                    print(f"[giveaways] double or nothing {g.get('message_id')}: {e}")
+                    logger.info(f"[giveaways] double or nothing {g.get('message_id')}: {e}")
         except Exception as e:
-            print(f"[giveaways] game loop error: {e}")
+            logger.error(f"[giveaways] game loop error: {e}")
 
     @check_games.before_loop
     async def _before_games(self):
@@ -1153,7 +1156,7 @@ class Giveaways(commands.Cog):
                 try:
                     await self._end_giveaway(g)
                 except Exception as e:
-                    print(f"[giveaways] failed to end {g.get('message_id')}: {e}")
+                    logger.error(f"[giveaways] failed to end {g.get('message_id')}: {e}")
             # Backup for the member-join listener (member-count giveaways)
             for g in await models.get_active_membercount():
                 try:
@@ -1161,14 +1164,14 @@ class Giveaways(commands.Cog):
                     if guild and guild.member_count >= int(g["member_goal"]):
                         await self._end_giveaway(g)
                 except Exception as e:
-                    print(f"[giveaways] member count check {g.get('message_id')}: {e}")
+                    logger.info(f"[giveaways] member count check {g.get('message_id')}: {e}")
             for g in await models.get_expired_claims(now):
                 try:
                     await self._expire_claim(g)
                 except Exception as e:
-                    print(f"[giveaways] failed to expire claim {g.get('message_id')}: {e}")
+                    logger.error(f"[giveaways] failed to expire claim {g.get('message_id')}: {e}")
         except Exception as e:
-            print(f"[giveaways] loop error: {e}")
+            logger.error(f"[giveaways] loop error: {e}")
 
     @check_giveaways.before_loop
     async def _before_check(self):
@@ -1221,7 +1224,7 @@ class Giveaways(commands.Cog):
             try:
                 await msg.edit(embed=build_language_embed(snap, None, ended=True), view=None)
             except discord.HTTPException as e:
-                print(f"[giveaways] couldn't edit ended language embed: {e}")
+                logger.error(f"[giveaways] couldn't edit ended language embed: {e}")
             await models.update_giveaway(message_id, winners=[], claim_expired=True)
             return True
 
@@ -1230,7 +1233,7 @@ class Giveaways(commands.Cog):
             try:
                 await msg.edit(embed=build_flag_embed(snap, None, ended=True), view=None)
             except discord.HTTPException as e:
-                print(f"[giveaways] couldn't edit ended flag embed: {e}")
+                logger.error(f"[giveaways] couldn't edit ended flag embed: {e}")
             await models.update_giveaway(message_id, winners=[], claim_expired=True)
             return True
 
@@ -1258,7 +1261,7 @@ class Giveaways(commands.Cog):
                 try:
                     await msg.edit(embed=build_ended_embed(snap, []), view=None)
                 except discord.HTTPException as e:
-                    print(f"[giveaways] couldn't edit ended embed: {e}")
+                    logger.error(f"[giveaways] couldn't edit ended embed: {e}")
                 await models.update_giveaway(message_id, winners=[], claim_expired=True)
                 return True
             try:
@@ -1266,7 +1269,7 @@ class Giveaways(commands.Cog):
                     snap, [], status="Winner: ⚡ Fastest Finger race in progress..."
                 ), view=None)
             except discord.HTTPException as e:
-                print(f"[giveaways] couldn't edit ended embed: {e}")
+                logger.error(f"[giveaways] couldn't edit ended embed: {e}")
             await self._start_fastest(snap, channel, entrants)
             return True
 
@@ -1284,7 +1287,7 @@ class Giveaways(commands.Cog):
         try:
             await msg.edit(embed=build_ended_embed(snap, winners), view=None)
         except discord.HTTPException as e:
-            print(f"[giveaways] couldn't edit ended embed: {e}")
+            logger.error(f"[giveaways] couldn't edit ended embed: {e}")
 
         if not winners:
             await models.update_giveaway(message_id, winners=[], claim_expired=True)
@@ -1345,7 +1348,7 @@ class Giveaways(commands.Cog):
                 view=build_game_view(mid, game),
             )
         except discord.HTTPException as e:
-            print(f"[giveaways] couldn't post game message: {e}")
+            logger.error(f"[giveaways] couldn't post game message: {e}")
             await models.update_giveaway(mid, game_active=False, claim_expired=True)
             return
         await models.update_giveaway(mid, game_message_id=str(msg.id))
@@ -1461,7 +1464,7 @@ class Giveaways(commands.Cog):
             elif channel:
                 await channel.send(embed=embed)
         except discord.HTTPException as e:
-            print(f"[giveaways] couldn't post game result: {e}")
+            logger.error(f"[giveaways] couldn't post game result: {e}")
 
         if not winners or channel is None:
             await models.update_giveaway(mid, winners=[], claim_expired=True)
@@ -1504,7 +1507,7 @@ class Giveaways(commands.Cog):
         try:
             msg = await channel.send(embed=build_ff_embed(g, "countdown"))
         except discord.HTTPException as e:
-            print(f"[giveaways] couldn't post fastest finger message: {e}")
+            logger.error(f"[giveaways] couldn't post fastest finger message: {e}")
             await models.ff_set_state(mid, "countdown", "timeout", claim_expired=True)
             return
         await models.update_giveaway(mid, game_message_id=str(msg.id))
@@ -1515,7 +1518,7 @@ class Giveaways(commands.Cog):
             await asyncio.sleep(delay)
             await self._ff_arm(mid)
         except Exception as e:
-            print(f"[giveaways] fastest finger arm failed ({mid}): {e}")
+            logger.error(f"[giveaways] fastest finger arm failed ({mid}): {e}")
 
     async def _ff_arm(self, mid):
         """countdown -> live: show the code. Safe to call twice (compare-and-set)."""
@@ -1534,7 +1537,7 @@ class Giveaways(commands.Cog):
             try:
                 await msg.edit(embed=build_ff_embed(g, "live"), view=view)
             except discord.HTTPException as e:
-                print(f"[giveaways] couldn't show fastest finger code: {e}")
+                logger.error(f"[giveaways] couldn't show fastest finger code: {e}")
 
     async def _ff_win(self, g: dict, uid) -> bool:
         mid = g["message_id"]
@@ -1621,7 +1624,7 @@ class Giveaways(commands.Cog):
                 embed=build_don_embed(g), view=build_don_view(mid, 0),
             )
         except discord.HTTPException as e:
-            print(f"[giveaways] couldn't post double or nothing panel: {e}")
+            logger.error(f"[giveaways] couldn't post double or nothing panel: {e}")
             await models.don_finish(mid, 0, claim_expired=True)
             return
         await models.update_giveaway(mid, game_message_id=str(msg.id))
@@ -1811,20 +1814,20 @@ class Giveaways(commands.Cog):
                 try:
                     await self._ff_try_win(ff_mid, message.author.id, message)
                 except Exception as e:
-                    print(f"[giveaways] fastest finger message handler: {e}")
+                    logger.info(f"[giveaways] fastest finger message handler: {e}")
                 break
         fl = self.flag_live.get(message.guild.id)
         if fl and flags_data.normalize(content) in fl["answers"]:
             try:
                 await self._flag_guess(fl["mid"], message)
             except Exception as e:
-                print(f"[giveaways] guess flag handler: {e}")
+                logger.info(f"[giveaways] guess flag handler: {e}")
         ll = self.lang_live.get(message.guild.id)
         if ll and languages_data.matches(ll["answers"], content):
             try:
                 await self._language_guess(ll["mid"], message)
             except Exception as e:
-                print(f"[giveaways] guess language handler: {e}")
+                logger.info(f"[giveaways] guess language handler: {e}")
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -1847,7 +1850,7 @@ class Giveaways(commands.Cog):
                 except (discord.NotFound, discord.Forbidden, discord.HTTPException):
                     pass
         except Exception as e:
-            print(f"[giveaways] member join handler: {e}")
+            logger.info(f"[giveaways] member join handler: {e}")
 
     async def _expire_claim(self, g: dict):
         channel = self.bot.get_channel(int(g["channel_id"]))
@@ -2375,7 +2378,7 @@ class Giveaways(commands.Cog):
             original = await channel.fetch_message(int(g["message_id"]))
             await original.edit(embed=build_ended_embed(g, new_winners), view=None)
         except (discord.NotFound, discord.Forbidden, discord.HTTPException) as e:
-            print(f"[giveaways] couldn't update original message on reroll: {e}")
+            logger.error(f"[giveaways] couldn't update original message on reroll: {e}")
 
         ann, claim_end = await self._post_winners(
             channel, g["prize"], g["message_id"], new_winners,

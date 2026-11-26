@@ -21,6 +21,9 @@ from database.mongo import scheduled_announcements_col
 from utils import announce_core as core
 from utils import panel_box
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 KEEP_DAYS = 90        # finished / cancelled schedules older than this are deleted
 
 
@@ -84,14 +87,14 @@ class Announcements(commands.Cog):
                 try:
                     await self._fire(doc, now)
                 except Exception as e:
-                    print(f"[announcements] {doc.get('_id')} failed: {e}")
+                    logger.error(f"[announcements] {doc.get('_id')} failed: {e}")
             self._ticks += 1
             if self._ticks % 120 == 1:          # roughly hourly (and once at startup)
                 await col.delete_many({
                     "status": {"$in": ["sent", "failed", "cancelled"]},
                     "updated_at": {"$lt": now - timedelta(days=KEEP_DAYS)}})
         except Exception as e:
-            print(f"[announcements] loop error: {e}")
+            logger.error(f"[announcements] loop error: {e}")
 
     @_loop.before_loop
     async def _before(self):
@@ -102,7 +105,7 @@ class Announcements(commands.Cog):
             await scheduled_announcements_col().create_index(
                 [("guild_id", 1), ("next_run", 1)])
         except Exception as e:
-            print(f"[announcements] index failed: {e}")
+            logger.error(f"[announcements] index failed: {e}")
 
     async def _fire(self, doc: dict, now: datetime):
         col = scheduled_announcements_col()
@@ -140,7 +143,7 @@ class Announcements(commands.Cog):
                         except discord.Forbidden:
                             raise
                         except discord.HTTPException as e:      # Discord refused the box: use the embed
-                            print(f"[announcements] box refused in {doc['guild_id']}: {e}")
+                            logger.info(f"[announcements] box refused in {doc['guild_id']}: {e}")
                             await channel.send(content=content, embed=embed, allowed_mentions=mentions)
                     else:
                         await channel.send(content=content, embed=embed, allowed_mentions=mentions)

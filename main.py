@@ -6,7 +6,6 @@ needing Railway's Procfile worker/web split, which requires two separate service
 actually both start - a single Railway service only runs one process type.
 """
 import asyncio
-import logging
 import os
 import threading
 
@@ -16,7 +15,8 @@ from discord.ext import commands
 from config import settings
 from utils.permissions import get_prefix_for_guild, register_all_commands
 
-logging.basicConfig(level=logging.INFO)
+from utils.log import get_logger
+logger = get_logger(__name__)
 
 intents = discord.Intents.default()
 intents.members = True
@@ -62,17 +62,17 @@ COGS = [
 
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} ({bot.user.id})")
+    logger.info(f"Logged in as {bot.user} ({bot.user.id})")
     try:
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} slash command(s).")
+        logger.info(f"Synced {len(synced)} slash command(s).")
     except Exception as e:
-        print(f"Slash sync failed: {e}")
+        logger.error(f"Slash sync failed: {e}")
 
     try:
         await register_all_commands(bot)
     except Exception as e:
-        print(f"Command registration failed: {e}")
+        logger.error(f"Command registration failed: {e}")
 
 
 @bot.event
@@ -80,7 +80,7 @@ async def on_guild_join(guild):
     try:
         await register_all_commands(bot, [guild.id])
     except Exception as e:
-        print(f"Command registration failed for {guild.id}: {e}")
+        logger.error(f"Command registration failed for {guild.id}: {e}")
 
 
 def run_dashboard():
@@ -99,9 +99,9 @@ async def main():
         for cog in COGS:
             try:
                 await bot.load_extension(cog)
-                print(f"Loaded {cog}")
+                logger.info(f"Loaded {cog}")
             except Exception as e:
-                print(f"Failed to load {cog}: {e}")
+                logger.error(f"Failed to load {cog}: {e}")
         await bot.start(settings.DISCORD_TOKEN)
 
 

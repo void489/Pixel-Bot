@@ -21,6 +21,9 @@ from datetime import datetime, timezone
 
 from database.mongo import ticket_stats_col
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # channel_id -> (guild_id, opener_id) for tickets that have no staff reply yet
 PENDING_REPLY: dict = {}
 
@@ -47,7 +50,7 @@ async def _col():
             await col.create_index([("guild_id", 1), ("closed_at", -1)])
             await col.create_index([("guild_id", 1), ("claimed_at", -1)])
         except Exception as e:
-            print(f"[ticket_stats] index creation failed: {e}")
+            logger.error(f"[ticket_stats] index creation failed: {e}")
     return col
 
 
@@ -87,7 +90,7 @@ async def record_open(ticket_doc: dict) -> None:
         OPEN_TICKETS[int(cid)] = {"guild_id": doc["guild_id"], "opener_id": doc["opener_id"],
                                   "type_id": doc["ticket_type_id"]}
     except Exception as e:
-        print(f"[ticket_stats] open failed: {e}")
+        logger.error(f"[ticket_stats] open failed: {e}")
 
 
 async def load_open() -> None:
@@ -99,7 +102,7 @@ async def load_open() -> None:
             OPEN_TICKETS[int(d["channel_id"])] = {"guild_id": str(d["guild_id"]), "opener_id": str(d["opener_id"]),
                                                   "type_id": d.get("ticket_type_id")}
     except Exception as e:
-        print(f"[ticket_stats] couldn't load open tickets: {e}")
+        logger.error(f"[ticket_stats] couldn't load open tickets: {e}")
 
 
 async def load_pending() -> None:
@@ -111,7 +114,7 @@ async def load_pending() -> None:
         async for d in cursor:
             PENDING_REPLY[int(d["_id"])] = (int(d["guild_id"]), int(d["opener_id"]))
     except Exception as e:
-        print(f"[ticket_stats] couldn't load waiting tickets: {e}")
+        logger.error(f"[ticket_stats] couldn't load waiting tickets: {e}")
 
 
 async def record_first_reply(channel_id: int, staff, at) -> None:
@@ -130,7 +133,7 @@ async def record_first_reply(channel_id: int, staff, at) -> None:
                       "first_reply_by_id": str(staff.id),
                       "first_reply_by_name": getattr(staff, "display_name", str(staff.id))}})
     except Exception as e:
-        print(f"[ticket_stats] first reply failed: {e}")
+        logger.error(f"[ticket_stats] first reply failed: {e}")
 
 
 async def record_claim(ticket_doc: dict, staff) -> None:
@@ -140,14 +143,14 @@ async def record_claim(ticket_doc: dict, staff) -> None:
             "claimed_by_name": getattr(staff, "display_name", str(staff.id)),
             "claimed_at": datetime.now(timezone.utc)})
     except Exception as e:
-        print(f"[ticket_stats] claim failed: {e}")
+        logger.error(f"[ticket_stats] claim failed: {e}")
 
 
 async def record_unclaim(ticket_doc: dict) -> None:
     try:
         await _upsert(ticket_doc, {"claimed_by_id": None, "claimed_by_name": None, "claimed_at": None})
     except Exception as e:
-        print(f"[ticket_stats] unclaim failed: {e}")
+        logger.error(f"[ticket_stats] unclaim failed: {e}")
 
 
 async def record_close(ticket_doc: dict, closer, claimer_name=None) -> None:
@@ -172,7 +175,7 @@ async def record_close(ticket_doc: dict, closer, claimer_name=None) -> None:
                 fields["claimed_by_name"] = claimer_name
         await _upsert(ticket_doc, fields)
     except Exception as e:
-        print(f"[ticket_stats] close failed: {e}")
+        logger.error(f"[ticket_stats] close failed: {e}")
 
 
 async def record_rating(channel_id, rating: int, staff_id) -> None:
@@ -185,4 +188,4 @@ async def record_rating(channel_id, rating: int, staff_id) -> None:
             {"_id": str(channel_id)},
             {"$set": {"rating": int(rating), "rating_staff_id": str(staff_id) if staff_id else None}})
     except Exception as e:
-        print(f"[ticket_stats] rating failed: {e}")
+        logger.error(f"[ticket_stats] rating failed: {e}")

@@ -7,6 +7,9 @@ from discord.ext import commands, tasks
 
 from database import models
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 IMAGE_RETENTION_DAYS = 7
 
 
@@ -22,10 +25,10 @@ class TranscriptCleanup(commands.Cog):
     async def _cleanup(self):
         try:
             r = await models.prune_transcript_images(IMAGE_RETENTION_DAYS)
-            print(f"[transcript_cleanup] removed {r['files']} image(s), "
+            logger.info(f"[transcript_cleanup] removed {r['files']} image(s), "
                   f"{r['orphan_chunks']} orphan chunk(s)")
         except Exception as e:
-            print(f"[transcript_cleanup] failed: {type(e).__name__}: {e}")
+            logger.error(f"[transcript_cleanup] failed: {type(e).__name__}: {e}")
 
     @_cleanup.before_loop
     async def _before(self):

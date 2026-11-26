@@ -25,6 +25,9 @@ import requests
 
 from dashboard import botguilds
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 MAX_REPLY = 2000
 REPLY_LIMIT = (20, 60)                # at most 20 replies per 60 s per staff member
 FOOTER = "Sent from the dashboard"
@@ -121,7 +124,7 @@ def fetch_messages(channel_id, after=None, limit: int = 50):
     try:
         resp = _api("GET", f"/channels/{int(channel_id)}/messages", params=params)
     except Exception as e:
-        print(f"[live] message fetch failed: {e}")
+        logger.error(f"[live] message fetch failed: {e}")
         return [], "error"
     if resp.status_code == 200:
         data = _json(resp)
@@ -175,7 +178,7 @@ def send_reply(channel_id, staff_name: str, staff_avatar: str, text: str, ping_u
             _api("PATCH", f"/channels/{cid}", json={"archived": False})      # reopen the thread, try once more
             resp = _api("POST", f"/channels/{cid}/messages", json=payload)
     except Exception as e:
-        print(f"[live] reply failed: {e}")
+        logger.error(f"[live] reply failed: {e}")
         return False, "error"
     if resp.status_code in (200, 201):
         return True, None
@@ -222,7 +225,7 @@ def _lookup_name(guild_id, uid) -> str:
                 d = _json(r)
                 name = d.get("global_name") or d.get("username")
     except Exception as e:
-        print(f"[live] name lookup failed: {e}")
+        logger.error(f"[live] name lookup failed: {e}")
     name = name or f"user {uid}"
     _names[key] = (time.monotonic(), name)
     return name

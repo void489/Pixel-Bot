@@ -9,6 +9,9 @@ from config import settings
 from database.automod_config import normalize_automod_config
 from utils.site_settings import normalize_site
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 _client = None
 
 
@@ -216,7 +219,7 @@ def get_site_settings() -> dict:
     try:
         val = normalize_site(get_db().bot_settings.find_one({"_id": "site"}))
     except Exception as e:
-        print(f"[dashboard] couldn't load site settings: {e}")
+        logger.error(f"[dashboard] couldn't load site settings: {e}")
         return _SITE_CACHE["val"] or normalize_site({})
     _SITE_CACHE.update(at=now, val=val)
     return val
@@ -398,7 +401,7 @@ def _shares():
             col.create_index([("guild_id", 1), ("transcript_id", 1)])
             _shares_indexed = True
         except Exception as e:
-            print(f"[dashboard] share index failed: {e}")
+            logger.error(f"[dashboard] share index failed: {e}")
     return col
 
 
@@ -1037,7 +1040,7 @@ def log_audit(guild_id, actor_id, actor_name, action: str, detail: str = "",
         except Exception:
             pass
     except Exception as e:
-        print(f"[dashboard] audit log failed: {e}")
+        logger.error(f"[dashboard] audit log failed: {e}")
 
 
 def search_audit(guild_id, actor: str = "", page: str = "", q: str = "",
@@ -1059,7 +1062,7 @@ def search_audit(guild_id, actor: str = "", page: str = "", q: str = "",
         return (list(col.find(flt).sort("at", -1).skip(max(0, skip)).limit(limit)),
                 col.count_documents(flt))
     except Exception as e:
-        print(f"[dashboard] audit search failed: {e}")
+        logger.error(f"[dashboard] audit search failed: {e}")
         return [], 0
 
 
@@ -1075,7 +1078,7 @@ def get_audit(guild_id, limit: int = 25) -> list:
         return list(get_db().dashboard_audit.find({"guild_id": str(guild_id)})
                     .sort("at", -1).limit(limit))
     except Exception as e:
-        print(f"[dashboard] audit read failed: {e}")
+        logger.error(f"[dashboard] audit read failed: {e}")
         return []
 
 
@@ -1099,7 +1102,7 @@ def get_promotion_history(guild_id: str, search: str = "", type_id: str = "", ki
     try:
         return list(get_db().promotion_history.find(q).sort("at", -1).limit(limit))
     except Exception as e:
-        print(f"[dashboard] promotion history read failed: {e}")
+        logger.error(f"[dashboard] promotion history read failed: {e}")
         return []
 
 

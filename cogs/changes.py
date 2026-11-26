@@ -50,6 +50,9 @@ from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
 from config import constants
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 async def _reply(ctx: commands.Context, embed: discord.Embed, *, delete_after: float = 5):
     if ctx.interaction is not None:
@@ -101,7 +104,7 @@ async def post_staff_change(guild: discord.Guild, member: discord.Member, kind: 
         file = discord.File(io.BytesIO(png), filename="staffchange.png")
         embed.set_image(url="attachment://staffchange.png")
     except Exception as e:  # card is a nicety - fall back to the plain embed
-        print(f"[changes] card render failed: {e}")
+        logger.error(f"[changes] card render failed: {e}")
         file = None
 
     try:
@@ -260,7 +263,7 @@ async def apply_auto_nick(guild: discord.Guild, member: discord.Member, ctype: d
     except discord.HTTPException as e:
         return f"Couldn't change their nickname: {e}"
     except Exception as e:
-        print(f"[changes] auto nick failed: {e}")
+        logger.error(f"[changes] auto nick failed: {e}")
         return "Couldn't change their nickname."
 
 
@@ -315,7 +318,7 @@ async def _reset_strikes(guild_id: int, ctype: dict, user_id: int, flag: str) ->
             return 0
         return await models.clear_user_strikes(guild_id, ctype["id"], user_id)
     except Exception as e:
-        print(f"[changes] strike reset failed: {e}")
+        logger.error(f"[changes] strike reset failed: {e}")
         return 0
 
 
@@ -343,7 +346,7 @@ async def _log_history(guild: discord.Guild, member: discord.Member, ctype: dict
             "at": datetime.now(timezone.utc),
         })
     except Exception as e:
-        print(f"[changes] history log failed: {e}")
+        logger.error(f"[changes] history log failed: {e}")
 
 
 async def promote_member(guild: discord.Guild, member: discord.Member, ctype: dict, types: list,
@@ -558,7 +561,7 @@ async def promote_application(guild: discord.Guild, member, change_type_id, deci
             if res.extras_warning:
                 role_warnings.append(res.extras_warning)
     except Exception as e:
-        print(f"[changes] application promotion failed: {e}")
+        logger.error(f"[changes] application promotion failed: {e}")
         notes.append("Something went wrong promoting the applicant. Use `/promote` instead.")
     return role_warnings, notes
 
@@ -602,7 +605,7 @@ class Changes(commands.Cog):
                 return
             await sync_member_nick(after.guild, after, types, "Auto nick change (role changed)")
         except Exception as e:
-            print(f"[changes] auto nick listener failed: {e}")
+            logger.error(f"[changes] auto nick listener failed: {e}")
 
     # ── Dashboard: "Sync nicknames" button ────────────────────────────────
     @tasks.loop(seconds=3)
@@ -620,11 +623,11 @@ class Changes(commands.Cog):
                             guild, (t.get("payload") or {}).get("type_id"))
                 except Exception as e:
                     error = f"Unexpected error: {e}"
-                    print(f"[changes] nick sync task {t.get('_id')} failed: {e}")
+                    logger.error(f"[changes] nick sync task {t.get('_id')} failed: {e}")
                 await dashboard_tasks_col().update_one(
                     {"_id": t["_id"]}, {"$set": {"error": error, "result": result}})
         except Exception as e:
-            print(f"[changes] dashboard poller error: {e}")
+            logger.error(f"[changes] dashboard poller error: {e}")
 
     @_poll_dashboard_tasks.before_loop
     async def _before_poll(self):
@@ -633,7 +636,7 @@ class Changes(commands.Cog):
             await promotion_history_col().create_index([("guild_id", 1), ("at", -1)])
             await promotion_history_col().create_index([("guild_id", 1), ("member_id", 1), ("at", -1)])
         except Exception as e:
-            print(f"[changes] history index failed: {e}")
+            logger.error(f"[changes] history index failed: {e}")
 
     async def _sync_type_nicks(self, guild: discord.Guild, type_id) -> str:
         cfg = await models.get_changes_config(guild.id)

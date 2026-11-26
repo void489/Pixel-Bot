@@ -17,6 +17,23 @@ Entry fields:
 CHANGES = [
     {
         "date": "2026-11-26",
+        "title": "Structured logging, global error handlers, test suite, deployment files",
+        "tags": ["Fix", "Dashboard", "Admin"],
+        "summary": "All print() calls were moved to real logging (timestamps, levels, per-module names, LOG_LEVEL env), failed commands now tell the user and land in the admin Errors tab, and the repo gained a pytest suite with CI plus deployment files.",
+        "details": [
+            "Logging: every print() in the bot and dashboard is now logger.info/warning/error via a new shared setup (utils/log.py). Console output shows timestamps, level and logger name; LOG_LEVEL (DEBUG/INFO/WARNING/ERROR, default INFO) changes verbosity. ERROR-level records still flow into the admin Errors tab exactly as before - the Errors tab now also catches failures that used to be print-only.",
+            "Error handlers: a global handler in cogs/events.py now catches unhandled prefix/slash command errors, logs the traceback (so it shows on the Errors tab) and sends the user a short error message instead of Discord's generic response. Check failures are untouched - those checks already send their own message.",
+            "Tests: tests/ with pytest covers spawner price parsing, audit-log diffs and the guessflag answer matcher (57 tests). CI runs them on every push (.github/workflows/tests.yml). Run locally with: pip install pytest, then python -m pytest.",
+            "Deployment: DEPLOYMENT.md documents the Railway setup, the Procfile formalizes 'python main.py', and Dockerfile.example is an optional container build (deliberately not named Dockerfile so Railway's current build path doesn't silently change).",
+            "Housekeeping: .env.example no longer carries the real client id / Railway URL / old database name; MONGO_DB_NAME example is now pixel_bot. No behaviour change for existing servers - all live values stay in the Railway variables.",
+            "Nothing here changes commands, permissions or stored data; servers need no reconfiguration.",
+        ],
+        "files": ["utils/log.py", "main.py", "cogs/events.py", "cogs/ utils/ database/ dashboard/ config/ (logging only)",
+                  "tests/", "conftest.py", "pytest.ini", ".github/workflows/tests.yml",
+                  "Procfile", "Dockerfile.example", "DEPLOYMENT.md", ".env.example"],
+    },
+    {
+        "date": "2026-11-26",
         "title": "Server growth stats: /stats combined, /stats joins, /stats leaves",
         "tags": ["Commands", "Admin", "Dashboard", "Database"],
         "summary": "New commands show how many members joined and left today, in the last 7 days and in the last 30 days, with a joins-and-leaves history chart under the numbers.",

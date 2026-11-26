@@ -28,6 +28,9 @@ from database import models
 from database.mongo import get_db, guild_settings_col
 from utils import join_ads as ja
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 GLOBAL = "_global"
 MAX_RECENT_FAILURES = 10
 BACKOFF_SECONDS = 90  # after Discord says we're opening DMs too fast
@@ -58,7 +61,7 @@ class JoinAds(commands.Cog):
             await _sent_col().create_index("at", expireAfterSeconds=400 * 86400)
             await _daily_col().create_index("at", expireAfterSeconds=3 * 86400)
         except Exception as e:
-            print(f"[join_ads] couldn't create indexes: {e}")
+            logger.error(f"[join_ads] couldn't create indexes: {e}")
         self._expiry_loop.start()
 
     async def cog_unload(self):
@@ -152,7 +155,7 @@ class JoinAds(commands.Cog):
                 return
             self._schedule(member, cfg["delay_seconds"])
         except Exception as e:
-            print(f"[join_ads] join handling failed in {member.guild.id}: {e}")
+            logger.error(f"[join_ads] join handling failed in {member.guild.id}: {e}")
 
     def _schedule(self, member: discord.Member, delay: int):
         async def _go():
@@ -186,7 +189,7 @@ class JoinAds(commands.Cog):
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                print(f"[join_ads] processing failed in {guild_id}: {e}")
+                logger.error(f"[join_ads] processing failed in {guild_id}: {e}")
                 wait = 0
             if wait:
                 await asyncio.sleep(wait)
@@ -309,7 +312,7 @@ class JoinAds(commands.Cog):
                         await self._finish(self.bot.get_guild(gid), gid, a, reason,
                                            cfg["notify_channel_id"], sent)
         except Exception as e:
-            print(f"[join_ads] expiry check failed: {e}")
+            logger.error(f"[join_ads] expiry check failed: {e}")
 
     @_expiry_loop.before_loop
     async def _before_expiry(self):

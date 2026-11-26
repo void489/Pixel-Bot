@@ -11,11 +11,23 @@ web dashboard and MongoDB. Deployed on Railway.
 - `database/` - MongoDB connection + models
 - `config/` - settings & constants
 - `dashboard/` - web dashboard (Flask)
+- `tests/` - pytest suite (pure-logic modules; runs in CI on every push)
 
 ## Setup
 1. Copy `.env.example` to `.env` and fill in values.
 2. `pip install -r requirements.txt`
 3. `python main.py`
+
+## Testing
+```
+pip install pytest
+python -m pytest
+```
+Covers the pure-logic modules (spawner price parsing, audit-log diffs, guessflag
+matching). CI runs the same suite on every push (`.github/workflows/tests.yml`).
+Logging goes through `logging` (see `utils/log.py`); `LOG_LEVEL` sets verbosity, and
+ERROR-level records appear on the dashboard's admin **Errors** tab as before.
+Deployment notes live in `DEPLOYMENT.md`.
 
 ## Spawner panel
 Buy/sell price panel with tickets (`cogs/spawner_panel.py`).

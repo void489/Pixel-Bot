@@ -44,6 +44,9 @@ from config import constants
 # Command Permissions page groups commands exactly the same way.
 from config.command_groups import MEMBER_COMMANDS, STAFF_COMMANDS  # noqa: E402
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # Everything else (any command with @command_check) is listed under /admin help,
 # grouped by its first word.
 ADMIN_CATEGORIES = {
@@ -354,7 +357,7 @@ async def refresh_panels(bot) -> int:
             await models.delete_help_panel(p["_id"])   # the message was deleted
             continue
         except (discord.HTTPException, AttributeError) as e:
-            print(f"[help] couldn't refresh panel {p['_id']}: {e}")
+            logger.error(f"[help] couldn't refresh panel {p['_id']}: {e}")
             continue
         await models.set_help_panel_sig(p["_id"], sig)
         edited += 1
@@ -408,7 +411,7 @@ class HelpSelect(discord.ui.Select):
                 await models.save_help_panel(interaction.guild.id, interaction.channel_id,
                                              interaction.message.id, self.kind)
             except Exception as e:
-                print(f"[help] couldn't track panel: {e}")
+                logger.error(f"[help] couldn't track panel: {e}")
 
         # Re-send the public menu untouched so the same category can be picked again.
         try:
@@ -520,7 +523,7 @@ class Help(commands.Cog):
                 self._cmd_sig = sig
             await refresh_panels(self.bot)
         except Exception as e:
-            print(f"[help] live sync failed: {e}")
+            logger.error(f"[help] live sync failed: {e}")
 
     @live_sync.before_loop
     async def _before_live_sync(self):
@@ -544,7 +547,7 @@ class Help(commands.Cog):
                 await models.save_help_panel(ctx.guild.id, ctx.channel.id, msg.id, kind,
                                              _panel_sig(kind, pages, prefix))
             except Exception as e:
-                print(f"[help] couldn't track panel: {e}")
+                logger.error(f"[help] couldn't track panel: {e}")
 
     async def _guard(self, ctx) -> bool:
         if ctx.guild is None:

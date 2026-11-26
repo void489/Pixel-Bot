@@ -31,6 +31,9 @@ from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
 from cogs.staff_strikes import give_strike
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 DEFAULT_EMOJI = "💎"
 BLURPLE = 0x5865F2
 MAX_LISTED = 40  # mentions shown in the results embed before "+N more"
@@ -59,7 +62,7 @@ class StaffActivity(commands.Cog):
             await staff_activity_checks_col().create_index([("config_id", 1), ("closed", 1)])
             await staff_activity_configs_col().create_index("guild_id")
         except Exception as e:
-            print(f"[staff_activity] index creation failed: {e}")
+            logger.error(f"[staff_activity] index creation failed: {e}")
         self.loop_task.start()
 
     async def cog_unload(self):
@@ -96,7 +99,7 @@ class StaffActivity(commands.Cog):
                         or not core.is_excepted_anywhere(
                             [r.id for r in guild.get_member(uid).roles], scope)]
         except Exception as e:
-            print(f"[staff_activity] exception roles lookup failed: {e}")
+            logger.error(f"[staff_activity] exception roles lookup failed: {e}")
 
         embed = discord.Embed(
             title=f"Staff Activity Check • {name}",
@@ -119,7 +122,7 @@ class StaffActivity(commands.Cog):
             )
             await msg.add_reaction(emoji)
         except discord.HTTPException as e:
-            print(f"[staff_activity] Failed to post check '{name}' in guild {guild.id}: {e}")
+            logger.error(f"[staff_activity] Failed to post check '{name}' in guild {guild.id}: {e}")
             return False
 
         await staff_activity_checks_col().insert_one({
@@ -173,7 +176,7 @@ class StaffActivity(commands.Cog):
             except discord.NotFound:
                 message_gone = True
             except discord.HTTPException as e:
-                print(f"[staff_activity] Failed to fetch check message: {e}")
+                logger.error(f"[staff_activity] Failed to fetch check message: {e}")
 
         role_text = role.mention if role else "@unknown role"
 
@@ -211,7 +214,7 @@ class StaffActivity(commands.Cog):
             try:
                 await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException as e:
-                print(f"[staff_activity] Failed to post results: {e}")
+                logger.error(f"[staff_activity] Failed to post results: {e}")
 
         await staff_activity_checks_col().update_one(
             {"_id": check["_id"]},
@@ -242,7 +245,7 @@ class StaffActivity(commands.Cog):
                         guild, member, ctype, cfg["types"],
                         sc.clean_reason(f"Missed activity check: {name}"), self.bot.user)
                 except Exception as e:
-                    print(f"[staff_activity] strike failed for {uid}: {e}")
+                    logger.error(f"[staff_activity] strike failed for {uid}: {e}")
                     continue
                 struck += 1
             line = f"Struck **{struck}** member(s) in **{ctype['name']}**."
@@ -250,7 +253,7 @@ class StaffActivity(commands.Cog):
                 line += f" {gone} left the server."
             return line
         except Exception as e:
-            print(f"[staff_activity] strike step failed: {e}")
+            logger.error(f"[staff_activity] strike step failed: {e}")
             return "⚠️ Something went wrong while giving strikes."
 
     # ── Scheduler (restart-safe: everything is timestamp-driven from Mongo) ──
@@ -279,7 +282,7 @@ class StaffActivity(commands.Cog):
                 if last is None or now >= last + timedelta(days=interval):
                     await self.open_check(guild, cfg)
         except Exception as e:
-            print(f"[staff_activity] loop error: {e}")
+            logger.error(f"[staff_activity] loop error: {e}")
 
     @loop_task.before_loop
     async def _before_loop(self):

@@ -32,6 +32,9 @@ from utils import changes_core as cc
 from utils import staff_automation_core as core
 from utils.embeds import base_embed, error_embed
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 POST_NOW_TASK = "staff_report_now"
 SNAPSHOT_KEEP = 12
 
@@ -136,7 +139,7 @@ class StaffAutomation(commands.Cog):
                 [("guild_id", 1), ("user_id", 1), ("type_id", 1)], unique=True)
             await staff_report_snapshots_col().create_index([("guild_id", 1), ("at", -1)])
         except Exception as e:
-            print(f"[staff_automation] index creation failed: {e}")
+            logger.error(f"[staff_automation] index creation failed: {e}")
         self._review_sweep.start()
         self._report_loop.start()
         self._task_poll.start()
@@ -161,7 +164,7 @@ class StaffAutomation(commands.Cog):
                 if cfg["probation"]["enabled"]:
                     await self.probation_for_guild(guild, cfg, types)
             except Exception as e:
-                print(f"[staff_automation] sweep failed for {guild.id}: {e}")
+                logger.error(f"[staff_automation] sweep failed for {guild.id}: {e}")
 
     @_review_sweep.before_loop
     async def _before_sweep(self):
@@ -220,7 +223,7 @@ class StaffAutomation(commands.Cog):
             msg = await channel.send(content=content, embed=embed, allowed_mentions=mentions,
                                      view=_buttons("sug", res.inserted_id, ("promote", "dismiss")))
         except discord.HTTPException as e:
-            print(f"[staff_automation] couldn't post suggestion: {e}")
+            logger.error(f"[staff_automation] couldn't post suggestion: {e}")
             await staff_suggestions_col().delete_one({"_id": res.inserted_id})   # retry next sweep
             return False
         await staff_suggestions_col().update_one(
@@ -341,7 +344,7 @@ class StaffAutomation(commands.Cog):
             msg = await channel.send(content=content, embed=embed, allowed_mentions=mentions,
                                      view=_buttons("prob", doc["_id"], ("pass", "extend")))
         except discord.HTTPException as e:
-            print(f"[staff_automation] couldn't post probation review: {e}")
+            logger.error(f"[staff_automation] couldn't post probation review: {e}")
             await staff_probation_col().update_one(key, {"$set": {"status": "active"}})
             return False
         await staff_probation_col().update_one(
@@ -392,7 +395,7 @@ class StaffAutomation(commands.Cog):
                     continue
                 await self.post_report(guild, cfg, late=(now - due) > timedelta(minutes=10))
             except Exception as e:
-                print(f"[staff_automation] report failed for {guild.id}: {e}")
+                logger.error(f"[staff_automation] report failed for {guild.id}: {e}")
 
     @_report_loop.before_loop
     async def _before_report(self):
@@ -418,7 +421,7 @@ class StaffAutomation(commands.Cog):
                 await dashboard_tasks_col().update_one(
                     {"_id": t["_id"]}, {"$set": {"error": error, "result": "" if error else "Posted."}})
         except Exception as e:
-            print(f"[staff_automation] task poll error: {e}")
+            logger.error(f"[staff_automation] task poll error: {e}")
 
     @_task_poll.before_loop
     async def _before_poll(self):

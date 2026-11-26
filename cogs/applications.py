@@ -42,6 +42,9 @@ from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
 from utils import review_queue_core as rq
 from utils import panel_style, panel_box
+
+from utils.log import get_logger
+logger = get_logger(__name__)
 MAX_APPS_PER_PANEL = 5          # buttons (Discord: 5 per row)
 MAX_APPS_DROPDOWN = 25          # a dropdown menu holds 25 options
 
@@ -648,7 +651,7 @@ async def _decide_application(client, guild, staff, sub, app, status: str, reaso
                 decided_by=staff, reason=reason,
             )
         except Exception as e:
-            print(f"[applications] promotion failed: {e}")
+            logger.error(f"[applications] promotion failed: {e}")
             review_notes = ["Something went wrong promoting the applicant. Use `/promote` instead."]
 
     refreshed = await models.get_application_submission(str(sub["_id"])) or sub
@@ -1293,7 +1296,7 @@ class Applications(commands.Cog):
                 except (discord.Forbidden, discord.NotFound, discord.HTTPException):
                     pass
         except Exception as e:
-            print(f"[applications] sweeper error: {e}")
+            logger.error(f"[applications] sweeper error: {e}")
 
     @_sweep_sessions.before_loop
     async def _before_sweep(self):
@@ -1312,9 +1315,9 @@ class Applications(commands.Cog):
                 try:
                     await self._run_task(t)
                 except Exception as e:
-                    print(f"[applications] dashboard task {t.get('_id')} failed: {e}")
+                    logger.error(f"[applications] dashboard task {t.get('_id')} failed: {e}")
         except Exception as e:
-            print(f"[applications] poller error: {e}")
+            logger.error(f"[applications] poller error: {e}")
 
     @_poll_dashboard_tasks.before_loop
     async def _before_poll(self):
@@ -1350,7 +1353,7 @@ class Applications(commands.Cog):
             if str(posted.id) != str(existing_id):
                 await models.save_application_panel(guild_id, {"message_id": str(posted.id)})
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[applications] could not post panel: {e}")
+            logger.error(f"[applications] could not post panel: {e}")
 
 
 async def setup(bot: commands.Bot):

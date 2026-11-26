@@ -1,0 +1,21 @@
+# NOTE: named Dockerfile.example on purpose. Railway (and most PaaS platforms)
+# build with a Dockerfile automatically when one exists at the repo root, which
+# would silently switch the deployment away from its current build path. To
+# adopt it, rename this file to `Dockerfile` and redeploy once, watching the
+# first build. Until then the current build behaviour is unchanged.
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PORT=8080
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# The dashboard (Flask) and the bot run in this one process; main.py binds the
+# dashboard to SERVER_PORT, then PORT, then DASHBOARD_PORT.
+CMD ["python", "main.py"]

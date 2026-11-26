@@ -62,6 +62,9 @@ from cogs.tickets import (
     TicketControlView, category_lock, find_category_by_name, _can_close_ticket,
 )
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 SELL = "sell"
 BUY = "buy"
 
@@ -301,12 +304,12 @@ async def refresh_panels(guild: discord.Guild) -> int:
             await models.remove_spawner_panel(guild.id, p["message_id"])
             continue
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
+            logger.error(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
             continue
         try:
             posted, _style, _note = await _put_panel(channel, msg.id, cfg, guild.id)
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
+            logger.error(f"[spawners] couldn't refresh panel {p['message_id']} in {guild.id}: {e}")
             continue
         if posted.id != msg.id:     # replaced: remember the new message
             await models.remove_spawner_panel(guild.id, msg.id)
@@ -353,7 +356,7 @@ async def _sync_ticket(guild: discord.Guild, doc: dict, t: dict, new_unit: int) 
             ),
         )
     except (discord.Forbidden, discord.HTTPException) as e:
-        print(f"[spawners] couldn't post price update in {channel.id}: {e}")
+        logger.error(f"[spawners] couldn't post price update in {channel.id}: {e}")
     return True
 
 
@@ -370,7 +373,7 @@ async def sync_ticket_prices(guild: discord.Guild, key: str, side: str) -> int:
             if await _sync_ticket(guild, doc, t, new_unit):
                 changed += 1
         except Exception as e:
-            print(f"[spawners] failed to reprice ticket {doc.get('channel_id')}: {e}")
+            logger.error(f"[spawners] failed to reprice ticket {doc.get('channel_id')}: {e}")
     return changed
 
 
@@ -531,7 +534,7 @@ async def create_spawner_ticket(interaction: discord.Interaction, key: str, side
     try:
         await sync_ticket_prices(guild, key, side)
     except Exception as e:
-        print(f"[spawners] post-create price check failed: {e}")
+        logger.error(f"[spawners] post-create price check failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +554,7 @@ async def _rename_ticket_channel(channel: discord.TextChannel, **changes):
             channel.edit(reason="Spawner ticket amount changed", **changes), timeout=10
         )
     except Exception as e:
-        print(f"[spawners] couldn't rename {channel.id} after amount change: {e}")
+        logger.error(f"[spawners] couldn't rename {channel.id} after amount change: {e}")
 
 
 async def change_spawner_amount(interaction: discord.Interaction, amount_text: str):
@@ -621,7 +624,7 @@ async def change_spawner_amount(interaction: discord.Interaction, amount_text: s
             allowed_mentions=discord.AllowedMentions.none(),
         )
     except (discord.Forbidden, discord.HTTPException) as e:
-        print(f"[spawners] couldn't post amount update in {channel.id}: {e}")
+        logger.error(f"[spawners] couldn't post amount update in {channel.id}: {e}")
 
     # Keep the channel name / topic in step with the order (in the background).
     changes = {"name": _channel_name(side, new_amount, t["name"])}
@@ -928,9 +931,9 @@ class Spawners(commands.Cog):
                         for ch in (t.get("payload") or {}).get("price_changes") or []:
                             await sync_ticket_prices(guild, str(ch.get("key")), str(ch.get("side")))
                 except Exception as e:
-                    print(f"[spawners] dashboard task {t.get('_id')} failed: {e}")
+                    logger.error(f"[spawners] dashboard task {t.get('_id')} failed: {e}")
         except Exception as e:
-            print(f"[spawners] dashboard poller error: {e}")
+            logger.error(f"[spawners] dashboard poller error: {e}")
 
     @_poll_dashboard_tasks.before_loop
     async def _before_poll(self):

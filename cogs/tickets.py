@@ -43,6 +43,9 @@ from utils import panel_style
 from config import constants
 from config.settings import dashboard_base_url
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 DEFAULT_CLOSE_REASON = "No Further Action Required"
 
@@ -228,7 +231,7 @@ async def _cleanup_empty_category(guild: discord.Guild, category, gone_ids=()):
             except discord.HTTPException:
                 pass
     except Exception as e:
-        print(f"[tickets] category cleanup failed: {e}")
+        logger.error(f"[tickets] category cleanup failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +326,7 @@ async def _rename_channel_quietly(channel: discord.TextChannel, name: str, reaso
     try:
         await asyncio.wait_for(channel.edit(name=name, reason=reason), timeout=10)
     except Exception as e:
-        print(f"[tickets] couldn't rename {channel.id}: {e}")
+        logger.error(f"[tickets] couldn't rename {channel.id}: {e}")
 
 
 async def _rename_ok(channel, name: str, reason: str) -> bool:
@@ -335,7 +338,7 @@ async def _rename_ok(channel, name: str, reason: str) -> bool:
         await asyncio.wait_for(channel.edit(name=name, reason=reason), timeout=10)
         return True
     except Exception as e:
-        print(f"[tickets] couldn't rename {channel.id}: {e}")
+        logger.error(f"[tickets] couldn't rename {channel.id}: {e}")
         return False
 
 
@@ -473,7 +476,7 @@ async def _dm_ticket_closed(guild: discord.Guild, channel: discord.TextChannel,
         from cogs.ticket_ratings import build_rating_view
         view = await build_rating_view(guild, opener, ticket_doc, channel.name, transcript_id)
     except Exception as e:
-        print(f"[tickets] couldn't prepare the rating buttons: {e}")
+        logger.error(f"[tickets] couldn't prepare the rating buttons: {e}")
     if view is not None:
         embed.add_field(name="⭐ How did we do?",
                         value="Rate how this ticket was handled, 1 (poor) to 5 (great).",
@@ -490,7 +493,7 @@ async def _dm_ticket_closed(guild: discord.Guild, channel: discord.TextChannel,
                     value=f"[Read this ticket's transcript]({base}/guild/{guild.id}/transcripts/{transcript_id})",
                     inline=False)
     except Exception as e:
-        print(f"[tickets] couldn't add the transcript link: {e}")
+        logger.error(f"[tickets] couldn't add the transcript link: {e}")
 
     try:
         if view is not None:
@@ -573,7 +576,7 @@ async def _build_transcript_messages(channel: discord.TextChannel, transcript_id
                     total_bytes += len(data)
                     saved_images += 1
                 except Exception as e:  # never block closing on an image
-                    print(f"[tickets] couldn't save transcript image {att.filename}: {e}")
+                    logger.error(f"[tickets] couldn't save transcript image {att.filename}: {e}")
             atts.append(entry)
 
         out.append({
@@ -689,7 +692,7 @@ async def close_ticket_with_reason(guild: discord.Guild, channel,
         from cogs.taskbook import record_ticket_close as tb_close
         await tb_close(guild, closer)
     except Exception as e:
-        print(f"[tickets] taskbook settle failed: {e}")
+        logger.error(f"[tickets] taskbook settle failed: {e}")
 
     settings = await models.get_guild_settings(guild.id)
     ticket_cfg = settings.get("tickets", {})
@@ -719,7 +722,7 @@ async def close_ticket_with_reason(guild: discord.Guild, channel,
             try:
                 await transcript_channel.send(embed=embed, view=view)
             except (discord.Forbidden, discord.HTTPException) as e:
-                print(f"[tickets] couldn't post transcript embed: {e}")
+                logger.error(f"[tickets] couldn't post transcript embed: {e}")
 
     log_channel_id = ticket_cfg.get("log_channel_id")
     if log_channel_id:
@@ -1180,7 +1183,7 @@ async def post_panel(channel, panel: dict, ticket_types: list):
             except discord.Forbidden:
                 raise
             except Exception as e:
-                print(f"[panel] box style failed for {panel.get('name')!r}: {type(e).__name__}: {e}")
+                logger.error(f"[panel] box style failed for {panel.get('name')!r}: {type(e).__name__}: {e}")
                 note = "The one-box style failed, so it was posted as an embed instead."
         else:
             note = "The one-box style needs a newer discord.py, so it was posted as an embed instead."
@@ -1245,7 +1248,7 @@ async def _set_priority(channel, guild: discord.Guild, ticket_doc: dict, level: 
             else:
                 notes.append("I couldn't rename the channel right now (Discord limits renames).")
     except Exception as e:
-        print(f"[tickets] priority rename failed: {e}")
+        logger.error(f"[tickets] priority rename failed: {e}")
     return notes
 
 
@@ -1362,7 +1365,7 @@ async def _apply_claim_visibility(channel, guild: discord.Guild, ticket_doc: dic
             elif str(claimer.id) != str(ticket_doc.get("opener_id")):
                 await channel.set_permissions(claimer, overwrite=None, reason="Ticket claim visibility")
     except Exception as e:
-        print(f"[tickets] claim visibility update failed: {e}")
+        logger.error(f"[tickets] claim visibility update failed: {e}")
 
 
 class CloseTicketButton(discord.ui.Button):
@@ -1393,7 +1396,7 @@ async def _tb_adjust_handled(guild, user_id, delta):
         from cogs.taskbook import adjust_handled
         await adjust_handled(guild, user_id, delta)
     except Exception as e:
-        print(f"[tickets] taskbook handled update failed: {e}")
+        logger.error(f"[tickets] taskbook handled update failed: {e}")
 
 
 class ClaimTicketButton(discord.ui.Button):
@@ -1691,7 +1694,7 @@ async def _send_welcome(channel, content: str, embed: discord.Embed, ticket_type
     except discord.HTTPException as e:
         if e.status != 400:
             raise
-        print(f"[tickets] custom buttons rejected for '{ticket_type.get('name')}': {e}")
+        logger.info(f"[tickets] custom buttons rejected for '{ticket_type.get('name')}': {e}")
         return await channel.send(content=content, embed=embed, view=TicketControlView())
 
 
@@ -1721,7 +1724,7 @@ async def _prepare_thread_ticket(guild: discord.Guild, thread: discord.Thread,
                 "Allow **View Channel** for members on that channel (and deny Send Messages there)."),
                 allowed_mentions=discord.AllowedMentions.none())
     except Exception as e:
-        print(f"[tickets] thread setup extras failed: {e}")
+        logger.error(f"[tickets] thread setup extras failed: {e}")
 
 
 async def _create_ticket_from_modal(interaction: discord.Interaction, ticket_type: dict,
@@ -1806,7 +1809,7 @@ async def _create_ticket_from_modal(interaction: discord.Interaction, ticket_typ
                         extra=extra,
                     )
                 except Exception as e:
-                    print(f"[tickets] couldn't save the ticket: {e}")
+                    logger.error(f"[tickets] couldn't save the ticket: {e}")
                     failed = True
                     await tcont.delete_container(channel, "Ticket database write failed")
     if problem:
@@ -1866,7 +1869,7 @@ async def _create_ticket_from_modal(interaction: discord.Interaction, ticket_typ
         if new_doc:
             await ticket_automations.on_ticket_opened(guild, channel, new_doc, ticket_type)
     except Exception as e:
-        print(f"[tickets] automation hook failed: {e}")
+        logger.error(f"[tickets] automation hook failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -1991,7 +1994,7 @@ class Tickets(commands.Cog):
             if member and await _is_ticket_staff(message.guild, member, ticket_doc):
                 await ticket_stats.record_first_reply(message.channel.id, member, message.created_at)
         except Exception as e:
-            print(f"[tickets] first-reply tracking failed: {e}")
+            logger.error(f"[tickets] first-reply tracking failed: {e}")
 
     async def cog_unload(self):
         self._inactivity_sweep.cancel()
@@ -2003,7 +2006,7 @@ class Tickets(commands.Cog):
             try:
                 await self._inactivity_guild(guild)
             except Exception as e:
-                print(f"[tickets] inactivity sweep failed for {guild.id}: {e}")
+                logger.error(f"[tickets] inactivity sweep failed for {guild.id}: {e}")
 
     @_inactivity_sweep.before_loop
     async def _before_inactivity(self):
@@ -2060,7 +2063,7 @@ class Tickets(commands.Cog):
                     f"automatically in {grace}** unless someone replies here."),
                 allowed_mentions=discord.AllowedMentions(users=True, roles=False, everyone=False))
         except discord.HTTPException as e:
-            print(f"[tickets] couldn't post inactivity warning in {channel.id}: {e}")
+            logger.error(f"[tickets] couldn't post inactivity warning in {channel.id}: {e}")
             return
         await tickets_col().update_one(
             {"_id": doc["_id"], "status": "open"},
@@ -2076,7 +2079,7 @@ class Tickets(commands.Cog):
                 f"Closed automatically: no reply after the inactivity warning "
                 f"({ac.hours_text(cfg['grace_hours'])})")
         except Exception as e:
-            print(f"[tickets] inactivity close of {cid} failed: {e}")
+            logger.error(f"[tickets] inactivity close of {cid} failed: {e}")
         finally:
             self._closing.discard(cid)
 
@@ -2098,7 +2101,7 @@ class Tickets(commands.Cog):
                 pass
             await close_ticket_with_reason(guild, channel, guild.me, OPENER_LEFT_REASON)
         except Exception as e:
-            print(f"[tickets] auto-close of {cid} failed: {e}")
+            logger.error(f"[tickets] auto-close of {cid} failed: {e}")
         finally:
             self._closing.discard(cid)
 
@@ -2115,7 +2118,7 @@ class Tickets(commands.Cog):
             for doc in docs:
                 await self._close_orphan_ticket(member.guild, doc)
         except Exception as e:
-            print(f"[tickets] member-leave handler failed: {e}")
+            logger.error(f"[tickets] member-leave handler failed: {e}")
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -2146,7 +2149,7 @@ class Tickets(commands.Cog):
                     if checked[opener] is False:
                         await self._close_orphan_ticket(guild, doc)
         except Exception as e:
-            print(f"[tickets] startup sweep failed: {e}")
+            logger.error(f"[tickets] startup sweep failed: {e}")
 
     @commands.hybrid_group(name="ticket", description="Manage support tickets")
     async def ticket(self, ctx: commands.Context):
@@ -2179,7 +2182,7 @@ class Tickets(commands.Cog):
             from cogs.taskbook import record_ticket_rename as tb_rename
             await tb_rename(ctx.guild, ctx.channel, ctx.author)
         except Exception as e:
-            print(f"[tickets] taskbook rename hook failed: {e}")
+            logger.error(f"[tickets] taskbook rename hook failed: {e}")
         await ctx.send(embed=success_embed(f"Ticket renamed to **{name}**."))
 
     @ticket.command(name="priority", description="Set this ticket's priority (staff)")

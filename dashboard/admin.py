@@ -28,6 +28,9 @@ from dashboard import botguilds
 from dashboard import db as dashboard_db
 from utils.site_settings import valid_email, valid_support_url
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 SESSION_HOURS = 12
@@ -174,7 +177,7 @@ def _audit(action: str, detail: str = ""):
         col.insert_one({"at": datetime.now(timezone.utc), "action": action,
                         "detail": str(detail)[:300], "ip": _client_ip()})
     except Exception as e:
-        print(f"[admin] audit write failed: {e}")
+        logger.error(f"[admin] audit write failed: {e}")
 
 
 def _aware(dt):
@@ -468,7 +471,7 @@ def leave_server(guild_id):
     _audit("Made the bot leave a server", f"{guild_id}" + ("" if ok else f" - failed: {msg}"))
     if ok:
         return redirect(url_for("admin.admin_page", tab="servers", left="1"))
-    print(f"[admin] leave {guild_id} failed: {msg}")
+    logger.error(f"[admin] leave {guild_id} failed: {msg}")
     return redirect(url_for("admin.admin_page", tab="servers", error="leave"))
 
 

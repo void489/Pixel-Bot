@@ -15,6 +15,9 @@ from flask import g, request
 
 from utils import audit_diff as ad
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # Per-guild config collections worth diffing. Each doc has guild_id (string or int).
 WATCHED = ["ticket_panels", "ticket_types", "role_panels", "applications",
            "application_panels", "command_permissions", "staff_activity_configs",
@@ -51,7 +54,7 @@ def register(bp, dashboard_db, audit_actor, discord_session, names_for):
         try:
             g.audit_before = _snapshot(dashboard_db.get_db(), str(request.view_args["guild_id"]))
         except Exception as e:
-            print(f"[dashboard] audit snapshot failed: {e}")
+            logger.error(f"[dashboard] audit snapshot failed: {e}")
 
     @bp.after_request
     def _audit_after(resp):
@@ -94,5 +97,5 @@ def register(bp, dashboard_db, audit_actor, discord_session, names_for):
             dashboard_db.log_audit(guild_id, actor_id, actor_name, "dashboard_save", summary,
                                    page=page, lines=ad.cap(lines))
         except Exception as e:
-            print(f"[dashboard] audit hook failed: {e}")      # never break a save
+            logger.error(f"[dashboard] audit hook failed: {e}")      # never break a save
         return resp

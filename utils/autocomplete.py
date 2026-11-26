@@ -6,6 +6,9 @@ user just sees an empty dropdown (nothing in the logs). This wrapper gives the c
 import asyncio
 import functools
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 AUTOCOMPLETE_TIMEOUT = 2.5
 
 
@@ -15,9 +18,9 @@ def safe_autocomplete(func):
         try:
             return await asyncio.wait_for(func(*args, **kwargs), AUTOCOMPLETE_TIMEOUT)
         except asyncio.TimeoutError:
-            print(f"[autocomplete] {func.__qualname__} took longer than "
+            logger.info(f"[autocomplete] {func.__qualname__} took longer than "
                   f"{AUTOCOMPLETE_TIMEOUT}s - no options shown")
         except Exception as e:
-            print(f"[autocomplete] {func.__qualname__} failed: {type(e).__name__}: {e}")
+            logger.error(f"[autocomplete] {func.__qualname__} failed: {type(e).__name__}: {e}")
         return []
     return wrapper

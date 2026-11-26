@@ -90,6 +90,9 @@ from utils.autocomplete import safe_autocomplete
 from utils import review_queue_core as rq
 from config import constants
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # /calc - safe expression evaluator
@@ -504,7 +507,7 @@ async def _decide_blacklist(guild: discord.Guild, staff, req: dict, status: str)
             guild.id, ("accepted" if status == "Accepted" else "denied"), req["type"]
         )
     except Exception as e:
-        print(f"[blacklist] counter bump failed: {e}")
+        logger.error(f"[blacklist] counter bump failed: {e}")
 
     # Taskbook: +1 blacklists for whoever submitted an accepted /blacklist add
     if status == "Accepted" and req.get("action") == "add":
@@ -512,7 +515,7 @@ async def _decide_blacklist(guild: discord.Guild, staff, req: dict, status: str)
             from cogs.taskbook import record_blacklist as tb_blacklist
             await tb_blacklist(guild, req)
         except Exception as e:
-            print(f"[blacklist] taskbook hook failed: {e}")
+            logger.error(f"[blacklist] taskbook hook failed: {e}")
 
     fresh = await models.get_blacklist_request(rid) or req
     if role_error:
@@ -990,7 +993,7 @@ class PollVoteButton(
         try:
             await interaction.message.edit(embed=build_poll_embed(updated))
         except discord.HTTPException as e:
-            print(f"[poll] couldn't update counts: {e}")
+            logger.error(f"[poll] couldn't update counts: {e}")
 
 
 def build_poll_view(message_id, option_count: int, disabled: bool = False) -> discord.ui.View:
@@ -1112,7 +1115,7 @@ class Utilities(commands.Cog):
             await member_events_col().create_index([("guild_id", 1), ("at", 1)])
             await member_events_col().create_index("at", expireAfterSeconds=models.MEMBER_EVENT_KEEP_SECONDS)
         except Exception as e:
-            print(f"[stats] couldn't create the member_events indexes: {e}")
+            logger.error(f"[stats] couldn't create the member_events indexes: {e}")
         self._check_temp_roles.start()
         self._update_stat_channels.start()
 
@@ -1276,7 +1279,7 @@ class Utilities(commands.Cog):
                 self.afk[(str(doc["guild_id"]), str(doc["user_id"]))] = doc
         except Exception as e:
             self._afk_loaded = False
-            print(f"[utilities] afk load failed: {e}")
+            logger.error(f"[utilities] afk load failed: {e}")
 
     @commands.Cog.listener("on_message")
     async def afk_on_message(self, message: discord.Message):
@@ -2273,7 +2276,7 @@ class Utilities(commands.Cog):
             if cfg["enabled"]:
                 await models.record_member_event(member.guild.id, member.id, kind)
         except Exception as e:
-            print(f"[stats] couldn't record a {kind} in {member.guild.id}: {type(e).__name__}: {e}")
+            logger.error(f"[stats] couldn't record a {kind} in {member.guild.id}: {type(e).__name__}: {e}")
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -2299,7 +2302,7 @@ class Utilities(commands.Cog):
                     try:
                         await models.backfill_member_events(ctx.guild.id)
                     except Exception as e:
-                        print(f"[stats] backfill failed in {ctx.guild.id}: {type(e).__name__}: {e}")
+                        logger.error(f"[stats] backfill failed in {ctx.guild.id}: {type(e).__name__}: {e}")
 
         today = datetime.now(timezone.utc).date()
         since = datetime.combine(today - timedelta(days=member_stats.CHART_DAYS - 1),
@@ -2463,7 +2466,7 @@ class Utilities(commands.Cog):
             try:
                 await self._refresh_stat_channels(guild)
             except Exception as e:
-                print(f"[statchannel] {guild.id}: {e}")
+                logger.info(f"[statchannel] {guild.id}: {e}")
 
     @_update_stat_channels.before_loop
     async def _before_update_stat_channels(self):
@@ -2488,12 +2491,12 @@ class Utilities(commands.Cog):
                             await member.remove_roles(
                                 role, reason="Temp role expired")
                 except Exception as e:
-                    print(f"[temprole] failed to expire {doc.get('_id')}: {e}")
+                    logger.error(f"[temprole] failed to expire {doc.get('_id')}: {e}")
                 finally:
                     # Always clean up the DB entry, even if the member left
                     await models.delete_temp_role_by_id(doc["_id"])
         except Exception as e:
-            print(f"[temprole] loop error: {e}")
+            logger.error(f"[temprole] loop error: {e}")
 
     @_check_temp_roles.before_loop
     async def _before_check_temp_roles(self):

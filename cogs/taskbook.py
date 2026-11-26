@@ -76,6 +76,9 @@ from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
 from utils.spawner_math import parse_number, format_short, format_exact
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 CREATE_TASK = "taskbook_create"
 DELETE_TASK = "taskbook_delete"
 IMPORT_TASK = "taskbook_import_blacklists"
@@ -164,7 +167,7 @@ async def add_rating(guild: discord.Guild, user_id: int, rating: int) -> None:
         if tb:
             await refresh_embed(guild, tb)
     except Exception as e:
-        print(f"[taskbook] couldn't add rating for {user_id}: {e}")
+        logger.error(f"[taskbook] couldn't add rating for {user_id}: {e}")
 
 
 def build_embed(guild: discord.Guild, tb: dict) -> discord.Embed:
@@ -218,7 +221,7 @@ async def refresh_embed(guild: discord.Guild, tb: dict) -> None:
     except discord.NotFound:
         pass
     except discord.HTTPException as e:
-        print(f"[taskbook] couldn't refresh #{tb.get('number')}: {e}")
+        logger.error(f"[taskbook] couldn't refresh #{tb.get('number')}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +381,7 @@ async def delete_thread(guild: discord.Guild, thread_id: int) -> None:
     try:
         await thread.delete(reason="Taskbook deleted on the dashboard")
     except discord.HTTPException as e:
-        print(f"[taskbook] couldn't delete thread {thread_id}: {e}")
+        logger.error(f"[taskbook] couldn't delete thread {thread_id}: {e}")
 
 
 async def delete_taskbook(guild: discord.Guild, tb: dict, reason: str = "") -> None:
@@ -386,7 +389,7 @@ async def delete_taskbook(guild: discord.Guild, tb: dict, reason: str = "") -> N
     await taskbooks_col().delete_one({"_id": tb["_id"]})
     if tb.get("thread_id"):
         await delete_thread(guild, int(tb["thread_id"]))
-    print(f"[taskbook] deleted taskbook #{tb.get('number')} ({reason or 'no reason'})")
+    logger.info(f"[taskbook] deleted taskbook #{tb.get('number')} ({reason or 'no reason'})")
 
 
 async def sync_member(guild: discord.Guild, member) -> None:
@@ -406,7 +409,7 @@ async def sync_member(guild: discord.Guild, member) -> None:
         if has_role and not tb and not is_mgr:
             err = await create_taskbook(guild, member.id)
             if err:
-                print(f"[taskbook] auto-create for {member} failed: {err}")
+                logger.error(f"[taskbook] auto-create for {member} failed: {err}")
         elif not has_role and tb:
             await delete_taskbook(guild, tb, "staff role removed")
 
@@ -446,7 +449,7 @@ async def clear_thread(guild: discord.Guild, tb: dict) -> None:
             keep = int(tb["message_id"])
         await thread.purge(limit=None, check=lambda m: m.id != keep, bulk=True)
     except (discord.Forbidden, discord.HTTPException) as e:
-        print(f"[taskbook] couldn't clear thread for #{tb.get('number')}: {e}")
+        logger.error(f"[taskbook] couldn't clear thread for #{tb.get('number')}: {e}")
 
 
 async def _thread_missing(guild: discord.Guild, thread_id) -> bool:
@@ -515,7 +518,7 @@ async def sync_all(guild: discord.Guild, delete_user_ids) -> str:
         err = await create_taskbook(guild, m.id)
         if err:
             failed += 1
-            print(f"[taskbook] sync couldn't create for {m}: {err}")
+            logger.error(f"[taskbook] sync couldn't create for {m}: {err}")
         else:
             created += 1
         await asyncio.sleep(1)
@@ -557,7 +560,7 @@ async def restore_thread(guild: discord.Guild, tb: dict) -> None:
         try:
             thread, msg = await _open_thread(guild, channel, member, tb, cfg)
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[taskbook] couldn't restore thread for #{tb.get('number')}: {e}")
+            logger.error(f"[taskbook] couldn't restore thread for #{tb.get('number')}: {e}")
             return
         await taskbooks_col().update_one(
             {"_id": tb["_id"]},
@@ -590,7 +593,7 @@ async def adjust_handled(guild: discord.Guild, user_id, delta: int) -> None:
     try:
         await _bump(guild, user_id, "handled", delta)
     except Exception as e:
-        print(f"[taskbook] adjust_handled failed: {e}")
+        logger.error(f"[taskbook] adjust_handled failed: {e}")
 
 
 async def record_ticket_rename(guild: discord.Guild, channel, member) -> None:
@@ -604,7 +607,7 @@ async def record_ticket_rename(guild: discord.Guild, channel, member) -> None:
         if res.modified_count:
             await _bump(guild, member.id, "renamed", 1)
     except Exception as e:
-        print(f"[taskbook] record_ticket_rename failed: {e}")
+        logger.error(f"[taskbook] record_ticket_rename failed: {e}")
 
 
 async def record_ticket_close(guild: discord.Guild, closer) -> None:
@@ -613,7 +616,7 @@ async def record_ticket_close(guild: discord.Guild, closer) -> None:
         if closer is not None:
             await _bump(guild, closer.id, "closed", 1)
     except Exception as e:
-        print(f"[taskbook] record_ticket_close failed: {e}")
+        logger.error(f"[taskbook] record_ticket_close failed: {e}")
 
 
 async def record_blacklist(guild: discord.Guild, req: dict) -> None:
@@ -634,7 +637,7 @@ async def record_blacklist(guild: discord.Guild, req: dict) -> None:
         if claimed.modified_count:
             await _bump(guild, applicant_id, "blacklisted", 1)
     except Exception as e:
-        print(f"[taskbook] record_blacklist failed: {e}")
+        logger.error(f"[taskbook] record_blacklist failed: {e}")
 
 
 async def reset_taskbooks(guild: discord.Guild, number=None) -> int:
@@ -723,13 +726,13 @@ class Taskbook(commands.Cog):
             await taskbooks_col().create_index([("guild_id", 1), ("number", 1)], unique=True)
             await taskbooks_col().create_index([("guild_id", 1), ("user_id", 1)], unique=True)
         except Exception as e:
-            print(f"[taskbook] index creation failed: {e}")
+            logger.error(f"[taskbook] index creation failed: {e}")
         try:
             done = await backfill_lifetime()
             if done:
-                print(f"[taskbook] lifetime totals started for {done} existing taskbook(s)")
+                logger.info(f"[taskbook] lifetime totals started for {done} existing taskbook(s)")
         except Exception as e:
-            print(f"[taskbook] lifetime backfill failed: {e}")
+            logger.error(f"[taskbook] lifetime backfill failed: {e}")
         self._poll_dashboard_tasks.start()
 
     async def cog_unload(self):
@@ -773,12 +776,12 @@ class Taskbook(commands.Cog):
                         await delete_thread(guild, int(payload["thread_id"]))
                 except Exception as e:
                     error = f"Unexpected error: {e}"
-                    print(f"[taskbook] dashboard task {t.get('_id')} failed: {e}")
+                    logger.error(f"[taskbook] dashboard task {t.get('_id')} failed: {e}")
                 if error or result:
                     await dashboard_tasks_col().update_one(
                         {"_id": t["_id"]}, {"$set": {"error": error, "result": result}})
         except Exception as e:
-            print(f"[taskbook] dashboard poller error: {e}")
+            logger.error(f"[taskbook] dashboard poller error: {e}")
 
     @_poll_dashboard_tasks.before_loop
     async def _before_poll(self):
@@ -800,7 +803,7 @@ class Taskbook(commands.Cog):
             if had != has:
                 await sync_member(after.guild, after)
         except Exception as e:
-            print(f"[taskbook] member update sync failed: {e}")
+            logger.error(f"[taskbook] member update sync failed: {e}")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
@@ -811,7 +814,7 @@ class Taskbook(commands.Cog):
             if tb:
                 await delete_taskbook(member.guild, tb, "member left the server")
         except Exception as e:
-            print(f"[taskbook] member remove cleanup failed: {e}")
+            logger.error(f"[taskbook] member remove cleanup failed: {e}")
 
     @commands.Cog.listener()
     async def on_raw_thread_delete(self, payload: discord.RawThreadDeleteEvent):
@@ -833,7 +836,7 @@ class Taskbook(commands.Cog):
             user, readable = await _who_deleted(
                 guild, discord.AuditLogAction.thread_delete, payload.thread_id)
             if not readable:
-                print("[taskbook] can't read the audit log (give the bot View Audit Log) "
+                logger.info("[taskbook] can't read the audit log (give the bot View Audit Log) "
                       "- restoring the thread to be safe")
             elif user is not None:
                 if user.id == self.bot.user.id:
@@ -844,7 +847,7 @@ class Taskbook(commands.Cog):
                     return
             await restore_thread(guild, tb)
         except Exception as e:
-            print(f"[taskbook] thread delete handler failed: {e}")
+            logger.error(f"[taskbook] thread delete handler failed: {e}")
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent):
@@ -871,7 +874,7 @@ class Taskbook(commands.Cog):
                 if _is_manager(guild.get_member(user.id), await get_config(guild.id)):
                     return
             if not readable:
-                print("[taskbook] can't read the audit log (give the bot View Audit Log) "
+                logger.info("[taskbook] can't read the audit log (give the bot View Audit Log) "
                       "- restoring the embed to be safe")
             # make sure it is still the current embed (a reset may have replaced it)
             fresh = await taskbooks_col().find_one({"_id": tb["_id"]})
@@ -888,7 +891,7 @@ class Taskbook(commands.Cog):
             finally:
                 _restoring.discard(tb["_id"])
         except Exception as e:
-            print(f"[taskbook] embed restore failed: {e}")
+            logger.error(f"[taskbook] embed restore failed: {e}")
 
     # ── Commands ──────────────────────────────────────────────────────────
     async def _number_autocomplete(self, interaction: discord.Interaction, current: str):

@@ -32,6 +32,9 @@ from discord.ext import commands
 from database import models
 from utils.embeds import error_embed
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 def command_check():
     def decorator(func):
@@ -101,5 +104,5 @@ async def register_all_commands(bot, guild_ids=None):
     try:
         await models.purge_removed_commands()
     except Exception as e:
-        print(f"[permissions] couldn't clean up removed commands: {e}")
-    print(f"[permissions] registered {len(targets)} command(s) for {len(guild_ids)} guild(s)")
+        logger.error(f"[permissions] couldn't clean up removed commands: {e}")
+    logger.info(f"[permissions] registered {len(targets)} command(s) for {len(guild_ids)} guild(s)")

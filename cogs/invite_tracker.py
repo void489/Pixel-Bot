@@ -32,6 +32,9 @@ from database import models
 from utils.embeds import base_embed, error_embed, info_embed, success_embed
 from utils.permissions import command_check
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 async def _reply(ctx: commands.Context, embed: discord.Embed, *, delete_after: float = 8):
     if ctx.interaction is not None:
@@ -67,7 +70,7 @@ class InviteTracker(commands.Cog):
                     if snap is not None:
                         self._cache[guild.id] = snap
             except Exception as e:
-                print(f"[invites] startup snapshot failed for {guild.id}: {e}")
+                logger.error(f"[invites] startup snapshot failed for {guild.id}: {e}")
 
     @commands.Cog.listener()
     async def on_invite_create(self, invite: discord.Invite):
@@ -123,7 +126,7 @@ class InviteTracker(commands.Cog):
             if cfg["channel_id"]:
                 await self._log_join(guild, cfg, member, inviter_id, code, kind)
         except Exception as e:
-            print(f"[invites] join handling failed in {guild.id}: {type(e).__name__}: {e}")
+            logger.error(f"[invites] join handling failed in {guild.id}: {type(e).__name__}: {e}")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
@@ -134,7 +137,7 @@ class InviteTracker(commands.Cog):
             if cfg["enabled"]:
                 await models.mark_invite_left(member.guild.id, member.id)
         except Exception as e:
-            print(f"[invites] leave handling failed in {member.guild.id}: {e}")
+            logger.error(f"[invites] leave handling failed in {member.guild.id}: {e}")
 
     async def _log_join(self, guild, cfg, member, inviter_id, code, kind):
         channel = guild.get_channel(int(cfg["channel_id"]))

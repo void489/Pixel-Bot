@@ -41,6 +41,9 @@ from utils.permissions import command_check
 from utils.autocomplete import safe_autocomplete
 from utils import changes_core as core
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 def _ts(dt) -> int:
     if dt.tzinfo is None:
@@ -196,7 +199,7 @@ class StaffStrikes(commands.Cog):
                 [("guild_id", 1), ("type_id", 1), ("user_id", 1)])
             await staff_strikes_col().create_index([("guild_id", 1), ("number", 1)], unique=True)
         except Exception as e:  # indexes are an optimisation, never block the cog
-            print(f"[staff_strikes] couldn't create indexes: {e}")
+            logger.error(f"[staff_strikes] couldn't create indexes: {e}")
 
     async def cog_unload(self):
         self._expire_sweep.cancel()
@@ -211,9 +214,9 @@ class StaffStrikes(commands.Cog):
                 try:
                     await self._expire_guild(gdoc)
                 except Exception as e:
-                    print(f"[staff_strikes] expiry sweep failed for {gdoc.get('_id')}: {e}")
+                    logger.error(f"[staff_strikes] expiry sweep failed for {gdoc.get('_id')}: {e}")
         except Exception as e:
-            print(f"[staff_strikes] expiry sweep error: {e}")
+            logger.error(f"[staff_strikes] expiry sweep error: {e}")
 
     @_expire_sweep.before_loop
     async def _before_expire(self):

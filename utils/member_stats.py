@@ -15,6 +15,9 @@ from datetime import timedelta
 
 from PIL import Image, ImageDraw, ImageFont
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 CHART_DAYS = 30
 MODES = ("combined", "joins", "leaves")
 
@@ -177,9 +180,7 @@ if __name__ == "__main__":                              # quick manual test: pyt
                {"join": random.randint(5, 60) if i % 7 else 150, "leave": random.randint(5, 40)}
                for i in range(30)}
     ds, js, ls = build_series(buckets, date.today())
-    print(card_value("combined", window(js, 1), window(ls, 1)),
-          card_value("combined", window(js, 7), window(ls, 7)),
-          card_value("combined", window(js, 30), window(ls, 30)))
+    logger.info(" ".join(str(x) for x in (card_value("combined", window(js, 1), window(ls, 1)), card_value("combined", window(js, 7), window(ls, 7)), card_value("combined", window(js, 30), window(ls, 30)))))
     for m in MODES:
         open(f"/tmp/stats_{m}.png", "wb").write(render_chart(m, ds, js, ls))
-    print("wrote /tmp/stats_*.png")
+    logger.info("wrote /tmp/stats_*.png")

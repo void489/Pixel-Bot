@@ -51,6 +51,9 @@ from utils.embeds import base_embed, success_embed, error_embed, info_embed
 from utils.permissions import command_check
 from cogs.utilities import _reply
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 NO_MENTIONS = discord.AllowedMentions.none()
 
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
@@ -322,11 +325,11 @@ class MemberTools(commands.Cog):
                 try:
                     await self._deliver_reminder(doc, now)
                 except Exception as e:
-                    print(f"[reminders] failed to deliver {doc.get('_id')}: {e}")
+                    logger.error(f"[reminders] failed to deliver {doc.get('_id')}: {e}")
                 finally:
                     await models.delete_reminder(doc["_id"])
         except Exception as e:
-            print(f"[reminders] loop error: {e}")
+            logger.error(f"[reminders] loop error: {e}")
 
     @_reminder_loop.before_loop
     async def _before_reminder_loop(self):
@@ -394,7 +397,7 @@ class MemberTools(commands.Cog):
                 raise ValueError(data.get("responseDetails") or "service error")
             out = html.unescape(data["responseData"]["translatedText"])
         except Exception as e:
-            print(f"[translate] failed: {e}")
+            logger.error(f"[translate] failed: {e}")
             return await ctx.send(embed=error_embed(
                 "The translation service didn't answer. Try again in a moment."))
         embed = base_embed(title=f"🌐 Translation → {code}")
@@ -635,7 +638,7 @@ class MemberTools(commands.Cog):
                     continue
                 await models.mark_birthday_announced(doc["_id"], now.year)
         except Exception as e:
-            print(f"[birthday] loop error: {e}")
+            logger.error(f"[birthday] loop error: {e}")
 
     @_birthday_loop.before_loop
     async def _before_birthday_loop(self):

@@ -29,6 +29,9 @@ from discord.ext import commands
 from database.mongo import ticket_ratings_col, transcripts_col
 from utils.embeds import error_embed
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 RATING_COLOR = 0xFEE75C
 COMMENT_MAX = 500
 RATING_WINDOW_DAYS = 30   # after this, an unanswered close-DM can no longer be rated
@@ -90,7 +93,7 @@ async def _mirror_to_transcript(doc: dict, **fields) -> None:
         if tid:
             await transcripts_col().update_one({"_id": tid}, {"$set": fields})
     except Exception as e:
-        print(f"[ticket_ratings] couldn't update the transcript: {e}")
+        logger.error(f"[ticket_ratings] couldn't update the transcript: {e}")
 
 
 def _oid(raw):
@@ -139,14 +142,14 @@ class RateButton(discord.ui.DynamicItem[discord.ui.Button],
             from utils import ticket_stats
             await ticket_stats.record_rating(doc.get("channel_id"), self.n, doc.get("staff_id"))
         except Exception as e:
-            print(f"[ticket_ratings] analytics update failed: {e}")
+            logger.error(f"[ticket_ratings] analytics update failed: {e}")
         try:
             from cogs.taskbook import add_rating
             guild = interaction.client.get_guild(int(doc["guild_id"]))
             if guild is not None:
                 await add_rating(guild, int(doc["staff_id"]), self.n)
         except Exception as e:
-            print(f"[ticket_ratings] taskbook update failed: {e}")
+            logger.error(f"[ticket_ratings] taskbook update failed: {e}")
 
         embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed()
         embed.add_field(name="⭐ Your rating", value=f"**{self.n}** / 5 - thank you!", inline=False)
@@ -213,7 +216,7 @@ class TicketRatings(commands.Cog):
             await ticket_ratings_col().create_index([("guild_id", 1), ("rated_at", -1)])
             await ticket_ratings_col().create_index([("guild_id", 1), ("created_at", -1)])
         except Exception as e:
-            print(f"[ticket_ratings] index creation failed: {e}")
+            logger.error(f"[ticket_ratings] index creation failed: {e}")
 
 
 async def setup(bot: commands.Bot):

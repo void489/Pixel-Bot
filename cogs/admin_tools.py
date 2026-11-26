@@ -27,6 +27,9 @@ from database import models
 from database.logging_config import get_logging_config
 from database.mongo import admin_broadcasts_col, bot_errors_col, bot_settings_col
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 PRESENCE_TASK = "bot_presence_apply"
 BROADCAST_TASK = "admin_broadcast"
 HEARTBEAT_SECONDS = 30
@@ -123,7 +126,7 @@ async def apply_presence(bot: commands.Bot) -> tuple:
         await bot.change_presence(status=status, activity=activity)
         msg, ok = "Applied.", True
     except Exception as e:
-        print(f"[admin_tools] change_presence failed: {e}")
+        logger.error(f"[admin_tools] change_presence failed: {e}")
         msg, ok = f"Failed: {e}", False
 
     await bot_settings_col().update_one(
@@ -150,7 +153,7 @@ class AdminTools(commands.Cog):
         try:
             await bot_errors_col().create_index("created_at", expireAfterSeconds=ERROR_KEEP_SECONDS)
         except Exception as e:
-            print(f"[admin_tools] error index: {e}")
+            logger.error(f"[admin_tools] error index: {e}")
         self._poll.start()
         self._poll_broadcast.start()
         self._startup.start()
@@ -193,7 +196,7 @@ class AdminTools(commands.Cog):
                 "disabled_cogs": set((docs.get("features") or {}).get("disabled_cogs") or []),
             }
         except Exception as e:
-            print(f"[admin_tools] couldn't read the maintenance switches: {e}")
+            logger.error(f"[admin_tools] couldn't read the maintenance switches: {e}")
         self._controls_at = now
         return self._controls_data
 
@@ -251,19 +254,19 @@ class AdminTools(commands.Cog):
     async def on_guild_join(self, guild: discord.Guild):
         try:
             if str(guild.id) in await self._blocked_ids():
-                print(f"[admin_tools] {guild.name} ({guild.id}) is blocked: leaving")
+                logger.info(f"[admin_tools] {guild.name} ({guild.id}) is blocked: leaving")
                 await guild.leave()
         except Exception as e:
-            print(f"[admin_tools] blocked-server check failed for {guild.id}: {e}")
+            logger.error(f"[admin_tools] blocked-server check failed for {guild.id}: {e}")
 
     async def _leave_blocked(self):
         for guild in list(self.bot.guilds):
             if str(guild.id) in await self._blocked_ids():
-                print(f"[admin_tools] {guild.name} ({guild.id}) is blocked: leaving")
+                logger.info(f"[admin_tools] {guild.name} ({guild.id}) is blocked: leaving")
                 try:
                     await guild.leave()
                 except discord.HTTPException as e:
-                    print(f"[admin_tools] couldn't leave {guild.id}: {e}")
+                    logger.error(f"[admin_tools] couldn't leave {guild.id}: {e}")
 
     # ------------------------------------------------------------------
     # Heartbeat + error capture
@@ -289,7 +292,7 @@ class AdminTools(commands.Cog):
             await bot_settings_col().update_one({"_id": "guild_info"},
                                                 {"$set": {"guilds": info, "updated_at": now}}, upsert=True)
         except Exception as e:
-            print(f"[admin_tools] heartbeat error: {e}")
+            logger.error(f"[admin_tools] heartbeat error: {e}")
 
     @_heartbeat.before_loop
     async def _before_heartbeat(self):
@@ -308,7 +311,7 @@ class AdminTools(commands.Cog):
         try:
             await bot_errors_col().insert_many(docs, ordered=False)
         except Exception as e:
-            print(f"[admin_tools] couldn't save {len(docs)} error(s): {e}")
+            logger.error(f"[admin_tools] couldn't save {len(docs)} error(s): {e}")
 
     # ------------------------------------------------------------------
     # Broadcast (from the /admin Broadcast tab)
@@ -381,7 +384,7 @@ class AdminTools(commands.Cog):
             for task in await models.take_pending_dashboard_tasks(limit=1, types=[BROADCAST_TASK]):
                 await self._run_broadcast(task)
         except Exception as e:
-            print(f"[admin_tools] broadcast error: {e}")
+            logger.error(f"[admin_tools] broadcast error: {e}")
 
     @_poll_broadcast.before_loop
     async def _before_poll_broadcast(self):
@@ -396,7 +399,7 @@ class AdminTools(commands.Cog):
             if any(ph in text for ph in PLACEHOLDERS):
                 await apply_presence(self.bot)
         except Exception as e:
-            print(f"[admin_tools] count refresh error: {e}")
+            logger.error(f"[admin_tools] count refresh error: {e}")
 
     @_refresh_counts.before_loop
     async def _before_refresh_counts(self):
@@ -409,7 +412,7 @@ class AdminTools(commands.Cog):
             if batch:
                 await apply_presence(self.bot)  # always applies the latest saved value
         except Exception as e:
-            print(f"[admin_tools] poller error: {e}")
+            logger.error(f"[admin_tools] poller error: {e}")
 
     @_poll.before_loop
     async def _before_poll(self):
@@ -420,11 +423,11 @@ class AdminTools(commands.Cog):
         try:
             await apply_presence(self.bot)
         except Exception as e:
-            print(f"[admin_tools] startup apply error: {e}")
+            logger.error(f"[admin_tools] startup apply error: {e}")
         try:
             await self._leave_blocked()
         except Exception as e:
-            print(f"[admin_tools] blocked-server sweep error: {e}")
+            logger.error(f"[admin_tools] blocked-server sweep error: {e}")
 
     @_startup.before_loop
     async def _before_startup(self):

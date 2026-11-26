@@ -32,6 +32,9 @@ from utils.welcome import (
     MAX_WELCOME_LEN, render_welcome, role_is_dangerous,
 )
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 class Welcome(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -44,20 +47,20 @@ class Welcome(commands.Cog):
         try:
             cfg = await models.get_welcome_config(member.guild.id)
         except Exception as e:
-            print(f"[welcome] couldn't load the config in {member.guild.id}: {e}")
+            logger.error(f"[welcome] couldn't load the config in {member.guild.id}: {e}")
             return
         try:
             await self._give_auto_roles(member, cfg["autorole_ids"])
         except Exception as e:
-            print(f"[welcome] auto role failed in {member.guild.id}: {e}")
+            logger.error(f"[welcome] auto role failed in {member.guild.id}: {e}")
         try:
             await self._send_welcome(member, cfg)
         except Exception as e:
-            print(f"[welcome] welcome message failed in {member.guild.id}: {e}")
+            logger.error(f"[welcome] welcome message failed in {member.guild.id}: {e}")
         try:
             await self._ghost_ping(member, cfg.get("ghostping_channel_ids") or [])
         except Exception as e:
-            print(f"[welcome] ping on join failed in {member.guild.id}: {e}")
+            logger.error(f"[welcome] ping on join failed in {member.guild.id}: {e}")
 
     async def _ghost_ping(self, member: discord.Member, channel_ids: list):
         """Ping the joiner in each chosen channel, then delete the message. Only the
@@ -75,7 +78,7 @@ class Welcome(commands.Cog):
                 msg = await channel.send(member.mention, allowed_mentions=mentions)
                 await msg.delete()
             except (discord.Forbidden, discord.HTTPException) as e:
-                print(f"[welcome] ping on join failed in channel {cid} of {guild.id}: {e}")
+                logger.error(f"[welcome] ping on join failed in channel {cid} of {guild.id}: {e}")
 
         await asyncio.gather(*(one(c) for c in channel_ids[:GHOSTPING_MAX_CHANNELS]))
 
@@ -90,10 +93,10 @@ class Welcome(commands.Cog):
             if role is None or role.is_default() or role.managed:
                 continue
             if me is None or role >= me.top_role:
-                print(f"[welcome] can't assign '{role.name}' in {guild.id}: it's not below my top role")
+                logger.info(f"[welcome] can't assign '{role.name}' in {guild.id}: it's not below my top role")
                 continue
             if role_is_dangerous(role.permissions.value):
-                print(f"[welcome] skipped '{role.name}' in {guild.id}: it has admin/moderation permissions")
+                logger.info(f"[welcome] skipped '{role.name}' in {guild.id}: it has admin/moderation permissions")
                 continue
             if role in member.roles:
                 continue
@@ -103,7 +106,7 @@ class Welcome(commands.Cog):
         try:
             await member.add_roles(*roles, reason="Auto role")
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[welcome] couldn't add auto roles in {guild.id}: {e}")
+            logger.error(f"[welcome] couldn't add auto roles in {guild.id}: {e}")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
@@ -113,7 +116,7 @@ class Welcome(commands.Cog):
             cfg = await models.get_leave_config(member.guild.id)
             await self._send_welcome(member, cfg, leave=True)
         except Exception as e:
-            print(f"[welcome] leave message failed in {member.guild.id}: {e}")
+            logger.error(f"[welcome] leave message failed in {member.guild.id}: {e}")
 
     async def _send_welcome(self, member: discord.Member, cfg: dict, leave: bool = False):
         """leave=True: the Leaves section - same types, but nobody is pinged and the
@@ -138,7 +141,7 @@ class Welcome(commands.Cog):
             else:
                 await self._send_normal(member, channel, cfg, mentions, leave)
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[welcome] couldn't post {'leave' if leave else 'welcome'} message in {guild.id}: {e}")
+            logger.error(f"[welcome] couldn't post {'leave' if leave else 'welcome'} message in {guild.id}: {e}")
 
     @staticmethod
     def _fill(template: str, member: discord.Member, *, markdown: bool, mention: bool) -> str:
@@ -202,7 +205,7 @@ class Welcome(commands.Cog):
                     text="\n".join(x for x in lines if x), colour=colour.value,
                     image_url=member.display_avatar.replace(size=256).url, position="right")
         except Exception as e:
-            print(f"[welcome] couldn't build the box in {member.guild.id}: {e}")
+            logger.error(f"[welcome] couldn't build the box in {member.guild.id}: {e}")
             view = None
         if view is None:
             return await self._send_embed(member, channel, cfg, mentions, leave)
@@ -211,7 +214,7 @@ class Welcome(commands.Cog):
         except discord.Forbidden:
             raise
         except discord.HTTPException as e:
-            print(f"[welcome] box refused in {member.guild.id}: {e}")
+            logger.info(f"[welcome] box refused in {member.guild.id}: {e}")
             await self._send_embed(member, channel, cfg, mentions, leave)
 
     async def _send_embed(self, member, channel, cfg, mentions, leave=False):
@@ -247,17 +250,17 @@ class Welcome(commands.Cog):
             try:
                 avatar = await member.display_avatar.replace(size=256, format="png").read()
             except Exception as e:
-                print(f"[welcome] avatar download failed in {member.guild.id}: {e}")
+                logger.error(f"[welcome] avatar download failed in {member.guild.id}: {e}")
             try:
                 background = await models.get_welcome_background(member.guild.id, "leave" if leave else "welcome")
             except Exception as e:
-                print(f"[welcome] background load failed in {member.guild.id}: {e}")
+                logger.error(f"[welcome] background load failed in {member.guild.id}: {e}")
                 background = None
             return await asyncio.to_thread(
                 render_welcome_image, member.display_name or member.name, avatar, background,
                 "GOODBYE" if leave else "WELCOME")
         except Exception as e:
-            print(f"[welcome] image failed in {member.guild.id}: {e}")
+            logger.error(f"[welcome] image failed in {member.guild.id}: {e}")
             return None
 
 

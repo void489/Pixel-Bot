@@ -28,6 +28,9 @@ from config import constants
 from database.logging_config import get_logging_config
 from utils.embeds import base_embed, success_embed, error_embed, info_embed, warning_embed
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 MAX_OPTIONS = 25
 
 
@@ -108,7 +111,7 @@ async def send_log(guild: discord.Guild, embed: discord.Embed) -> None:
         if isinstance(channel, discord.TextChannel):
             await channel.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
     except Exception as e:  # noqa: BLE001
-        print(f"[review_queue] log post failed: {e}")
+        logger.error(f"[review_queue] log post failed: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +338,7 @@ class _BulkConfirm(discord.ui.View):
                     status, note = await spec.bulk_decide(
                         interaction.client, guild, interaction.user, item["id"], self.accept)
                 except Exception as e:  # noqa: BLE001
-                    print(f"[review_queue:{spec.key}] bulk item {item['id']} failed: {e}")
+                    logger.error(f"[review_queue:{spec.key}] bulk item {item['id']} failed: {e}")
                     status, note = "failed", None
                 counts[status if status in counts else "failed"] += 1
                 if note and len(notes) < 6:
@@ -415,7 +418,7 @@ async def refresh(bot, guild_id: int, spec: QueueSpec) -> None:
             msg = await channel.send(**kwargs)
             await models.set_review_queue_config(guild.id, spec.key, channel.id, msg.id)
     except Exception as e:  # noqa: BLE001
-        print(f"[review_queue:{spec.key}] refresh failed: {e}")
+        logger.error(f"[review_queue:{spec.key}] refresh failed: {e}")
 
 
 # ---------------------------------------------------------------------------

@@ -45,6 +45,9 @@ from database.automod_config import (  # noqa: F401  (re-exported: other code us
     AUTOMOD_RULES, AUTOMOD_DEFAULTS, normalize_automod_config,
 )
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # ---------------------------------------------------------------------------
 # GUILD SETTINGS
 # ---------------------------------------------------------------------------
@@ -249,7 +252,7 @@ async def create_ticket(guild_id: int, channel_id: int, opener_id: int,
         from utils import ticket_stats
         await ticket_stats.record_open(doc)
     except Exception as e:
-        print(f"[tickets] analytics open failed: {e}")
+        logger.error(f"[tickets] analytics open failed: {e}")
 
 
 async def get_ticket(channel_id: int) -> dict:
@@ -1848,7 +1851,7 @@ async def log_nuke_event(guild_id: int, actor_id: int, actor_name: str, is_bot: 
         if overflow_ids:
             await nuke_events_col().delete_many({"_id": {"$in": overflow_ids}})
     except Exception as e:
-        print(f"[anti_nuke] prune failed: {e}")
+        logger.error(f"[anti_nuke] prune failed: {e}")
     return str(result.inserted_id)
 
 

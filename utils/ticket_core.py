@@ -30,6 +30,9 @@ import discord
 from database import models
 from utils.ticket_settings import MAX_OVERFLOW, clean_overflow_ids  # noqa: F401 (re-exported)
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 CATEGORY_CHANNEL_LIMIT = 50     # Discord's hard limit per category
 
 FULL_MESSAGE = ("All ticket categories are full right now. "
@@ -86,7 +89,7 @@ async def _make_category(guild: discord.Guild, name: str):
     try:
         return await guild.create_category(name=name[:100], reason="Ticket category (created on demand)")
     except discord.HTTPException as e:       # includes Forbidden
-        print(f"[tickets] couldn't create category '{name}': {e}")
+        logger.error(f"[tickets] couldn't create category '{name}': {e}")
         return None
 
 
@@ -129,7 +132,7 @@ async def _persist_overflow(owner, old_entry: str, new_id: str) -> None:
         else:
             await models.update_guild_settings(int(ref), {"tickets.overflow_category_ids": updated})
     except Exception as e:
-        print(f"[tickets] couldn't save spare category: {e}")
+        logger.error(f"[tickets] couldn't save spare category: {e}")
 
 
 async def _resolve_entry(guild: discord.Guild, entry, owner):
@@ -158,7 +161,7 @@ async def _resolve_fixed(guild: discord.Guild, raw):
         try:
             await models.update_guild_settings(guild.id, {"tickets.fixed_category_id": str(cat.id)})
         except Exception as e:
-            print(f"[tickets] couldn't save main category: {e}")
+            logger.error(f"[tickets] couldn't save main category: {e}")
     return cat
 
 
@@ -292,7 +295,7 @@ async def alert_staff(guild: discord.Guild, text: str, key: str = "general") -> 
             allowed_mentions=discord.AllowedMentions(roles=True),
         )
     except Exception as e:
-        print(f"[tickets] could not alert staff ({key}): {e}")
+        logger.error(f"[tickets] could not alert staff ({key}): {e}")
 
 
 async def alert_staff_full(guild: discord.Guild, names=None, what: str = "ticket") -> None:

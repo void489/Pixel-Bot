@@ -29,6 +29,9 @@ from utils import ticket_core
 from utils import ticket_settings as ts
 from utils import ticket_stats
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 _CACHE_SECONDS = 60
 _cache: dict = {}                 # guild_id -> (loaded at, [enabled automations])
 _runs_indexed = False
@@ -79,7 +82,7 @@ async def _log_run(guild, channel, automation: dict, results: list, context: dic
             "ok": all(r["ok"] for r in results),
         })
     except Exception as e:
-        print(f"[automations] couldn't log a run: {e}")
+        logger.error(f"[automations] couldn't log a run: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +245,7 @@ async def on_ticket_opened(guild, channel, ticket_doc: dict, ticket_type: dict) 
             if a["trigger"]["type"] == "opened" and ta.applies_to_panel(a["trigger"], ticket_type["_id"]):
                 await run_automation(guild, channel, ticket_doc, a, {"trigger": "opened"})
     except Exception as e:
-        print(f"[automations] opened trigger failed: {e}")
+        logger.error(f"[automations] opened trigger failed: {e}")
 
 
 async def on_ticket_message(message: discord.Message) -> None:
@@ -316,7 +319,7 @@ class TicketAutomations(commands.Cog):
         try:
             await on_ticket_message(message)
         except Exception as e:
-            print(f"[automations] keyword trigger failed: {e}")
+            logger.error(f"[automations] keyword trigger failed: {e}")
 
     @tasks.loop(seconds=60)
     async def _no_reply_sweep(self):
@@ -324,7 +327,7 @@ class TicketAutomations(commands.Cog):
             try:
                 await sweep_no_reply(guild)
             except Exception as e:
-                print(f"[automations] sweep failed for {guild.id}: {e}")
+                logger.error(f"[automations] sweep failed for {guild.id}: {e}")
 
     @_no_reply_sweep.before_loop
     async def _before_sweep(self):

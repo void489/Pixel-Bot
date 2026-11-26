@@ -24,6 +24,9 @@ import discord
 from database import models
 from utils import panel_style
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 _BOX_PARTS = ("LayoutView", "Container", "TextDisplay", "Section", "Thumbnail", "MediaGallery",
               "Separator", "ActionRow")
 
@@ -163,7 +166,7 @@ async def put_panel(channel, message_id, *, look: dict, image_key: str, make_box
             except discord.Forbidden:
                 raise
             except Exception as e:  # noqa: BLE001
-                print(f"[panel_box] box style failed in #{getattr(channel, 'name', '?')}: "
+                logger.error(f"[panel_box] box style failed in #{getattr(channel, 'name', '?')}: "
                       f"{type(e).__name__}: {e}")
                 note = "The one-box style failed, so it was posted as an embed instead."
                 # the old message may be a box that is still fine to replace below

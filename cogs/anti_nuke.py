@@ -21,6 +21,9 @@ from database import models
 from utils.embeds import base_embed
 from config import constants
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 ALERT_COOLDOWN_SECONDS = 60
 
@@ -63,7 +66,7 @@ REVERT_ACTION_MAP = {
     "webhook_create": "webhook_create",
 }
 
-print("[anti_nuke] tracked actions: " + ", ".join(sorted(ACTION_TO_AUDIT.keys())))
+logger.info("[anti_nuke] tracked actions: " + ", ".join(sorted(ACTION_TO_AUDIT.keys())))
 
 
 def _normalize_actions(actions: dict) -> dict:
@@ -131,16 +134,16 @@ class AntiNuke(commands.Cog):
         self._poll_dashboard_tasks.cancel()
 
     async def cog_load(self):
-        print(f"[anti_nuke] discord.py version: {discord.__version__}")
+        logger.info(f"[anti_nuke] discord.py version: {discord.__version__}")
         for guild in self.bot.guilds:
             me = guild.me
             if me is None:
                 continue
             has = me.guild_permissions.view_audit_log
             if has:
-                print(f"[anti_nuke] startup check OK: {guild.name} ({guild.id}) can read audit log")
+                logger.info(f"[anti_nuke] startup check OK: {guild.name} ({guild.id}) can read audit log")
             else:
-                print(
+                logger.warning(
                     f"[anti_nuke] WARNING: missing View Audit Log in "
                     f"{guild.name} ({guild.id}) — anti-nuke cannot detect anything there"
                 )
@@ -150,14 +153,14 @@ class AntiNuke(commands.Cog):
     # ------------------------------------------------------------------
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
-        print(
+        logger.info(
             f"[anti_nuke] listener fired: action={entry.action} "
             f"user={getattr(entry.user, 'id', None)}"
         )
         try:
             await self._handle_entry(entry)
         except Exception as e:
-            print(f"[anti_nuke] handler error: {type(e).__name__}: {e}")
+            logger.error(f"[anti_nuke] handler error: {type(e).__name__}: {e}")
 
     async def _handle_entry(self, entry: discord.AuditLogEntry):
         guild = entry.guild
@@ -166,50 +169,50 @@ class AntiNuke(commands.Cog):
 
         action_key = AUDIT_TO_ACTION.get(entry.action)
         if action_key is None:
-            print(f"[anti_nuke] skip: action {entry.action} is not tracked")
+            logger.info(f"[anti_nuke] skip: action {entry.action} is not tracked")
             return
 
-        print(f"[anti_nuke] mapped audit {entry.action} -> internal '{action_key}'")
+        logger.info(f"[anti_nuke] mapped audit {entry.action} -> internal '{action_key}'")
 
         actor = entry.user
         if actor is None:
-            print("[anti_nuke] skip: entry has no actor")
+            logger.info("[anti_nuke] skip: entry has no actor")
             return
 
         if actor.id == self.bot.user.id:
-            print("[anti_nuke] skip: actor is me")
+            logger.info("[anti_nuke] skip: actor is me")
             return
 
         cfg = await models.get_anti_nuke_config(guild.id)
         if not cfg["enabled"]:
-            print(f"[anti_nuke] skip: enabled=False in guild {guild.id}")
+            logger.info(f"[anti_nuke] skip: enabled=False in guild {guild.id}")
             return
 
         per_action = _normalize_actions(cfg["actions"])
         rule = per_action.get(action_key)
         if not rule:
-            print(f"[anti_nuke] skip: no rule for '{action_key}' in config")
+            logger.info(f"[anti_nuke] skip: no rule for '{action_key}' in config")
             return
         if not rule["enabled"]:
-            print(f"[anti_nuke] skip: action '{action_key}' is disabled in config")
+            logger.info(f"[anti_nuke] skip: action '{action_key}' is disabled in config")
             return
 
         if actor.id == guild.owner_id:
-            print("[anti_nuke] skip: actor is guild owner (exempt)")
+            logger.info("[anti_nuke] skip: actor is guild owner (exempt)")
             return
         actor_member = guild.get_member(actor.id)
         if _is_admin(actor_member):
-            print(f"[anti_nuke] skip: actor {actor.id} is admin (exempt)")
+            logger.info(f"[anti_nuke] skip: actor {actor.id} is admin (exempt)")
             return
 
         whitelisted = self._is_whitelisted(guild, actor, cfg)
         if whitelisted:
-            print(f"[anti_nuke] actor {actor.id} is whitelisted (still detected, no punish)")
+            logger.info(f"[anti_nuke] actor {actor.id} is whitelisted (still detected, no punish)")
 
         threshold = rule["count"]
         window = rule["window_seconds"]
 
-        print(
+        logger.info(
             f"[anti_nuke] config in use for guild {guild.id}: "
             f"enabled={cfg['enabled']} punishment={cfg['punishment']} "
             f"dry_run={cfg['dry_run']} auto_revert={cfg.get('auto_revert')} "
@@ -219,20 +222,20 @@ class AntiNuke(commands.Cog):
             f"{k}={v['count']}/{v['window_seconds']}s"
             for k, v in sorted(per_action.items()) if v["enabled"]
         )
-        print(f"[anti_nuke] enabled rules: {active_rules or '(none)'}")
+        logger.info(f"[anti_nuke] enabled rules: {active_rules or '(none)'}")
 
         since = datetime.now(timezone.utc) - timedelta(seconds=window)
         count = await self._recount(guild, action_key, actor.id, since)
-        print(
+        logger.info(
             f"[anti_nuke] recount: actor={actor.id} action={action_key} "
             f"count={count} threshold={threshold} window={window}s"
         )
 
         if count < threshold:
-            print(f"[anti_nuke] skip: below threshold ({count} < {threshold})")
+            logger.info(f"[anti_nuke] skip: below threshold ({count} < {threshold})")
             return
 
-        print(f"[anti_nuke] 🚨 THRESHOLD CROSSED: {count} {action_key} in {window}s by {actor}")
+        logger.info(f"[anti_nuke] 🚨 THRESHOLD CROSSED: {count} {action_key} in {window}s by {actor}")
 
         now_ts = datetime.now(timezone.utc).timestamp()
         re_punish_at = self._punished_until[guild.id].get(actor.id, 0)
@@ -247,24 +250,24 @@ class AntiNuke(commands.Cog):
         revert_summary = None
 
         if dry_run:
-            print("[anti_nuke] dry-run is on, skipping punishment and revert")
+            logger.info("[anti_nuke] dry-run is on, skipping punishment and revert")
         elif punishment == "alert_only":
-            print("[anti_nuke] punishment is alert_only, skipping punishment and revert")
+            logger.info("[anti_nuke] punishment is alert_only, skipping punishment and revert")
         elif already_punished:
-            print("[anti_nuke] already punished recently, skipping re-punish")
+            logger.info("[anti_nuke] already punished recently, skipping re-punish")
         else:
             if auto_revert and action_key in REVERT_ACTION_MAP:
                 try:
                     revert_summary = await self._revert(
                         guild, action_key, actor, since, window
                     )
-                    print(f"[anti_nuke] revert summary: {revert_summary}")
+                    logger.info(f"[anti_nuke] revert summary: {revert_summary}")
                 except Exception as e:
-                    print(f"[anti_nuke] revert error: {type(e).__name__}: {e}")
+                    logger.error(f"[anti_nuke] revert error: {type(e).__name__}: {e}")
                     revert_summary = {"attempted": 0, "ok": 0, "failed": 0,
                                       "errors": [f"{type(e).__name__}: {e}"]}
             elif auto_revert:
-                print(f"[anti_nuke] no revert defined for action '{action_key}'")
+                logger.info(f"[anti_nuke] no revert defined for action '{action_key}'")
 
             applied, err = await self._apply_punishment(
                 guild, actor, punishment, action_key, count, window
@@ -273,9 +276,9 @@ class AntiNuke(commands.Cog):
             punishment_error = err
             if applied:
                 self._punished_until[guild.id][actor.id] = now_ts + window
-                print(f"[anti_nuke] punishment applied: {punishment}")
+                logger.info(f"[anti_nuke] punishment applied: {punishment}")
             else:
-                print(f"[anti_nuke] punishment failed: {err}")
+                logger.error(f"[anti_nuke] punishment failed: {err}")
 
         try:
             await models.log_nuke_event(
@@ -291,13 +294,13 @@ class AntiNuke(commands.Cog):
                 punishment_applied=punishment_applied,
                 punishment_error=punishment_error,
             )
-            print("[anti_nuke] nuke_events row written")
+            logger.info("[anti_nuke] nuke_events row written")
         except Exception as e:
-            print(f"[anti_nuke] log_nuke_event failed: {type(e).__name__}: {e}")
+            logger.error(f"[anti_nuke] log_nuke_event failed: {type(e).__name__}: {e}")
 
         last_alert = self._alert_last_sent[guild.id].get(actor.id, 0)
         if now_ts - last_alert < ALERT_COOLDOWN_SECONDS:
-            print("[anti_nuke] alert suppressed (rate limit)")
+            logger.info("[anti_nuke] alert suppressed (rate limit)")
             return
         self._alert_last_sent[guild.id][actor.id] = now_ts
 
@@ -320,10 +323,10 @@ class AntiNuke(commands.Cog):
                         if total >= 1000:
                             break
             except discord.Forbidden as e:
-                print(f"[anti_nuke] audit_logs Forbidden for action={audit_action}: {e}")
+                logger.info(f"[anti_nuke] audit_logs Forbidden for action={audit_action}: {e}")
                 return 0
             except discord.HTTPException as e:
-                print(f"[anti_nuke] audit_logs HTTPException for action={audit_action}: {e}")
+                logger.error(f"[anti_nuke] audit_logs HTTPException for action={audit_action}: {e}")
                 return 0
         return total
 
@@ -478,11 +481,11 @@ class AntiNuke(commands.Cog):
                           revert_summary: dict, whitelisted: bool):
         channel_id = cfg.get("security_alert_channel_id")
         if not channel_id:
-            print(f"[anti_nuke] no security alert channel set for guild {guild.id}")
+            logger.info(f"[anti_nuke] no security alert channel set for guild {guild.id}")
             return
         channel = guild.get_channel(int(channel_id))
         if channel is None:
-            print(f"[anti_nuke] security alert channel {channel_id} not found in guild {guild.id}")
+            logger.info(f"[anti_nuke] security alert channel {channel_id} not found in guild {guild.id}")
             return
 
         color = constants.COLOR_ERROR
@@ -545,9 +548,9 @@ class AntiNuke(commands.Cog):
 
         try:
             await channel.send(content=content, embed=embed)
-            print(f"[anti_nuke] alert sent to #{channel.name} ({channel.id})")
+            logger.info(f"[anti_nuke] alert sent to #{channel.name} ({channel.id})")
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[anti_nuke] could not send alert: {type(e).__name__}: {e}")
+            logger.error(f"[anti_nuke] could not send alert: {type(e).__name__}: {e}")
 
     # ------------------------------------------------------------------
     # Honey trap
@@ -560,7 +563,7 @@ class AntiNuke(commands.Cog):
         try:
             cfg = await models.get_honeypot_config(message.guild.id)
         except Exception as e:
-            print(f"[honeypot] config read failed: {e}")
+            logger.error(f"[honeypot] config read failed: {e}")
             return
 
         if not cfg["enabled"] or not cfg["channel_id"]:
@@ -585,11 +588,11 @@ class AntiNuke(commands.Cog):
         now_ts = datetime.now(timezone.utc).timestamp()
         last = self._honeypot_cooldown[guild.id].get(author.id, 0)
         if now_ts - last < 60:
-            print(f"[honeypot] skip {author.id} (cooldown)")
+            logger.info(f"[honeypot] skip {author.id} (cooldown)")
             return
         self._honeypot_cooldown[guild.id][author.id] = now_ts
 
-        print(f"[honeypot] triggered by {author} ({author.id}) in #{message.channel}")
+        logger.info(f"[honeypot] triggered by {author} ({author.id}) in #{message.channel}")
 
         # 1. Capture message content info BEFORE deletion.
         content_preview = (message.content or "")[:200]
@@ -637,7 +640,7 @@ class AntiNuke(commands.Cog):
             )
             await guild.unban(author, reason="Honey trap: softban")
             softban_ok = True
-            print(f"[honeypot] softbanned {author.id}")
+            logger.info(f"[honeypot] softbanned {author.id}")
         except discord.Forbidden:
             softban_error = "Missing permissions or role hierarchy."
         except discord.HTTPException as e:
@@ -657,13 +660,13 @@ class AntiNuke(commands.Cog):
                 content_types=content_types,
             )
         except Exception as e:
-            print(f"[honeypot] log failed: {e}")
+            logger.error(f"[honeypot] log failed: {e}")
 
         new_count = 0
         try:
             new_count = await models.bump_honeypot_kick_count(guild.id)
         except Exception as e:
-            print(f"[honeypot] counter bump failed: {e}")
+            logger.error(f"[honeypot] counter bump failed: {e}")
 
         # 5. DM the user (best effort).
         try:
@@ -678,7 +681,7 @@ class AntiNuke(commands.Cog):
                 except (discord.Forbidden, discord.HTTPException):
                     pass
         except Exception as e:
-            print(f"[honeypot] dm failed: {e}")
+            logger.error(f"[honeypot] dm failed: {e}")
 
         # 6. Refresh the panel button label in place.
         await self._refresh_honeypot_panel(guild, cfg, new_count)
@@ -692,7 +695,7 @@ class AntiNuke(commands.Cog):
         """Edit the panel in place. If the message is gone, repost once."""
         channel = guild.get_channel(int(cfg["channel_id"]))
         if channel is None:
-            print(f"[honeypot] trap channel {cfg['channel_id']} not found")
+            logger.info(f"[honeypot] trap channel {cfg['channel_id']} not found")
             return
 
         embed = _honeypot_panel_embed(kick_count, guild)
@@ -711,9 +714,9 @@ class AntiNuke(commands.Cog):
         try:
             posted = await channel.send(embed=embed, view=view)
             await models.set_honeypot_panel_message(guild.id, posted.id)
-            print(f"[honeypot] panel (re)posted in #{channel.name}")
+            logger.info(f"[honeypot] panel (re)posted in #{channel.name}")
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[honeypot] could not post panel: {e}")
+            logger.error(f"[honeypot] could not post panel: {e}")
 
     async def _send_honeypot_alert(self, guild: discord.Guild, author,
                                    content_preview: str, content_types: list,
@@ -759,9 +762,9 @@ class AntiNuke(commands.Cog):
                 try:
                     await self._run_dashboard_task(t)
                 except Exception as e:
-                    print(f"[anti_nuke] dashboard task {t.get('_id')} failed: {e}")
+                    logger.error(f"[anti_nuke] dashboard task {t.get('_id')} failed: {e}")
         except Exception as e:
-            print(f"[anti_nuke] dashboard poller error: {e}")
+            logger.error(f"[anti_nuke] dashboard poller error: {e}")
 
     @_poll_dashboard_tasks.before_loop
     async def _before_poll(self):
@@ -776,7 +779,7 @@ class AntiNuke(commands.Cog):
             return
         cfg = await models.get_honeypot_config(guild_id)
         if not cfg["channel_id"]:
-            print(f"[honeypot] post panel requested but no trap channel in {guild_id}")
+            logger.info(f"[honeypot] post panel requested but no trap channel in {guild_id}")
             return
         await self._refresh_honeypot_panel(guild, cfg, cfg["kick_count"])
 
@@ -790,9 +793,9 @@ class AntiNuke(commands.Cog):
                 try:
                     await models.prune_nuke_events(guild.id, older_than_days=30)
                 except Exception as e:
-                    print(f"[anti_nuke] prune {guild.id} failed: {e}")
+                    logger.error(f"[anti_nuke] prune {guild.id} failed: {e}")
         except Exception as e:
-            print(f"[anti_nuke] prune loop error: {e}")
+            logger.error(f"[anti_nuke] prune loop error: {e}")
 
     @_prune_events.before_loop
     async def _before_prune(self):

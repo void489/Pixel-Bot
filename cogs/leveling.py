@@ -48,6 +48,9 @@ from utils.embeds import success_embed, error_embed, info_embed
 from utils.permissions import command_check
 from utils.spawner_math import parse_number
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 PAGE_SIZE = 10
 EMBED_COLOR = 0x5865F2
 _CFG_TTL = 30
@@ -244,7 +247,7 @@ class Leveling(commands.Cog):
             await levels_col().create_index([("guild_id", 1), ("user_id", 1)], unique=True)
             await levels_col().create_index([("guild_id", 1), ("xp", -1)])
         except Exception as e:
-            print(f"[leveling] index creation failed: {e}")
+            logger.error(f"[leveling] index creation failed: {e}")
         self.voice_loop.start()
 
     async def cog_unload(self):
@@ -333,7 +336,7 @@ class Leveling(commands.Cog):
                     description=f"{member.display_name} leveled up from level {old_level} to level {level}")
                 kwargs["content"] = text
             except Exception as e:
-                print(f"[leveling] level-up card failed in {guild.id}: {e}")
+                logger.error(f"[leveling] level-up card failed in {guild.id}: {e}")
                 style = "text"
         if style == "embed":
             embed = discord.Embed(title="⬆️ Level up!", description=text,
@@ -386,7 +389,7 @@ class Leveling(commands.Cog):
             if remove:
                 await member.remove_roles(*remove, reason=f"Level {level} reward sync")
         except (discord.Forbidden, discord.HTTPException) as e:
-            print(f"[leveling] couldn't sync roles for {member.id} in {guild.id}: {e}")
+            logger.error(f"[leveling] couldn't sync roles for {member.id} in {guild.id}: {e}")
 
     # ── Message XP ────────────────────────────────────────────────────────
     @commands.Cog.listener()
@@ -467,7 +470,7 @@ class Leveling(commands.Cog):
                                            * core.multiplier_for(cfg, role_ids, ch_ids)))
                         await self.award(guild, m, amount, cfg, source="voice", channel=vc)
         except Exception as e:
-            print(f"[leveling] voice loop error: {e}")
+            logger.error(f"[leveling] voice loop error: {e}")
 
     @voice_loop.before_loop
     async def _before_voice(self):
@@ -486,7 +489,7 @@ class Leveling(commands.Cog):
             if doc.get("xp"):
                 await self.sync_roles(member, core.level_from_xp(doc["xp"]), cfg)
         except Exception as e:
-            print(f"[leveling] member join sync failed: {e}")
+            logger.error(f"[leveling] member join sync failed: {e}")
 
     # ── /rank ─────────────────────────────────────────────────────────────
     @commands.hybrid_command(name="rank", description="Show your (or someone's) rank card")

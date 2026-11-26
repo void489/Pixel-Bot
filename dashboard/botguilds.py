@@ -16,6 +16,9 @@ import requests
 
 from config import settings
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 DISCORD_API = "https://discord.com/api/v10"
 _TTL = 60  # seconds
 
@@ -61,7 +64,7 @@ def get_bot_guilds(force: bool = False):
             _cache["guilds"] = _fetch_all()
             _cache["t"] = now
         except Exception as e:
-            print(f"[botguilds] couldn't fetch the bot's servers: {e}")
+            logger.error(f"[botguilds] couldn't fetch the bot's servers: {e}")
             # keep the last known list; retry again in a few seconds, not every request
             _cache["t"] = now - _TTL + 10
         return _cache["guilds"]
@@ -93,7 +96,7 @@ def get_member_role_ids(guild_id, user_id):
         if resp.status_code == 200:
             roles = {str(r) for r in (resp.json().get("roles") or [])}
     except Exception as e:
-        print(f"[dashboard] member role lookup failed: {e}")
+        logger.error(f"[dashboard] member role lookup failed: {e}")
     if roles is not None:                 # only cache real answers
         _member_roles_cache[key] = (time.time(), roles)
     return roles

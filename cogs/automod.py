@@ -43,6 +43,9 @@ from database.automod_config import clean_domain
 from database.mongo import automod_strikes_col
 from utils.embeds import base_embed
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 INVITE_RE = re.compile(
     r"(?:discord(?:app)?\.com/invite|discord\.gg|discord\.me|dsc\.gg|invite\.gg)/([A-Za-z0-9-]{2,32})",
     re.IGNORECASE)
@@ -81,7 +84,7 @@ class AutoMod(commands.Cog):
                 "updated_at", expireAfterSeconds=models.AUTOMOD_STRIKE_TTL_SECONDS)
             await automod_strikes_col().create_index("guild_id")
         except Exception as e:
-            print(f"[automod] strike index creation failed: {e}")
+            logger.error(f"[automod] strike index creation failed: {e}")
         self._cleanup.start()
 
     async def cog_unload(self):
@@ -158,7 +161,7 @@ class AutoMod(commands.Cog):
         try:
             hit = await self._check(message, cfg, edited)
         except Exception as e:
-            print(f"[automod] check failed: {type(e).__name__}: {e}")
+            logger.error(f"[automod] check failed: {type(e).__name__}: {e}")
             return
         if hit:
             await self._handle(message, cfg, *hit)
@@ -275,7 +278,7 @@ class AutoMod(commands.Cog):
         try:
             count = await models.add_automod_strike(guild.id, member.id, window)
         except Exception as e:
-            print(f"[automod] couldn't save strike: {type(e).__name__}: {e}")
+            logger.error(f"[automod] couldn't save strike: {type(e).__name__}: {e}")
             count = 1
 
         action = None

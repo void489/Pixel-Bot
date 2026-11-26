@@ -51,6 +51,9 @@ from utils.embeds import success_embed, error_embed, info_embed, base_embed
 from utils.permissions import command_check
 from config import constants
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 DURATION_RE = re.compile(r"^(\d+)\s*([smhdw])$", re.IGNORECASE)
 MAX_TIMEOUT_SECONDS = 28 * 24 * 60 * 60  # Discord cap
@@ -638,7 +641,7 @@ class Moderation(commands.Cog):
             await _log_case(self.bot, member.guild, case, constants.COLOR_ERROR,
                             "🚷 Re-quarantined (rejoined)")
         except Exception as e:
-            print(f"[quarantine] rejoin handling failed: {e}")
+            logger.error(f"[quarantine] rejoin handling failed: {e}")
 
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel: discord.abc.GuildChannel):
@@ -652,7 +655,7 @@ class Moderation(commands.Cog):
         except (discord.Forbidden, discord.HTTPException):
             pass
         except Exception as e:
-            print(f"[quarantine] new channel hide failed: {e}")
+            logger.error(f"[quarantine] new channel hide failed: {e}")
 
     @commands.hybrid_command(name="tempbans", description="List the active temp bans")
     @command_check()
@@ -678,7 +681,7 @@ class Moderation(commands.Cog):
             for doc in await models.get_due_temp_bans(datetime.now(timezone.utc)):
                 await self._finish_temp_ban(doc)
         except Exception as e:
-            print(f"[tempban] loop error: {e}")
+            logger.error(f"[tempban] loop error: {e}")
 
     @_expire_temp_bans.before_loop
     async def _before_expire_temp_bans(self):
@@ -697,7 +700,7 @@ class Moderation(commands.Cog):
             pass  # already unbanned by hand
         except (discord.Forbidden, discord.HTTPException) as e:
             attempts = await models.bump_temp_ban_attempts(doc["_id"])
-            print(f"[tempban] couldn't unban {uid} in {guild.id} (try {attempts}): {e}")
+            logger.error(f"[tempban] couldn't unban {uid} in {guild.id} (try {attempts}): {e}")
             if attempts < 10:
                 return  # try again on the next loop
         await models.delete_temp_ban_by_id(doc["_id"])

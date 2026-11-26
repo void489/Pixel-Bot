@@ -36,6 +36,9 @@ from database import models
 from database.mongo import bot_profiles_col, dashboard_tasks_col
 from datetime import datetime, timezone
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 APPLY_TASK = "bot_profile_apply"
 _UNSET = object()
 _locks: dict = {}
@@ -114,7 +117,7 @@ async def apply_profile(bot: commands.Bot, guild_id) -> tuple:
             return False, msg
         except Exception as e:
             msg = f"Unexpected error: {e}"
-            print(f"[bot_profile] apply failed for {gid}: {e}")
+            logger.error(f"[bot_profile] apply failed for {gid}: {e}")
             await _save_result(gid, False, msg)
             return False, msg
 
@@ -143,9 +146,9 @@ class BotProfile(commands.Cog):
                 try:
                     await apply_profile(self.bot, t["guild_id"])
                 except Exception as e:
-                    print(f"[bot_profile] task {t.get('_id')} failed: {e}")
+                    logger.error(f"[bot_profile] task {t.get('_id')} failed: {e}")
         except Exception as e:
-            print(f"[bot_profile] poller error: {e}")
+            logger.error(f"[bot_profile] poller error: {e}")
 
     @_poll.before_loop
     async def _before_poll(self):
@@ -166,7 +169,7 @@ class BotProfile(commands.Cog):
                 await apply_profile(self.bot, doc["_id"])
                 await asyncio.sleep(3)  # stay well inside Discord's rate limits
         except Exception as e:
-            print(f"[bot_profile] startup sync error: {e}")
+            logger.error(f"[bot_profile] startup sync error: {e}")
 
     @_startup_sync.before_loop
     async def _before_sync(self):

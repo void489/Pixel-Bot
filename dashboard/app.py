@@ -10,6 +10,9 @@ from dashboard.auth import init_discord_oauth
 from dashboard.routes import register_routes
 from dashboard.admin import admin_bp
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 # Allow OAuth over plain http for LOCAL testing only. This is OFF by default and only
 # ever switches on for a localhost redirect URL, so a real (https) deployment can never
 # end up accepting insecure OAuth. To test locally, set DASHBOARD_ALLOW_INSECURE_LOCAL=1.
@@ -26,7 +29,7 @@ app = Flask(__name__)
 # That is safe, but everyone gets logged out on each restart until a real key is set.
 _key = settings.DASHBOARD_SECRET_KEY or ""
 if len(_key) < 16 or _key.strip().lower() in {"change-me", "changeme", "secret", "password"}:
-    print("[dashboard] WARNING: DASHBOARD_SECRET_KEY is missing, too short (<16) or a default "
+    logger.warning("[dashboard] WARNING: DASHBOARD_SECRET_KEY is missing, too short (<16) or a default "
           "value. Using a random temporary key - everyone is logged out on every restart. "
           "Set DASHBOARD_SECRET_KEY to a long random string in your Railway variables.")
     _key = secrets.token_hex(32)

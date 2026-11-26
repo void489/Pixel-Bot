@@ -53,6 +53,9 @@ from utils.autocomplete import safe_autocomplete
 from utils import review_queue_core as rq
 from config import constants
 
+from utils.log import get_logger
+logger = get_logger(__name__)
+
 
 VOUCH_PREFIX_RE = re.compile(r"^vouch\s+", re.IGNORECASE)
 SCAM_VOUCH_PREFIX_RE = re.compile(r"^scam\s+vouch\s+", re.IGNORECASE)
@@ -574,7 +577,7 @@ class Vouches(commands.Cog):
                 message_id=message.id,
             )
         except Exception as e:
-            print(f"[vouches] failed to save vouch: {e}")
+            logger.error(f"[vouches] failed to save vouch: {e}")
             return
 
         try:
@@ -707,7 +710,7 @@ class Vouches(commands.Cog):
                     )
                     imported += 1
                 except Exception as e:
-                    print(f"[vouches] scan insert failed for message {msg.id}: {e}")
+                    logger.error(f"[vouches] scan insert failed for message {msg.id}: {e}")
                     skipped_invalid += 1
         except discord.Forbidden:
             return await ctx.send(embed=error_embed(
@@ -763,7 +766,7 @@ class Vouches(commands.Cog):
                     message_id=None,
                 )
             except Exception as e:
-                print(f"[vouches] add failed: {e}")
+                logger.error(f"[vouches] add failed: {e}")
                 break
             created += 1
             if first_num is None:
