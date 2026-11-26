@@ -4,7 +4,7 @@ from discord.ext import commands
 
 from database import models
 from cogs.tickets import (
-    TicketPanelView, TicketPanelBoxView, TicketControlView, TicketPriorityView, box_supported,
+    TicketPanelView, TicketPanelBoxView, panel_image_ref, TicketControlView, TicketPriorityView, box_supported,
 )
 
 
@@ -28,8 +28,10 @@ class Events(commands.Cog):
                         display = "dropdown" if panel.get("display_style") == "dropdown" else "buttons"
                         if panel.get("posted_style") == "box" and box_supported():
                             # the posted message is a one-box panel: re-attach that kind of view
+                            # keep the picture: the dropdown edits the message after a pick,
+                            # and a view built without it would wipe the picture
                             self.bot.add_view(TicketPanelBoxView(
-                                panel, ticket_types, None, display,
+                                panel, ticket_types, await panel_image_ref(panel), display,
                                 panel.get("placeholder"), str(panel["_id"]),
                             ))
                         else:

@@ -1119,6 +1119,16 @@ class TicketPanelBoxView(getattr(discord.ui, "LayoutView", discord.ui.View)):
         return gallery
 
 
+async def panel_image_ref(panel: dict):
+    """Just the picture URL a posted panel uses (no file upload): attachment://panel.<ext>
+    for an uploaded picture, else the saved link, else None. Used to rebuild the panel's
+    view after a restart, so the picture isn't dropped when the message is edited."""
+    uploaded = await models.get_ticket_panel_image(str(panel["_id"]))
+    if uploaded:
+        return f"attachment://panel.{uploaded[1]}"
+    return panel_style.panel_look(panel)["image_url"] or None
+
+
 async def _panel_picture(panel: dict):
     """(url for the message, discord.File or None). An uploaded picture wins over the link;
     it is attached to the message and referenced as attachment://."""
